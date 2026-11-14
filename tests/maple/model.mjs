@@ -5,7 +5,8 @@
 //   node tests/maple/model.mjs
 import * as M from '../../js/maple/model.js';
 import { stamp } from './stamp.mjs';
-import { buildTree, place, leafShape, SPOT } from '../../js/maple/tree.js';
+import { buildTree, place, leafShape, SPOT, DROOP } from '../../js/maple/tree.js';
+import { qrot } from '../../js/maple/gl.js';
 
 let fails = 0;
 { const r = stamp(true); if (r.stale.length) { fails++; console.log(`FAIL the version stamp is out of date in: ${r.stale.join(', ')}. Run: node tests/maple/stamp.mjs`); } }
@@ -29,9 +30,10 @@ for (const l of T.leaves) {
   ok(t.bud >= M.DAY_START && t.bud < 100, 'buds open in the first fortnight');
   ok(t.d0 > 290 && t.d0 < 320 && t.drop > t.d0 + 20 && t.land <= M.DAY_END + 1e-9, 'a leaf turns, then falls, and has landed by the last day');
   if (!l.focus) ok(t.drop < T.focus.T.drop, 'the followed leaf is the last to fall');
-  ok(l.g[1] >= 0 && l.g[1] < 0.03 && Math.hypot(l.g[0], l.g[2]) < 7, 'a fallen leaf lies on the lawn, within 7 m of the trunk');
+  ok(l.g[1] >= 0 && l.g[1] < 0.04 && Math.hypot(l.g[0], l.g[2]) < 7, 'a fallen leaf lies on the lawn, within 7 m of the trunk');
   ok(l.len > 0.06 && l.len < 0.1 && Math.abs(Math.hypot(...l.q) - 1) < 1e-6, 'a leaf is 6 to 10 cm long and has a proper rotation');
-  for (const d of [M.DAY_START, 200, t.d0 + 10, t.drop + 1, M.DAY_END]) { const o = place(l, d, {}); ok([...o.pos, ...o.q, o.size].every(Number.isFinite) && o.pos[1] > -1e-6, 'a leaf has a finite place above the ground'); }
+  for (const d of [M.DAY_START, 200, t.d0 + 10, t.drop + 1, M.DAY_END]) { const o = place(l, d, {}); ok([...o.pos, ...o.q, o.size].every(Number.isFinite) && o.pos[1] > -1e-6, 'a leaf has a finite place above the ground');
+  { const o = place(l, M.DAY_END, {}), s = l.len * o.size; for (const [x, y] of [[1, 0], [0.6, 0.6], [0.6, -0.6], [-0.2, 0.25], [-0.2, -0.25], [0, 0]]) { const w = qrot(o.q, [x * s, y * s, -DROOP * (x * x + y * y) * s]); if (o.pos[1] + w[1] < -1e-4) { ok(false, `a fallen leaf dips ${(-(o.pos[1] + w[1]) * 1000).toFixed(1)} mm below the lawn`); break; } } } }
   ok(place(l, M.DAY_END, {}).state === 2, 'every leaf is on the ground on the last day');
 }
 // sun leaves turn first and reddest

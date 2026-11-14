@@ -2,8 +2,8 @@
 // leaf's own timetable, and the outline of a leaf. Built once from a fixed seed, so every visit
 // shows the same tree. Lengths are in metres; x is to the right, y is up, z is toward the viewer,
 // and the foot of the trunk is at (0, 0, 0). No DOM.
-import { add, sub, mul, dot, cross, unit, len, quatOf, qmul, qaxis, slerp } from './gl.js?v=a18ea26b';
-import { timetable, FOCUS, pigments, mix, smooth, clamp } from './model.js?v=a18ea26b';
+import { add, sub, mul, dot, cross, unit, len, quatOf, qmul, qaxis, slerp } from './gl.js?v=79dc6efb';
+import { timetable, FOCUS, pigments, mix, smooth, clamp } from './model.js?v=79dc6efb';
 
 const UP = [0, 1, 0];
 function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
@@ -17,10 +17,14 @@ function lobe(L, n, teeth) {
   const pts = [], c = Math.cos(L.a), s = Math.sin(L.a);
   for (let side = 1; side >= -1; side -= 2) for (let i = 0; i <= n; i++) {
     const t = side > 0 ? i / n : 1 - i / n;
-    let w = HALF * L.len * profile(t) + 0.02 * (1 - t);
-    if (teeth && t > 0.08 && t < 0.93) { const f = (t * teeth) % 1; w *= 0.95 + 0.13 * (f < 0.75 ? f / 0.75 : (1 - f) / 0.25); }   // each tooth points toward the lobe's tip
-    const u = t * L.len;
-    pts.push([u * c - side * w * s, u * s + side * w * c]);
+    const at = (t) => { const w = HALF * L.len * profile(t) + 0.02 * (1 - t), u = t * L.len; return [u * c - side * w * s, u * s + side * w * c]; };
+    const p = at(t);
+    if (teeth && t > 0.08 && t < 0.93) {                    // each tooth stands out from the edge and leans toward the lobe's tip
+      const a = at(t - 1e-3), b = at(t + 1e-3), l = Math.hypot(b[0] - a[0], b[1] - a[1]), T = [(b[0] - a[0]) / l, (b[1] - a[1]) / l], N = [side * -T[1], side * T[0]];
+      const f = (t * teeth) % 1, g = (f < 0.8 ? f / 0.8 : (1 - f) / 0.2) * 0.0065 * L.len * Math.min(1, (t - 0.08) / 0.05, (0.93 - t) / 0.05);
+      p[0] += N[0] * g + T[0] * g * 0.6; p[1] += N[1] * g + T[1] * g * 0.6;
+    }
+    pts.push(p);
   }
   return pts;
 }
@@ -28,7 +32,7 @@ export const leafShape = {
   tiny: LOBES.map((L) => lobe(L, 3, 0)),
   mid: LOBES.map((L) => lobe(L, 5, 0)),
   plain: LOBES.map((L) => lobe(L, 12, 0)),
-  toothed: LOBES.map((L) => lobe(L, 176, 22)),
+  toothed: LOBES.map((L) => lobe(L, 320, 40)),
   veins: LOBES.map((L) => [[0, 0], [0.97 * L.len * Math.cos(L.a), 0.97 * L.len * Math.sin(L.a)]]),
   side: LOBES.flatMap((L) => {                             // side veins, running forward from each lobe's middle vein
     const out = [], c = Math.cos(L.a), s = Math.sin(L.a), n = Math.round(9 * L.len);
@@ -119,8 +123,9 @@ export function buildTree(seed = 20261113) {
   kept.push(focus);
   for (const l of kept) {                                   // where it comes to rest on the lawn, and how it lies there
     const b = add(l.node, mul(l.sd, l.pl)), a = l.focus ? 2.2 : l.r3 * 6.283;
-    l.g = l.focus ? [b[0] - 0.3, 0.006, b[2] + 0.45] : [b[0] + (l.r2 - 0.5) * 2.4 + 0.25, 0.004 + 0.01 * l.r1, b[2] + (l.r4 - 0.5) * 2.4];
-    l.rest = frame([Math.cos(a), 0, Math.sin(a)], l.focus ? [0.06, 1, 0.1] : [(l.r1 - 0.5) * 0.5, 1, (l.r2 - 0.5) * 0.5]).q;
+    const up = DROOP * l.len + 0.009;                       // a blade curves down to its tips, so it rests on them with its middle this far above the lawn
+    l.g = l.focus ? [b[0] - 0.3, up + 0.002, b[2] + 0.45] : [b[0] + (l.r2 - 0.5) * 2.4 + 0.25, up + 0.004 * l.r1, b[2] + (l.r4 - 0.5) * 2.4];
+    l.rest = frame([Math.cos(a), 0, Math.sin(a)], l.focus ? [0.04, 1, 0.06] : [(l.r1 - 0.5) * 0.16, 1, (l.r2 - 0.5) * 0.16]).q;
     l.spin = unit([l.r2 - 0.5, l.r3 - 0.5, l.r4 - 0.5 + 0.01]);
   }
   return { segs, nodes, leaves: kept, focus, bounds: { x0: lo[0], x1: hi[0], y0: lo[1], y1: hi[1], z0: lo[2], z1: hi[2] }, centre: c };

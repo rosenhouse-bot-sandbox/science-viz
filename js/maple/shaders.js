@@ -113,7 +113,7 @@ void main() {
   }
   c = mix(c, uDetail == 1 ? uVein : base * 1.22 + 0.02, 0.75 * main);
   // lit from the front it is matt; with the Sun behind it, light comes through and it glows
-  vec3 col = c * (0.42 + 0.4 * max(ndl, 0.0) + 1.0 * pow(max(-ndl, 0.0), 0.5));
+  vec3 col = c * (0.42 + 0.4 * max(ndl, 0.0) + 1.0 * smoothstep(0.0, 0.6, -ndl));
   col += vec3(1.0, 0.9, 0.8) * 0.12 * pow(max(dot(n, normalize(uSun + v)), 0.0), 30.0);
   o = vec4(col, 1.0);
 }`;
@@ -157,6 +157,7 @@ in vec3 vN; in vec3 vV; in vec4 vCol; in vec3 vMat; in vec3 vL; out vec4 o;
 uniform vec4 uBody[8], uDot[8], uVac[8];
 uniform float uFlash[64];
 uniform vec4 uFog;                  // colour and thickness of what the view is inside (the vacuole's water)
+uniform float uFogMax;              // above 0: the view is inside coloured water this deep (in metres), which tints what is seen through it
 uniform float uFade;                // how much of a molecule built atom by atom shows: they are smaller than a pixel from far off
 float hash3(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
 void main() {
@@ -187,7 +188,10 @@ void main() {
   else if (kind == 13) { float r = length(vL.xy), w = max(1.6 * vMat.y * vCol.a, fwidth(r) * 0.5); a = smoothstep(1.0 - 2.0 * w, 1.0 - w, r) * (1.0 - smoothstep(1.0 - w, 1.0, r)); c = vec3(1.0); if (a < 0.01) discard; }
   if (kind == 7 || kind == 8 || kind == 9) a *= uFade;
   if (kind == 10 || kind == 11 || kind == 12) a *= clamp(2.0 / max(fwidth(vL.x), fwidth(vL.y)), 0.0, 1.0);   // smaller than a pixel: only its share of the pixel shows
-  if (uFog.a > 0.0 && kind != 12 && kind != 13) a *= exp(-uFog.a * length(vV));     // hidden by the coloured water in front of it
+  if (uFog.a > 0.0 && kind != 12 && kind != 13) {
+    if (uFogMax > 0.0) { c = mix(uFog.rgb, c, exp(-uFog.a * min(length(vV), uFogMax))); if (a < 1.0) a = mix(1.0, a, exp(-uFog.a * min(length(vV), uFogMax))); }
+    else a *= exp(-uFog.a * length(vV));                  // a molecule: hidden by the coloured water in front of it
+  }
   o = vec4(c, a);
 }`;
 

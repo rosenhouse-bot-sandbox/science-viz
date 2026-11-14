@@ -605,6 +605,13 @@ Simplified or exaggerated, and said so on the page:
   the followed leaf's face and behind it are left out so that it can be seen and seen through.
 - A fall takes seconds; it is spread over two and a half days of the slider so that it can be seen.
   Fallen leaves keep their colour (real ones brown within days).
+- A young leaf's cells are drawn smaller: the window and its cells are sized by the square root of
+  the leaf's size, and the Tissue and Cells views close in by as much (the scale bar stays true).
+  Chloroplasts and molecules inside are not resized.
+- Inside the vacuole the water's colour hides the cell round it within a few micrometres, and
+  molecules beyond a hundred or so nanometres. Real cell sap is far clearer; without this the view
+  would not change as the zoom goes from micrometres to nanometres.
+- Fallen leaves rest on the tips of their lobes, level; real ones lie anyhow.
 - The window in the leaf is the picture's own device. The cells are a model: regular shapes,
   whole at the cut where real ones would be sliced open, and only their walls, chloroplasts and
   vacuoles are drawn. Only the followed cell's chloroplasts have their membrane stacks drawn; the
