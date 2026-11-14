@@ -1,9 +1,9 @@
 // Japanese maple: the controller. Two numbers drive the page: the zoom (0 = tree ... 4 = molecules)
 // and the season (0 = late March ... 1 = late December). The picture is redrawn only when one changes.
-import { dayOf, dateOf, dayLength, sunAt, takenIn, PHASES, phaseAt, LAT, clamp, smooth, mix, css, leafRGB } from './model.js?v=e1a77670';
-import { makeWorld, TARGETS } from './world.js?v=e1a77670';
-import { quatOf, qmul, qrot, slerp, add, mul, unit, cross, lerp3 } from './gl.js?v=e1a77670';
-import { drawSpectrum, drawStalk, drawChain } from './figs.js?v=e1a77670';
+import { dayOf, dateOf, dayLength, sunAt, takenIn, PHASES, phaseAt, LAT, clamp, smooth, mix, css, leafRGB } from './model.js?v=941216a0';
+import { makeWorld, TARGETS } from './world.js?v=941216a0';
+import { quatOf, qmul, qrot, slerp, add, mul, unit, cross, lerp3 } from './gl.js?v=941216a0';
+import { drawSpectrum, drawStalk, drawChain } from './figs.js?v=941216a0';
 
 const $ = (id) => document.getElementById(id);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -30,7 +30,7 @@ const HOP_OUT = 3.17;                    // changing where the Molecules scale l
 const CAP = {
   tree: [
     ['New leaves', 'A Japanese maple, Acer palmatum, about 4 m tall. Its buds open in late March and leaves grow in pairs along each twig. A new leaf is pale yellow-green: it is still making chlorophyll, the pigment that absorbs light for making sugar.'],
-    ['Full leaf', 'The leaves are held out flat in layers, so few are shaded by the ones above. In summer the Sun is higher at any hour and the days are longer, so the tree gets its most light now, with its leaves at their greenest.'],
+    ['Full leaf', 'The leaves are held out flat in layers, so few are shaded by the ones above. In summer the Sun is higher at any hour and the days are longer, so under a clear sky the tree gets its most light now, with its leaves at their greenest.'],
     ['The outside turns first', 'Leaves in full sun turn first and turn reddest, because a leaf needs light to make the red pigment. Shaded leaves inside the crown turn yellow or orange.'],
     ['Every leaf has turned', 'Red on the outside of the crown, orange and yellow within. The first leaves are falling.'],
     ['Bare twigs', 'A leaf falls once the layer of cells that held its stalk to the twig has come apart. The leaf we follow, ringed in white, is the last to go.'],
@@ -44,7 +44,7 @@ const CAP = {
   ],
   tissue: [
     ['Inside the leaf', 'A window is cut through the leaf (0.8 mm wide once the leaf is grown), and this is one wall of it. Full grown, the leaf is 0.14 mm thick. Under a clear skin one cell thick stand tall cells, side by side. Below them are loose cells with air between, then the lower skin.'],
-    ['Where the light is used', 'Watch the dots of sunlight fall through the leaf. Most that are taken in go in the tall cells, which hold the most chloroplasts: the green bodies. Light we see as blue or red seldom gets past them; more of the green goes deeper, and some comes out underneath. Carbon dioxide comes in through pores in the lower skin. The bundle of pipes on the right is a vein.'],
+    ['Where the light is used', 'Watch the dots of sunlight fall through the leaf. Most that are taken in go in the tall cells, which hold the most chloroplasts: the green bodies. Light we see as blue or red seldom gets past them; more of the light we see as green goes deeper, and some comes out underneath. Carbon dioxide comes in through pores in the lower skin. The bundle of pipes on the right is a vein.'],
     ['Green lasts by the vein', 'Cells far from a vein lose their chlorophyll first. Those beside it keep theirs a few days longer.'],
     ['Red on the sunlit side', 'Anthocyanin is made mostly in the tall cells under the upper skin, where the light is strongest. The loose cells below make little. That is why a maple leaf is redder on top than underneath.'],
     ['Emptied', 'Sugar, and the nitrogen from dismantled proteins, left through the vein before the stalk was sealed. Cell walls, carotenoids and anthocyanin stay behind.'],
@@ -71,9 +71,9 @@ const CAP = {
     ['Still red', 'Anthocyanin is not taken back into the tree. It stays in the leaf when it falls.'],
   ],
 };
-const DOTS = 'Each dot of light stands for a little sunlight of one wavelength, drawn in the colour we see it as, and moving far slower than light does. It is drawn falling straight down. Whether it is taken in, and how deep, is drawn by lot with the chances the page\'s model gives that wavelength on this date: by chlorophyll or a carotenoid at a chloroplast, or by anthocyanin in a vacuole, with a flash. A real leaf also scatters light about inside itself, which lets it take in more of the green than is drawn here (about three quarters of it in summer), and sends some back out of its upper side; that is not drawn, and as many dots are drawn on every date.';
+const DOTS = 'Each dot of light stands for a little sunlight of one wavelength, drawn in the colour we see it as, and moving far slower than light does. It is drawn falling straight down. Whether it is taken in, and how deep, is drawn by lot with the chances the page\'s model gives that wavelength on this date: by chlorophyll or a carotenoid at a chloroplast, or by anthocyanin in a vacuole, with a flash. A real leaf also scatters light about inside itself, which lets it take in more of the light we see as green than is drawn here (about three quarters of it in summer), and sends some back out of its upper side; that is not drawn, and as many dots are drawn on every date and at every wavelength from 400 to 700 nm, which is not the mix in real sunlight.';
 const NOTE = {
-  tree: `Drawn with ${world ? world.count.toLocaleString('en') : 'a few thousand'} leaves; a real tree this size carries several times more. The white ring marks the leaf we follow. Dates are typical for Kyoto, ${LAT}° N. A fall takes seconds; here it is spread over two and a half days so that it can be seen. Every day is shown at five in the afternoon by the Sun, with the Sun where it then stands: well up in June, on the horizon by mid-November. The sky is always clear.`,
+  tree: `Drawn with ${world ? world.count.toLocaleString('en') : 'a few thousand'} leaves; a real tree this size carries several times more. The white ring marks the leaf we follow. Dates are typical for Kyoto, ${LAT}° N. A fall takes seconds; here it is spread over two and a half days so that it can be seen. Every day is shown at five in the afternoon by the Sun, with the Sun where it then stands: well up in June, within a degree of the horizon by mid-November. The sky is always clear.`,
   leaf: 'The white ring marks a window cut through the leaf, 0.8 mm wide on the grown leaf, so that the next scales can look inside. A fall takes seconds; here it is spread over two and a half days of the slider so that it can be seen.',
   tissue: 'A model: real cells are less regular, and those at a cut would be sliced open. Only walls, chloroplasts and vacuoles are drawn. The ring marks the cell the next scale shows. ' + DOTS,
   cells: 'Only the walls, chloroplasts and vacuoles are drawn. The small ring marks where the Molecules scale looks. ' + DOTS,
@@ -90,6 +90,7 @@ let fly = null, hop = null, dirty = true, last = 0, raf = 0;
 // Season slider is being moved a flight between scales waits. These are when each was last moved by hand.
 let still = false;                       // the tests step the light themselves
 let zNew = false, sNew = false, zoomAt = -1e9, seasonAt = -1e9, lightOn = !reduced;
+const SUN_TO = 3.4;                      // closer than this the dots of sunlight are too big to draw, and only the light at the molecules is shown
 const LIGHT_FROM = 1.55;                 // the zoom from which the dots of sunlight in the leaf are big enough to see
 const HOLD = 450;                        // milliseconds
 const FLY_T = 0.45, FLY_V = 4.5;         // a flight's easing time in seconds, and its top speed: e^4.5 times larger or smaller each second
@@ -226,8 +227,8 @@ function frame(now) {
     dirty = true;
   }
   if (hop && !dating) { hop.t = Math.min(1, hop.t + dt / hop.dur); w = mix(hop.from, hop.to, smooth((hop.t - 0.36) / 0.28)); if (hop.t >= 1) hop = null; dirty = true; }
-  const zs = zShown(), lit = lightOn && !still && zs > LIGHT_FROM;      // light arriving moves by itself; with reduced motion it is off until the visitor switches it on
-  if (lit) { try { world.update(dayOf(st.s)); const p = world.focus().p; if (zs > 3.5) world.stepLight(dt, st.where, p); if (zs < 3.7) world.stepSun(dt, p); } catch (e) { oops(e); } dirty = true; }
+  const zs = zShown(), lit = lightOn && !still && zs > LIGHT_FROM && (zs < SUN_TO || zs > 3.5);      // light arriving moves by itself; with reduced motion it is off until the visitor switches it on
+  if (lit) { try { world.update(dayOf(st.s)); const p = world.focus().p; if (zs > 3.5) world.stepLight(dt, st.where, p); if (zs < SUN_TO) world.stepSun(dt, p); } catch (e) { oops(e); } dirty = true; }
   if (dirty) {
     dirty = false;
     try { draw(); } catch (e) { oops(e); }
