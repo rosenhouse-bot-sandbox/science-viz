@@ -81,6 +81,13 @@ for (const [name, width, height, motion] of [['desktop', 1280, 800, 'no-preferen
     if (spread(await page.evaluate(SNAP)) < 30) fail(`${name}: nothing drawn at scale ${i}`);
     await fits(`at scale ${i}`);
     if (shots) await page.screenshot({ path: path.join(out, `${name.replace(/\W+/g, '-')}-${i}.png`) });
+    const shownLight = await page.$eval('#lightCtl', (e) => !e.hidden);
+    if (shownLight !== (i >= 2)) fail(`${name}: "Light arriving" is ${shownLight ? 'shown' : 'hidden'} at scale ${i}`);
+    if (i === 2 || i === 3) {                                // sunlight falls through the cells by itself, unless the visitor asked for reduced motion
+      const a = await page.evaluate(SNAP); await page.waitForTimeout(motion === 'reduce' ? 700 : 5000); const moved = diff(a, await page.evaluate(SNAP));
+      if (motion !== 'reduce' && moved === 0) fail(`${name}: no sunlight is moving at scale ${i}`);
+      if (motion === 'reduce' && moved !== 0) fail(`${name}: the picture moves by itself with reduced motion at scale ${i}`);
+    }
     const shownWhere = await page.$eval('#whereCtl', (e) => !e.hidden);
     if (shownWhere !== (i >= 3)) fail(`${name}: "Zoom into" is ${shownWhere ? 'shown' : 'hidden'} at scale ${i}`);
   }

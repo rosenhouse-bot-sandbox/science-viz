@@ -3,11 +3,11 @@
 // window, one cell's chloroplasts and vacuole, one chloroplast's stacks of membrane, and the
 // pigment molecules on one membrane and in the vacuole. Each part is built at its true size in its
 // own units (metres, leaf lengths, micrometres, nanometres) and placed inside the part above.
-import { program, instanced, ball, tube, square, box, add, sub, mul, dot, cross, unit, len, quatOf, qmul, qaxis, qrot, qconj, qalong, rng } from './gl.js?v=79dc6efb';
-import * as SH from './shaders.js?v=79dc6efb';
-import { leafRGB, pigments, bandTable, wavelengthRGB, encode, clamp, smooth, mix, NM0, NSTEP } from './model.js?v=79dc6efb';
-import { buildTree, leafShape, place, SPOT, LOBES, DROOP, onBlade } from './tree.js?v=79dc6efb';
-import { pigmentShapes } from './molecules.js?v=79dc6efb';
+import { program, instanced, ball, tube, square, box, add, sub, mul, dot, cross, unit, len, quatOf, qmul, qaxis, qrot, qconj, qalong, rng } from './gl.js?v=e1a77670';
+import * as SH from './shaders.js?v=e1a77670';
+import { leafRGB, pigments, bandTable, wavelengthRGB, encode, clamp, smooth, mix, NM0, NSTEP, sunAt, thickness } from './model.js?v=e1a77670';
+import { buildTree, leafShape, place, SPOT, LOBES, DROOP, onBlade } from './tree.js?v=e1a77670';
+import { pigmentShapes } from './molecules.js?v=e1a77670';
 
 // The leaf cut through, in micrometres. In the frame of the cut: x runs along the wall of the window,
 // y into the leaf behind the wall, z up through the leaf's thickness. (0, CELL_Y, 0) is the middle of the followed cell.
@@ -16,7 +16,7 @@ export const HOLE = { half: 420, deep: 650 };              // the window: microm
 const CELL_Y = 6, WALL_R = 3.85;                           // the followed cell's middle is 6 um behind the wall; chloroplasts sit 3.85 um from a cell's axis
 const PLASTID = [0, CELL_Y - WALL_R, 0], MEMBRANE_Y = PLASTID[1] - 0.0785;   // the followed chloroplast, and the outer face of its middle stack
 export const TARGETS = { membrane: [0, MEMBRANE_Y, 0], vacuole: [0, CELL_Y, 0] };
-const SUN = unit([0.72, 0.3, -0.62]);                      // low, to the right, beyond the tree
+const NORTH = [0.541, 0.841], WEST = [0.841, -0.541];      // compass points on the ground (x, z): the afternoon Sun is to the right, beyond the tree
 const NEAR_NM = 11.5, VAC_NM = 15, VAC_PITCH = 4.2, PITCH = 2.9;
 
 const hash = (i, j) => { let h = Math.imul(i | 0, 374761393) ^ Math.imul(j | 0, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
@@ -68,17 +68,19 @@ export function makeWorld(gl) {
   // ---- the cut leaf: cells, in micrometres ----------------------------------------------------------
   const cells = { ball1: new Batch(), ball2: new Batch(), caps: new Batch(), disc: new Batch(), glassBall: new Batch(), glassCaps: new Batch(), vacBall: new Batch(), vacCaps: new Batch(), env: new Batch(), back: new Batch(), ball3: new Batch(), glassCapsFine: new Batch(), vacCapsFine: new Batch() };
   // behind the four rows of cells that are drawn, the rest of the leaf: one dark slab
-  cells.back.add([0, CELL_Y + 3 * 10.8 + 7.5, (SEC.top + SEC.bottom) / 2 - 2], [0, 0, 0, 1], [HOLE.half + 44, 1.2, (SEC.top - SEC.bottom) / 2 - 3], [0, 0, 0, 1], [15, 0, 0]);
+  cells.back.add([0, CELL_Y + 3 * 10.8 + 7.5, (SEC.top + SEC.bottom) / 2 - 2], [0, 0, 0, 1], [HOLE.half + 44, 1.2, (SEC.top - SEC.bottom) / 2 - 9], [0, 0, 0, 1], [15, 0, 0]);
   const veinNear = (x) => SEC.veinX + Math.round((x - SEC.veinX) / SEC.veinEvery) * SEC.veinEvery;
   const poreNear = (x) => SEC.pore + Math.round((x - SEC.pore) / SEC.poreEvery) * SEC.poreEvery;
   const toneOf = (x, low) => Math.round(clamp(1 - Math.abs(x - veinNear(x)) / 75) * 3) + (low ? 4 : 0);   // cells beside a vein run a few days behind; loose cells make little anthocyanin
   const WALL = [0.86, 0.94, 0.82, 0.035], rotZ = (a) => qaxis([0, 0, 1], a), toX = qaxis([0, 1, 0], Math.PI / 2);
   // where cells are: behind the wall of the window, and behind its two side walls. Each gives a place and how many cells deep it is from a cut face.
+  const lane = { tall: [], loose: [] };                   // the front row of cells, for the dots of sunlight: each cell's middle and the chloroplasts on its near side
   const sites = [], EDGE_I = Math.floor((HOLE.half + 35) / SEC.pitch);     // the cells drawn reach a little way past the window; the leaf's surface hides the rest
   for (let r = 0; r < 4; r++) for (let i = -EDGE_I; i <= EDGE_I; i++) sites.push({ x: i * SEC.pitch + (r & 1) * 6.2, y: CELL_Y + r * 10.8, row: r, i });
   for (const sd of [1, -1]) for (let c = 0; c < 3; c++) for (let j = 1; j * SEC.pitch < HOLE.deep; j++) sites.push({ x: sd * (HOLE.half + 6 + c * 10.8), y: -j * SEC.pitch + (c & 1) * 6.2, row: c, i: 1000 * sd + j });
   for (const s of sites) {
     const main = s.row === 0 && s.i === 0 && s.y === CELL_Y, half = main ? SEC.tall / 2 : SEC.tall / 2 - 1.5 * hash(s.i, 77 + s.row), cz = SEC.tall / 2 - half, tone = toneOf(s.x, false), pos = [s.x, s.y, cz];
+    const cellRec = s.row === 0 && Math.abs(s.i) < 500 ? { x: s.x, y: s.y, z0: cz - half + 3.4, z1: cz + half - 3.4, plast: [] } : null; if (cellRec) lane.tall.push(cellRec);
     const close = s.row < 2 && Math.abs(s.i) <= 3;          // the cells the zoom passes close to are built from finer shapes
     (close ? cells.glassCapsFine : cells.glassCaps).add(pos, ID, [SEC.r * 0.97, SEC.r * 0.97, half], WALL, [1, 0, 0]);
     (close ? cells.vacCapsFine : cells.vacCaps).add(pos, ID, [2.3, 2.3, half - 3.2], [0, 0, 0, 1], [2, 0, tone]);
@@ -86,6 +88,7 @@ export function makeWorld(gl) {
     for (let j = 0; j < rings; j++) for (let m = 0; m < per; m++) {
       const a = -Math.PI / 2 + (m + (j & 1) * 0.5) * 2 * Math.PI / per + (main ? 0 : (hash(s.i * 7 + j, m + s.row * 3) - 0.5) * 0.5), z = cz + (j - (rings - 1) / 2) * (2 * half - 5) / rings + (main ? 0 : (hash(s.i * 9 + j, m) - 0.5) * 1.2);
       const p = [s.x + Math.cos(a) * WALL_R, s.y + Math.sin(a) * WALL_R, z], q = rotZ(a), sc = [1.2 * big, 2.2 * big, 2.5 * big];
+      if (cellRec && Math.sin(a) < -0.25) cellRec.plast.push(p);
       if (!main) { (close ? cells.ball3 : cells.ball1).add(p, q, sc, [0, 0, 0, 1], [4, 0, tone]); continue; }
       // the followed cell's chloroplasts are built in full: a clear envelope round stacks of membrane
       const followed = j === 3 && m === 0, rnd = rng(1000 + j * 10 + m);
@@ -112,7 +115,8 @@ export function makeWorld(gl) {
     const tone = toneOf(cx, true), q = qaxis(unit([hash(i, j) - 0.5, hash(j, i + 5) - 0.5, 1]), hash(i + 4, r) * 3), sc = [rad * 1.12, rad, rad * 0.92];
     cells.glassBall.add([cx, cy, cz], q, sc, WALL, [1, 0, 0]);
     cells.vacBall.add([cx, cy, cz], q, mul(sc, 0.48), [0, 0, 0, 1], [2, 0, tone]);
-    for (let k = 0; k < 6; k++) { const d = unit([hash(i * 5 + k, j + r * 9) - 0.5, hash(i + k * 3, j * 5 + r) - 0.5, hash(i - k, j - r * 3) - 0.5]); cells.ball1.add(add([cx, cy, cz], qrot(q, [d[0] * (sc[0] - 1.5), d[1] * (sc[1] - 1.5), d[2] * (sc[2] - 1.5)])), qmul(q, qalong(d)), [1.6, 2.0, 1.0], [0, 0, 0, 1], [4, 0, tone]); }
+    const rec = j === 0 ? { x: cx, y: cy, z0: cz, z1: cz, plast: [] } : null; if (rec) lane.loose.push(rec);
+    for (let k = 0; k < 6; k++) { const d = unit([hash(i * 5 + k, j + r * 9) - 0.5, hash(i + k * 3, j * 5 + r) - 0.5, hash(i - k, j - r * 3) - 0.5]); const cp = add([cx, cy, cz], qrot(q, [d[0] * (sc[0] - 1.5), d[1] * (sc[1] - 1.5), d[2] * (sc[2] - 1.5)])); if (rec) rec.plast.push(cp); cells.ball1.add(cp, qmul(q, qalong(d)), [1.6, 2.0, 1.0], [0, 0, 0, 1], [4, 0, tone]); }
   };
   for (let r = 0; r < 5; r++) {
     for (let d = 0; d < 3; d++) for (let i = -34; i <= 34; i++) loose((i + (r & 1) * 0.5) * 17, 8 + d * 15, r, i, d);
@@ -175,7 +179,7 @@ export function makeWorld(gl) {
     }
     all.sort((a, b) => len(a.p) - len(b.p));
     all.forEach((m, n2) => { const id = Math.min(n2, 63); if (n2 < 63) vac.list.push({ x: m.p[0], y: m.p[1], z: m.p[2], kind: 'anth', th: m.th, id }); molecule(vac.balls, vac.sticks, shapes.anth, m.p, m.q, 9, m.th, id, INK.anth.map((v) => mix(v, 1, 0.82)), EL_PALE); }); }   // drawn pale so that it shows against the red of the water round it
-  const N = { memBalls: mk(M.ball1, mem.balls), memSticks: mk(M.stick, mem.sticks), memFlat: mk(M.sq, mem.flat), vacBalls: mk(M.ball1, vac.balls), vacSticks: mk(M.stick, vac.sticks), light: instanced(gl, M.sq, LAYOUT), rings: instanced(gl, M.sq, LAYOUT) };
+  const N = { memBalls: mk(M.ball1, mem.balls), memSticks: mk(M.stick, mem.sticks), memFlat: mk(M.sq, mem.flat), vacBalls: mk(M.ball1, vac.balls), vacSticks: mk(M.stick, vac.sticks), light: instanced(gl, M.sq, LAYOUT), sun: instanced(gl, M.sq, LAYOUT), rings: instanced(gl, M.sq, LAYOUT) };
 
   // ---- light: dots that each stand for a little light of one wavelength ---------------------------
   const PH = 34, photons = Array.from({ length: PH }, () => ({ y: 99 })), flash = new Float32Array(64), R = rng(77);
@@ -202,12 +206,51 @@ export function makeWorld(gl) {
   function loadLight() { if (cam.where !== lightWhere) { lightWhere = cam.where; for (const ph of photons) fresh(ph, cam.where, true); flash.fill(0); }
     photons.forEach((ph, i) => lightData.set([ph.x, ph.y, ph.z, 0, 0, 0, 1, 0.24, 0.24, 1, ph.c[0], ph.c[1], ph.c[2], 1, 12, 0, 0], i * 17)); N.light.set(lightData, gl.DYNAMIC_DRAW); }
 
+  // ---- sunlight coming down through the cut leaf, in micrometres ------------------------------------
+  // Each dot stands for a little sunlight of one wavelength. Whether the leaf's pigments take it in, how deep and which pigment,
+  // is drawn by lot when it sets out, with the chances the model gives that wavelength in a leaf holding the day's pigments
+  // (model.js, thickness): chlorophyll and carotenoids take it at a chloroplast, anthocyanin in a vacuole. The rest comes out underneath.
+  const SUN_N = 80, SUN_X = [-75, 155], SUN_TOP = 62, SUN_END = -128, SUN_V = 34, SUN_R = 2.7, DIE = 0.45;   // how many, where along the wall, from and to what height, micrometres a second, a dot's radius, seconds a flash lasts
+  const SHARE = { chl: 0.7, car: 0.7, anth: 0.83 };       // how much of each pigment is in the tall cells; the rest is in the loose cells below
+  const beams = Array.from({ length: SUN_N }, () => ({})), RS = rng(311), sunData = new Float32Array(SUN_N * 17);
+  const nearest = (list, x) => { let b = list[0]; for (const c of list) if (Math.abs(c.x - x) < Math.abs(b.x - x)) b = c; return b; };
+  function freshBeam(b, p, first) {
+    b.l = 400 + 300 * RS(); b.c = wavelengthRGB(b.l).map((v) => encode(v * 1.7)); b.dying = 0; b.kind = '';
+    b.x = mix(SUN_X[0], SUN_X[1], RS()); b.y = 1.5 + 7 * RS(); b.z = first ? SUN_TOP + RS() * (SUN_TOP - SUN_END) : SUN_TOP + RS() * 30; b.end = SUN_END;
+    const t = thickness(p, b.l), tall = t.chl * SHARE.chl + t.car * SHARE.car + t.anth * SHARE.anth, all = t.chl + t.car + t.anth, u = -Math.log(1 - RS());
+    if (u >= all) return;                                  // it gets through
+    const up = u < tall, part = PIGS.map((k) => t[k] * (up ? SHARE[k] : 1 - SHARE[k])); let r = RS() * (part[0] + part[1] + part[2]), k = 0; while (k < 2 && r >= part[k]) { r -= part[k]; k++; }
+    const cell = nearest(up ? lane.tall : lane.loose, b.x), depth = up ? mix(SEC.tall / 2 - 1.5, 1.5 - SEC.tall / 2, u / tall) : 0;
+    b.kind = PIGS[k];
+    if (k === 2) { b.x = cell.x + (RS() - 0.5) * 2; b.y = cell.y - 1; b.end = clamp(depth, cell.z0, cell.z1); }
+    else { let c = cell.plast[0]; if (up) { for (const q of cell.plast) if (Math.abs(q[2] - depth) < Math.abs(c[2] - depth)) c = q; } else c = cell.plast[Math.floor(RS() * cell.plast.length)]; b.x = c[0] + (RS() - 0.5) * 1.2; b.y = c[1]; b.end = c[2] + (RS() - 0.5) * 2; }
+  }
+  const PIGS = ['chl', 'car', 'anth'];
+  let beamsSet = false;
+  // Moves the sunlight on by dt seconds. p: the followed leaf's pigments.
+  function stepSun(dt, p) {
+    if (!beamsSet) { beamsSet = true; for (const b of beams) freshBeam(b, p, true); }
+    for (const b of beams) {
+      if (b.dying) { b.dying += dt / DIE; if (b.dying >= 1) freshBeam(b, p, false); continue; }
+      b.z -= dt * SUN_V;
+      if (b.z > b.end) continue;
+      if (b.kind && p[b.kind] > 0.03) { b.z = b.end; b.dying = 1e-6; } else if (b.kind) { b.kind = ''; b.end = SUN_END; } else freshBeam(b, p, false);
+    }
+  }
+  function loadSun(k) {                                    // k: how strongly the dots are drawn
+    beams.forEach((b, i) => { const t = b.dying, r = SUN_R * (1 + 2.2 * t), v = k * (t ? 1.5 * (1 - t) * (1 - t) + 0.0 : 1); sunData.set([b.x, b.y, b.z, 0, 0, 0, 1, r, r, 1, b.c[0] * v, b.c[1] * v, b.c[2] * v, 1, 12, 0, 0], i * 17); });
+    N.sun.set(sunData, gl.DYNAMIC_DRAW);
+  }
+
   // ---- the season -----------------------------------------------------------------------------------
   let day = -1; const tmp = { chl: 0, car: 0, anth: 0 }, pal = { body: new Float32Array(32), dot: new Float32Array(32), vac: new Float32Array(32), size: new Float32Array(8) };
   const focusAt = (dd) => dd ? pigments(day + dd, F.T) : fo.p;
   const shade = (dd, k = 1) => { const p = pigments(day + dd, F.T); tmp.chl = p.chl; tmp.car = p.car; tmp.anth = p.anth; return leafRGB(tmp).map((v) => clamp(v * k)); };
+  const sun = { dir: [0, 1, 0], light: [0, 1, 0], up: 0, ground: [1, 0], sin: 0 };
   function update(d) {
     if (d === day) return; day = d;
+    { const s = sunAt(d), hx = Math.cos(s.az) * NORTH[0] + Math.sin(s.az) * WEST[0], hz = Math.cos(s.az) * NORTH[1] + Math.sin(s.az) * WEST[1], e = Math.max(s.el, 0.07);   // once the Sun is down the sky above it still lights the tree
+      sun.dir = [hx * Math.cos(s.el), Math.sin(s.el), hz * Math.cos(s.el)]; sun.light = [hx * Math.cos(e), Math.sin(e), hz * Math.cos(e)]; sun.ground = [hx, hz]; sun.sin = Math.sin(s.el); sun.up = smooth(sun.sin / 0.36); }
     for (let i = 0; i < L.length; i++) {
       const l = L[i], o = place(l, d, S[i]), c = leafRGB(o.p), lit = 0.86 + 0.28 * l.r3, sc = l.len * o.size, k = i * 11;
       leafData.set(o.pos, k); leafData.set(o.q, k + 3); leafData[k + 7] = c[0] * lit; leafData[k + 8] = c[1] * lit; leafData[k + 9] = c[2] * lit; leafData[k + 10] = sc;
@@ -231,10 +274,11 @@ export function makeWorld(gl) {
     const n0 = unit([2 * DROOP * SPOT[0], 2 * DROOP * SPOT[1], 1]), wl = qrot(qconj(F.q), F.look), Y = unit(sub(wl, mul(n0, dot(wl, n0)))), X = cross(Y, n0);
     return { q: quatOf(X, Y, n0), along: unit([X[0], X[1], 0]) };
   })();
+  const SKIN_GAP = 1.5;                                    // the tops of the skin cells lie this far (micrometres) under the leaf's drawn surface, which stands for its waxy coat
   function frames(calm) {
     const unit = 1e-6 * Math.sqrt(fo.size);                 // a young leaf's cells are smaller: the cut and its cells are drawn at the square root of the leaf's size
     const q = calm ? fo.calm : fo.q, sc = F.len * fo.size, tq = qmul(q, cutLocal.q), top = add(fo.pos, qrot(q, mul(onBlade(SPOT[0], SPOT[1]), sc)));
-    return { leafPos: fo.pos, leafQ: q, leafScale: sc, cutQ: tq, unit, cutO: sub(top, mul(qrot(tq, [0, 0, 1]), SEC.top * unit)), centre: add(fo.pos, qrot(q, mul(onBlade(0.42, 0), sc))) };
+    return { leafPos: fo.pos, leafQ: q, leafScale: sc, cutQ: tq, unit, cutO: sub(top, mul(qrot(tq, [0, 0, 1]), (SEC.top + SKIN_GAP) * unit)), centre: add(fo.pos, qrot(q, mul(onBlade(0.42, 0), sc))) };
   }
 
   // ---- drawing ----------------------------------------------------------------------------------------
@@ -253,13 +297,14 @@ export function makeWorld(gl) {
     if (!keepDepth) gl.clear(gl.DEPTH_BUFFER_BIT);
   }
   const use = (p) => { gl.useProgram(p.p); if (p.u.uMV) gl.uniformMatrix4fv(p.u.uMV, false, mv); if (p.u.uP) gl.uniformMatrix4fv(p.u.uP, false, pm); if (p.u.uSun) gl.uniform3fv(p.u.uSun, sunV); return p.u; };
-  const solid = (shape, fog) => { const u = use(prog.solid); gl.uniform1i(u.uShape, shape); gl.uniform4fv(u.uCamQ, qmul(qconj(gq), cam.q)); gl.uniform1f(u.uFogMax, 0); gl.uniform4fv(u.uBody, pal.body); gl.uniform4fv(u.uDot, pal.dot); gl.uniform4fv(u.uVac, pal.vac); gl.uniform1fv(u.uSize, pal.size); gl.uniform3f(u.uPig, fo.p.chl, fo.p.car, fo.p.anth); gl.uniform1fv(u.uFlash, flash); gl.uniform4fv(u.uFog, fog || [0, 0, 0, 0]); gl.uniform1f(u.uFade, 1); return u; };
+  const solid = (shape, fog) => { const u = use(prog.solid); gl.uniform1i(u.uShape, shape); gl.uniform4fv(u.uCamQ, qmul(qconj(gq), cam.q)); gl.uniform1f(u.uFogMax, 0); gl.uniform4fv(u.uBody, pal.body); gl.uniform4fv(u.uDot, pal.dot); gl.uniform4fv(u.uVac, pal.vac); gl.uniform1fv(u.uSize, pal.size); gl.uniform3f(u.uPig, fo.p.chl, fo.p.car, fo.p.anth); gl.uniform1fv(u.uFlash, flash); gl.uniform4fv(u.uFog, fog || [0, 0, 0, 0]); gl.uniform1f(u.uFade, 1); gl.uniform1f(u.uLum, 1); gl.uniform1f(u.uBend, 0); return u; };
   const blend = (on, additive) => { if (on) { gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, additive ? gl.ONE : gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); } else { gl.disable(gl.BLEND); gl.depthMask(true); } };
 
   // view: { eye, q (the camera's turn: its x is right, y up, z back toward the viewer), W, H, dpr, P11, ox, oy, k (pixels per metre at what it looks at), dist, where, light }
   function draw(view) {
     cam = { ...view, r: qrot(view.q, [1, 0, 0]), u: qrot(view.q, [0, 1, 0]), b: qrot(view.q, [0, 0, 1]), P00: view.P11 * view.H / view.W };
-    sunV.set([dot(SUN, cam.r), dot(SUN, cam.u), dot(SUN, cam.b)]);
+    sunV.set([dot(sun.light, cam.r), dot(sun.light, cam.u), dot(sun.light, cam.b)]);
+    const lum = mix(1, 1.25, sun.up), dayMix = (a, b) => a.map((v, i) => mix(v, b[i], sun.up));   // the higher the Sun, the brighter the daylight
     gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
     gl.disable(gl.BLEND); gl.depthMask(true); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.disable(gl.CULL_FACE);
     gl.clearColor(0.02, 0.03, 0.06, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -269,21 +314,23 @@ export function makeWorld(gl) {
 
     // the sky
     { const u = use(prog.sky); for (let i = 0; i < 3; i++) { ray[i] = cam.r[i] / cam.P00; ray[3 + i] = cam.u[i] / cam.P11; ray[6 + i] = -cam.b[i] - cam.r[i] * cam.ox / cam.P00 - cam.u[i] * cam.oy / cam.P11; }
-      gl.uniformMatrix3fv(u.uRay, false, ray); gl.uniform3fv(u.uSunW, SUN); gl.depthMask(false); quad.draw(); gl.depthMask(true); }
+      gl.uniformMatrix3fv(u.uRay, false, ray); gl.uniform3fv(u.uSunW, sun.dir); gl.uniform1f(u.uDay, sun.up); gl.depthMask(false); quad.draw(); gl.depthMask(true); }
 
     // the park and the tree, in metres
     group([0, 0, 0], ID, 1, clamp(d * 0.05, 1e-3, 2), 400);
     { const u = use(prog.land); gl.uniform1i(u.uKind, 1);
-      gl.uniform4f(u.uShape, 150, 30, 1.3, 0); gl.uniform3f(u.uTint, 0.114, 0.13, 0.31); ringMesh.draw();
-      gl.uniform4f(u.uShape, 95, 17, 4.0, 0); gl.uniform3f(u.uTint, 0.047, 0.067, 0.15); ringMesh.draw();
-      gl.uniform1i(u.uKind, 0); gl.uniform4f(u.uShape, 200, 0, 0, 0); quad.draw(); }
-    solid(0); branches.draw(); if (0.0011 * view.k > 0.2) stalks.draw();
-    { const u = use(prog.leaf); gl.uniform1f(u.uDroop, DROOP); gl.uniform1i(u.uDetail, 0); gl.uniform2fv(u.uLobe, lobeDirs); gl.uniform1f(u.uVeinW, 0.011);
+      gl.uniform4f(u.uShape, 150, 30, 1.3, 0); gl.uniform3fv(u.uTint, dayMix([0.114, 0.13, 0.31], [0.27, 0.41, 0.56])); ringMesh.draw();
+      gl.uniform4f(u.uShape, 95, 17, 4.0, 0); gl.uniform3fv(u.uTint, dayMix([0.047, 0.067, 0.15], [0.1, 0.24, 0.2])); ringMesh.draw();
+      gl.uniform1i(u.uKind, 0); gl.uniform4f(u.uShape, 200, 0, 0, 0); gl.uniform1f(u.uLum, mix(1, 1.9, sun.up)); gl.uniform3fv(u.uHaze, dayMix([0.2, 0.2, 0.3], [0.38, 0.53, 0.66]));
+      const s = Math.max(sun.sin, 0.05);                    // the crown's middle is about 2.6 m up, so its shadow lies that far over the Sun's height off, and is stretched by as much
+      gl.uniform4f(u.uShade, sun.ground[0], sun.ground[1], Math.min(2.6 * Math.sqrt(1 - s * s) / s, 40), 0.55 * smooth(sun.sin / 0.12)); gl.uniform1f(u.uShadeL, Math.min(2.7 / s, 40)); quad.draw(); }
+    gl.uniform1f(solid(0).uLum, lum); branches.draw(); if (0.0011 * view.k > 0.2) stalks.draw();
+    { const u = use(prog.leaf); gl.uniform1f(u.uLum, lum); gl.uniform1f(u.uDroop, DROOP); gl.uniform1i(u.uDetail, 0); gl.uniform2fv(u.uLobe, lobeDirs); gl.uniform1f(u.uVeinW, 0.011);
       gl.bindVertexArray(leaves.vao); gl.drawElementsInstanced(gl.TRIANGLES, leaves.n, gl.UNSIGNED_SHORT, 0, L.length - 1); }
     ring(f.centre, 0.17, view.k); drawRings();
 
     // the followed leaf, in leaf lengths
-    const leafDetail = () => { const u = use(prog.leaf); gl.uniform1f(u.uDroop, DROOP); gl.uniform1i(u.uDetail, 1); gl.uniform2fv(u.uLobe, lobeDirs);
+    const leafDetail = () => { const u = use(prog.leaf); gl.uniform1f(u.uLum, lum); gl.uniform1f(u.uDroop, DROOP); gl.uniform1i(u.uDetail, 1); gl.uniform2fv(u.uLobe, lobeDirs);
       const mm = 1e-3 / f.leafScale, hl = f.unit / f.leafScale;
       gl.uniform1f(u.uVeinW, 0.011); gl.uniform1f(u.uSideW, 0.004); gl.uniform1f(u.uNetW, 0.016 * mm); gl.uniform1f(u.uNetCell, 0.55 * mm);
       gl.uniform3fv(u.uEarly, shade(-5, 1.08)); gl.uniform3fv(u.uLate, shade(4, 0.84)); gl.uniform3fv(u.uVein, shade(-9, 1.22));
@@ -295,12 +342,15 @@ export function makeWorld(gl) {
     // the cells round the window, in micrometres. The leaf's surface is laid down again first, unseen, so that it hides the cells under it.
     const cn = Math.max(d * 0.05, 2e-8), cf = Math.max(d * 60, 3e-3);
     group(f.leafPos, f.leafQ, f.leafScale, cn, cf);
+    gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(-1, -4);                             // the surface wins wherever a cell's top comes level with it
     gl.colorMask(false, false, false, false); leafDetail(); gl.colorMask(true, true, true, true);
+    gl.disable(gl.POLYGON_OFFSET_FILL);
     group(f.cutO, f.cutQ, f.unit, cn, cf, true);
     // Inside the followed cell's vacuole the view is through its water: the deeper in, the more the water's own colour hides the cell round it.
     const eyeC = mul(qrot(qconj(f.cutQ), sub(cam.eye, f.cutO)), 1 / f.unit), deep = Math.min(2.3 - Math.hypot(eyeC[0], eyeC[1] - TARGETS.vacuole[1]), SEC.tall / 2 - 3.2 - Math.abs(eyeC[2]));
     const vt = pal.vac.subarray(0, 4), water = [mix(0.6, vt[0] * 0.8, vt[3]), mix(0.68, vt[1] * 0.8, vt[3]), mix(0.6, vt[2] * 0.8, vt[3]), 1 / (0.5 * f.unit)];
-    const sol = (shape) => { const u = solid(shape, deep > 0 ? water : null); if (deep > 0) gl.uniform1f(u.uFogMax, deep * 3 * f.unit); return u; };
+    const bend = DROOP * f.unit / f.leafScale;             // the blade's curve, in the cut's own units: a young leaf is as curved as a grown one but its cells are nearly as big, so it matters most in spring
+    const sol = (shape) => { const u = solid(shape, deep > 0 ? water : null); if (deep > 0) gl.uniform1f(u.uFogMax, deep * 3 * f.unit); gl.uniform1f(u.uBend, bend); return u; };
     if (um > 0.002) {
       sol(0); C.back.draw(); C.ball1.draw(); C.ball3.draw(); C.disc.draw(); sol(1); C.caps.draw();
       blend(true);
@@ -308,6 +358,9 @@ export function makeWorld(gl) {
       sol(1); C.glassCaps.draw(); C.glassCapsFine.draw(); sol(0); C.glassBall.draw();
       blend(false);
     }
+    // the sunlight coming down through the cells: dots, far too small to see from the Leaf scale and too big to draw from close to
+    { const px = SUN_R * um, k = 1 - smooth((px - 48) / 45);
+      if (view.light && beamsSet && px > 0.25 && k > 0) { loadSun(k); solid(2); gl.disable(gl.DEPTH_TEST); blend(true, true); N.sun.draw(); blend(false); gl.enable(gl.DEPTH_TEST); } }
     ring([0, -HOLE.deep / 2, SEC.top], 1100, um); ring(TARGETS.vacuole, 45, um); drawRings();
     // the molecules, in nanometres. Nothing is switched on at a zoom: what is smaller than a pixel shows only as its share of that pixel.
     if (kn > 0.004) {
@@ -328,5 +381,5 @@ export function makeWorld(gl) {
     }
     gl.bindVertexArray(null);
   }
-  return { tree, update, draw, frames, focus: () => fo, focusAt, stepLight, count: L.length, INK, flash };
+  return { tree, update, draw, frames, focus: () => fo, focusAt, stepLight, stepSun, sun, count: L.length, INK, flash };
 }

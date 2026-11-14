@@ -574,6 +574,18 @@ What the page shows, and where each part comes from (`js/maple/model.js` unless 
   shown in the panel and the loose cells a fifth of it, so the leaf reddens from its upper side;
   cells within 75 µm of the vein run up to 7.5 days behind the rest, so green lasts longest there.
   Both numbers are illustrative.
+- **Sunlight in the leaf** (Tissue and Cells, with **Light arriving** switched on): dots of light
+  of single wavelengths fall down through the cut leaf. Whether a dot is taken in, how deep, and
+  by which pigment is drawn by lot when it sets out, with the chances the model gives that
+  wavelength in a leaf holding the day's pigments (`thickness` in `model.js`, the same numbers
+  the leaf's colour is computed from): chlorophyll and carotenoids take it at a chloroplast,
+  anthocyanin in a vacuole, each with a flash. So in summer the dots we see as blue and red stop
+  in the tall cells and many green ones go on and out underneath; in a red leaf the green ones stop
+  in the vacuoles and the red ones pass. The panel prints the model's shares at 450, 550 and 675 nm.
+- **The Sun** stands where it does at five in the afternoon, solar time, at 35° N on each date
+  (`sunAt` in `model.js`): 25° up at midsummer, on the horizon in mid November, just set by
+  late December. The sky, the brightness of the lawn, hills and leaves, and the tree's shadow
+  follow its height, so summer is the bright part of the year. The panel prints its height.
 - **Cells**: tall cells seen from the side, chloroplasts along their walls and the vacuole down
   the middle of each. In autumn the stacks of membrane inside each chloroplast go and drops of fat
   take their place (in the followed cell they are drawn one by one), the chloroplasts shrink and
@@ -607,6 +619,13 @@ Simplified or exaggerated, and said so on the page:
   measurements. Absorption bands are illustrative fits.
 - The tree has about 7,600 leaves; a real one this size carries several times more. Leaves near
   the followed leaf's face and behind it are left out so that it can be seen and seen through.
+- The dots of sunlight in the leaf fall straight down, far slower than light, and as many are
+  drawn on every date. A real leaf also scatters light about inside itself, which lets it take in
+  more of the green than is drawn (about three quarters of it in summer) and sends some back out
+  of its upper side; neither is drawn. The split of each pigment between the tall and the loose
+  cells (70% of the chloroplast pigments and 83% of the anthocyanin in the tall cells) is illustrative.
+- The sky is always clear, and the brightness that goes with the Sun's height is the picture's
+  own: a leaf's colour is still computed from its pigments and only dimmed or brightened as a whole.
 - A fall takes seconds; it is spread over two and a half days of the slider so that it can be seen.
   Fallen leaves keep their colour (real ones brown within days).
 - A young leaf's cells are drawn smaller: the window and its cells are sized by the square root of
