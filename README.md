@@ -580,10 +580,10 @@ What the page shows, and where each part comes from (`js/maple/model.js` unless 
   wavelength in a leaf holding the day's pigments (`thickness` in `model.js`, the same numbers
   the leaf's colour is computed from): chlorophyll and carotenoids take it at a chloroplast,
   anthocyanin in a vacuole, each with a flash. So in summer the dots we see as blue and red stop
-  in the tall cells and many green ones go on and out underneath; in a red leaf the green ones stop
-  in the vacuoles and the red ones pass. The panel prints the model's shares at 450, 550 and 675 nm.
+  in the tall cells and many of those we see as green go on and out underneath; in a red leaf the
+  dots we see as green stop in the vacuoles and those we see as red pass. The panel prints the model's shares at 450, 550 and 675 nm.
 - **The Sun** stands where it does at five in the afternoon, solar time, at 35° N on each date
-  (`sunAt` in `model.js`): 25° up at midsummer, on the horizon in mid November, just set by
+  (`sunAt` in `model.js`): 25° up at midsummer, within a degree of the horizon in mid November, just set by
   late December. The sky, the brightness of the lawn, hills and leaves, and the tree's shadow
   follow its height, so summer is the bright part of the year. The panel prints its height.
 - **Cells**: tall cells seen from the side, chloroplasts along their walls and the vacuole down
@@ -620,8 +620,8 @@ Simplified or exaggerated, and said so on the page:
 - The tree has about 7,600 leaves; a real one this size carries several times more. Leaves near
   the followed leaf's face and behind it are left out so that it can be seen and seen through.
 - The dots of sunlight in the leaf fall straight down, far slower than light, and as many are
-  drawn on every date. A real leaf also scatters light about inside itself, which lets it take in
-  more of the green than is drawn (about three quarters of it in summer) and sends some back out
+  drawn on every date and at every wavelength from 400 to 700 nm (not the mix in real sunlight). A real leaf also scatters light about inside itself, which lets it take in
+  more of the light we see as green than is drawn (about three quarters of it in summer) and sends some back out
   of its upper side; neither is drawn. The split of each pigment between the tall and the loose
   cells (70% of the chloroplast pigments and 83% of the anthocyanin in the tall cells) is illustrative.
 - The sky is always clear, and the brightness that goes with the Sun's height is the picture's

@@ -3,11 +3,11 @@
 // window, one cell's chloroplasts and vacuole, one chloroplast's stacks of membrane, and the
 // pigment molecules on one membrane and in the vacuole. Each part is built at its true size in its
 // own units (metres, leaf lengths, micrometres, nanometres) and placed inside the part above.
-import { program, instanced, ball, tube, square, box, add, sub, mul, dot, cross, unit, len, quatOf, qmul, qaxis, qrot, qconj, qalong, rng } from './gl.js?v=e1a77670';
-import * as SH from './shaders.js?v=e1a77670';
-import { leafRGB, pigments, bandTable, wavelengthRGB, encode, clamp, smooth, mix, NM0, NSTEP, sunAt, thickness } from './model.js?v=e1a77670';
-import { buildTree, leafShape, place, SPOT, LOBES, DROOP, onBlade } from './tree.js?v=e1a77670';
-import { pigmentShapes } from './molecules.js?v=e1a77670';
+import { program, instanced, ball, tube, square, box, add, sub, mul, dot, cross, unit, len, quatOf, qmul, qaxis, qrot, qconj, qalong, rng } from './gl.js?v=941216a0';
+import * as SH from './shaders.js?v=941216a0';
+import { leafRGB, pigments, bandTable, wavelengthRGB, encode, clamp, smooth, mix, NM0, NSTEP, sunAt, thickness } from './model.js?v=941216a0';
+import { buildTree, leafShape, place, SPOT, LOBES, DROOP, onBlade } from './tree.js?v=941216a0';
+import { pigmentShapes } from './molecules.js?v=941216a0';
 
 // The leaf cut through, in micrometres. In the frame of the cut: x runs along the wall of the window,
 // y into the leaf behind the wall, z up through the leaf's thickness. (0, CELL_Y, 0) is the middle of the followed cell.
@@ -210,35 +210,35 @@ export function makeWorld(gl) {
   // Each dot stands for a little sunlight of one wavelength. Whether the leaf's pigments take it in, how deep and which pigment,
   // is drawn by lot when it sets out, with the chances the model gives that wavelength in a leaf holding the day's pigments
   // (model.js, thickness): chlorophyll and carotenoids take it at a chloroplast, anthocyanin in a vacuole. The rest comes out underneath.
-  const SUN_N = 80, SUN_X = [-75, 155], SUN_TOP = 62, SUN_END = -128, SUN_V = 34, SUN_R = 2.7, DIE = 0.45;   // how many, where along the wall, from and to what height, micrometres a second, a dot's radius, seconds a flash lasts
+  const SUN_N = 80, SUN_X = [-75, 155], SUN_TOP = 62, SUN_END = -128, SUN_V = 27, SUN_R = 2.7, DIE = 0.45;   // how many, where along the wall, from and to what height, micrometres a second, a dot's radius, seconds a flash lasts
   const SHARE = { chl: 0.7, car: 0.7, anth: 0.83 };       // how much of each pigment is in the tall cells; the rest is in the loose cells below
   const beams = Array.from({ length: SUN_N }, () => ({})), RS = rng(311), sunData = new Float32Array(SUN_N * 17);
   const nearest = (list, x) => { let b = list[0]; for (const c of list) if (Math.abs(c.x - x) < Math.abs(b.x - x)) b = c; return b; };
-  function freshBeam(b, p, first) {
+  function freshBeam(b, p) {
     b.l = 400 + 300 * RS(); b.c = wavelengthRGB(b.l).map((v) => encode(v * 1.7)); b.dying = 0; b.kind = '';
-    b.x = mix(SUN_X[0], SUN_X[1], RS()); b.y = 1.5 + 7 * RS(); b.z = first ? SUN_TOP + RS() * (SUN_TOP - SUN_END) : SUN_TOP + RS() * 30; b.end = SUN_END;
+    b.x = mix(SUN_X[0], SUN_X[1], RS()); b.y = 1.5 + 7 * RS(); b.z = b.z0 = SUN_TOP + RS() * 30; b.end = SUN_END;
     const t = thickness(p, b.l), tall = t.chl * SHARE.chl + t.car * SHARE.car + t.anth * SHARE.anth, all = t.chl + t.car + t.anth, u = -Math.log(1 - RS());
     if (u >= all) return;                                  // it gets through
     const up = u < tall, part = PIGS.map((k) => t[k] * (up ? SHARE[k] : 1 - SHARE[k])); let r = RS() * (part[0] + part[1] + part[2]), k = 0; while (k < 2 && r >= part[k]) { r -= part[k]; k++; }
     const cell = nearest(up ? lane.tall : lane.loose, b.x), depth = up ? mix(SEC.tall / 2 - 1.5, 1.5 - SEC.tall / 2, u / tall) : 0;
     b.kind = PIGS[k];
-    if (k === 2) { b.x = cell.x + (RS() - 0.5) * 2; b.y = cell.y - 1; b.end = clamp(depth, cell.z0, cell.z1); }
+    if (k === 2) { b.x = cell.x + (RS() - 0.5) * 2; b.y = cell.y - 1; b.end = up ? clamp(depth, cell.z0, cell.z1) : cell.z0 + (RS() - 0.5) * 5; }
     else { let c = cell.plast[0]; if (up) { for (const q of cell.plast) if (Math.abs(q[2] - depth) < Math.abs(c[2] - depth)) c = q; } else c = cell.plast[Math.floor(RS() * cell.plast.length)]; b.x = c[0] + (RS() - 0.5) * 1.2; b.y = c[1]; b.end = c[2] + (RS() - 0.5) * 2; }
   }
   const PIGS = ['chl', 'car', 'anth'];
   let beamsSet = false;
   // Moves the sunlight on by dt seconds. p: the followed leaf's pigments.
   function stepSun(dt, p) {
-    if (!beamsSet) { beamsSet = true; for (const b of beams) freshBeam(b, p, true); }
+    if (!beamsSet) { beamsSet = true; for (const b of beams) freshBeam(b, p); for (let i = 0; i < 400; i++) stepSun(0.05 * (0.5 + RS()), p); }   // run on unseen first, so that the light is already falling all the way down when it is first shown
     for (const b of beams) {
-      if (b.dying) { b.dying += dt / DIE; if (b.dying >= 1) freshBeam(b, p, false); continue; }
+      if (b.dying) { b.dying += dt / DIE; if (b.dying >= 1) freshBeam(b, p); continue; }
       b.z -= dt * SUN_V;
       if (b.z > b.end) continue;
-      if (b.kind && p[b.kind] > 0.03) { b.z = b.end; b.dying = 1e-6; } else if (b.kind) { b.kind = ''; b.end = SUN_END; } else freshBeam(b, p, false);
+      if (b.kind && p[b.kind] > 0.001) { b.z = b.end; b.dying = 1e-6; } else if (b.kind) { b.kind = ''; b.end = SUN_END; } else freshBeam(b, p);
     }
   }
   function loadSun(k) {                                    // k: how strongly the dots are drawn
-    beams.forEach((b, i) => { const t = b.dying, r = SUN_R * (1 + 2.2 * t), v = k * (t ? 1.5 * (1 - t) * (1 - t) + 0.0 : 1); sunData.set([b.x, b.y, b.z, 0, 0, 0, 1, r, r, 1, b.c[0] * v, b.c[1] * v, b.c[2] * v, 1, 12, 0, 0], i * 17); });
+    beams.forEach((b, i) => { const t = b.dying, r = SUN_R * (1 + 2.2 * t), v = k * (t ? 1.5 * (1 - t) * (1 - t) : smooth((b.z0 - b.z) / 18) * smooth((b.z - SUN_END) / 18));   // a dot comes into sight above the leaf and goes out of sight below it gradually sunData.set([b.x, b.y, b.z, 0, 0, 0, 1, r, r, 1, b.c[0] * v, b.c[1] * v, b.c[2] * v, 1, 12, 0, 0], i * 17); });
     N.sun.set(sunData, gl.DYNAMIC_DRAW);
   }
 

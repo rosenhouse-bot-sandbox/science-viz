@@ -12,14 +12,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..700&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@400;500&display=swap">
-<link rel="modulepreload" href="../js/maple/model.js?v=e1a77670">
-<link rel="modulepreload" href="../js/maple/tree.js?v=e1a77670">
-<link rel="modulepreload" href="../js/maple/gl.js?v=e1a77670">
-<link rel="modulepreload" href="../js/maple/shaders.js?v=e1a77670">
-<link rel="modulepreload" href="../js/maple/molecules.js?v=e1a77670">
-<link rel="modulepreload" href="../js/maple/world.js?v=e1a77670">
-<link rel="modulepreload" href="../js/maple/figs.js?v=e1a77670">
-<link rel="stylesheet" href="../css/maple.css?v=e1a77670">
+<link rel="modulepreload" href="../js/maple/model.js?v=941216a0">
+<link rel="modulepreload" href="../js/maple/tree.js?v=941216a0">
+<link rel="modulepreload" href="../js/maple/gl.js?v=941216a0">
+<link rel="modulepreload" href="../js/maple/shaders.js?v=941216a0">
+<link rel="modulepreload" href="../js/maple/molecules.js?v=941216a0">
+<link rel="modulepreload" href="../js/maple/world.js?v=941216a0">
+<link rel="modulepreload" href="../js/maple/figs.js?v=941216a0">
+<link rel="stylesheet" href="../css/maple.css?v=941216a0">
 </head>
 <body>
 <canvas id="view" role="img" aria-label="Picture of the maple at the chosen zoom and date" aria-describedby="capTitle capBody"></canvas>
@@ -59,6 +59,8 @@
     </div>
   </div>
 
+  <label class="check" id="lightCtl" hidden><input type="checkbox" id="light"> <span>Light arriving</span></label>
+
   <div class="ctl" id="whereCtl" hidden>
     <span class="lab" id="lab-where">Zoom into</span>
     <div class="seg" role="group" aria-labelledby="lab-where">
@@ -66,8 +68,6 @@
       <button type="button" data-where="vacuole">The vacuole</button>
     </div>
   </div>
-
-  <label class="check" id="lightCtl" hidden><input type="checkbox" id="light"> <span>Light arriving</span></label>
 
   <div class="cap" id="cap" aria-live="polite">
     <div class="eyebrow"><span id="capScale"></span> · <span id="capPhase"></span></div>
@@ -109,6 +109,6 @@
   <p class="fine" id="note"></p>
 </main>
 
-<script type="module" src="../js/maple/main.js?v=e1a77670"></script>
+<script type="module" src="../js/maple/main.js?v=941216a0"></script>
 </body>
 </html>

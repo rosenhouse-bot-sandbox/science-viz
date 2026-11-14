@@ -18,14 +18,17 @@ export const mix = (a, b, t) => a + (b - a) * t;
 // The Season slider runs 0..1. Summer, when little changes, is given less of it than autumn.
 const KNOTS = [[0, 84], [0.2, 125], [0.35, 293], [0.78, 334], [1, 354]];   // slider value, day of the year
 export const DAY_START = KNOTS[0][1], DAY_END = KNOTS[KNOTS.length - 1][1];
+// The date is one smooth curve through those points (a monotone cubic), so the year's pace has no corner where summer meets autumn.
+const KM = (() => { const n = KNOTS.length, d = [], m = []; for (let i = 0; i < n - 1; i++) d[i] = (KNOTS[i + 1][1] - KNOTS[i][1]) / (KNOTS[i + 1][0] - KNOTS[i][0]); m[0] = d[0]; m[n - 1] = d[n - 2]; for (let i = 1; i < n - 1; i++) m[i] = 2 * d[i - 1] * d[i] / (d[i - 1] + d[i]); return m; })();
 export function dayOf(s) {
   s = clamp(s);
-  for (let i = 1; i < KNOTS.length; i++) if (s <= KNOTS[i][0]) return mix(KNOTS[i - 1][1], KNOTS[i][1], (s - KNOTS[i - 1][0]) / (KNOTS[i][0] - KNOTS[i - 1][0]));
-  return DAY_END;
+  let i = 1; while (i < KNOTS.length - 1 && s > KNOTS[i][0]) i++;
+  const h = KNOTS[i][0] - KNOTS[i - 1][0], g = (s - KNOTS[i - 1][0]) / h, g2 = g * g, g3 = g2 * g;
+  return (2 * g3 - 3 * g2 + 1) * KNOTS[i - 1][1] + (g3 - 2 * g2 + g) * h * KM[i - 1] + (3 * g2 - 2 * g3) * KNOTS[i][1] + (g3 - g2) * h * KM[i];
 }
 export function seasonOf(day) {
-  for (let i = 1; i < KNOTS.length; i++) if (day <= KNOTS[i][1]) return mix(KNOTS[i - 1][0], KNOTS[i][0], (day - KNOTS[i - 1][1]) / (KNOTS[i][1] - KNOTS[i - 1][1]));
-  return 1;
+  let a = 0, b = 1; for (let n = 0; n < 50; n++) { const c = (a + b) / 2; if (dayOf(c) < day) a = c; else b = c; }
+  return (a + b) / 2;
 }
 const MONTHS = [['January', 31], ['February', 28], ['March', 31], ['April', 30], ['May', 31], ['June', 30], ['July', 31], ['August', 31], ['September', 30], ['October', 31], ['November', 30], ['December', 31]];
 export function dateOf(day) {             // day 1 = 1 January, not a leap year
