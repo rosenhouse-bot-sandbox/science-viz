@@ -1,9 +1,9 @@
 // Japanese maple: the controller. Two numbers drive the page: the zoom (0 = tree ... 4 = molecules)
 // and the season (0 = late March ... 1 = late December). The picture is redrawn only when one changes.
-import { dayOf, dateOf, dayLength, PHASES, phaseAt, LAT, clamp, smooth, mix, css, leafRGB } from './model.js?v=a18ea26b';
-import { makeWorld, TARGETS } from './world.js?v=a18ea26b';
-import { quatOf, qmul, qrot, slerp, add, mul, unit, cross, lerp3 } from './gl.js?v=a18ea26b';
-import { drawSpectrum, drawStalk, drawChain } from './figs.js?v=a18ea26b';
+import { dayOf, dateOf, dayLength, PHASES, phaseAt, LAT, clamp, smooth, mix, css, leafRGB } from './model.js?v=79dc6efb';
+import { makeWorld, TARGETS } from './world.js?v=79dc6efb';
+import { quatOf, qmul, qrot, slerp, add, mul, unit, cross, lerp3 } from './gl.js?v=79dc6efb';
+import { drawSpectrum, drawStalk, drawChain } from './figs.js?v=79dc6efb';
 
 const $ = (id) => document.getElementById(id);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -43,14 +43,14 @@ const CAP = {
     ['The stalk lets go', 'Across the foot of the stalk, a layer of cells dissolves the walls that join them, while cork seals the twig behind. Then the leaf\'s weight breaks it off.'],
   ],
   tissue: [
-    ['Inside the leaf', 'A window 0.8 mm wide is cut through the leaf, and this is one wall of it. The leaf is 0.14 mm thick. Under a clear skin one cell thick stand tall cells, side by side. Below them are loose cells with air between, then the lower skin.'],
+    ['Inside the leaf', 'A window is cut through the leaf (0.8 mm wide once the leaf is grown), and this is one wall of it. Full grown, the leaf is 0.14 mm thick. Under a clear skin one cell thick stand tall cells, side by side. Below them are loose cells with air between, then the lower skin.'],
     ['Where the light is used', 'Most light is absorbed in the tall cells, which hold the most chloroplasts: the green bodies. Carbon dioxide comes in through pores in the lower skin and spreads through the air spaces. The bundle of pipes on the right is a vein.'],
     ['Green lasts by the vein', 'Cells far from a vein lose their chlorophyll first. Those beside it keep theirs a few days longer.'],
     ['Red on the sunlit side', 'Anthocyanin is made mostly in the tall cells under the upper skin, where the light is strongest. The loose cells below make little. That is why a maple leaf is redder on top than underneath.'],
     ['Emptied', 'Sugar, and the nitrogen from dismantled proteins, left through the vein before the stalk was sealed. Cell walls, carotenoids and anthocyanin stay behind.'],
   ],
   cells: [
-    ['One cell', 'One of the tall cells, 11 µm wide and 41 µm tall. The bodies along its wall are chloroplasts, where the chlorophyll is. The clear column down its middle is the vacuole, a store of water.'],
+    ['One cell', 'One of the tall cells; full grown it is 11 µm wide and 41 µm tall. The bodies along its wall are chloroplasts, where the chlorophyll is. The clear column down its middle is the vacuole, a store of water.'],
     ['Chloroplasts', 'Each chloroplast is about 5 µm long and lies against the cell wall, next to the air spaces that bring carbon dioxide. Inside its clear envelope are stacks of membrane, like stacks of coins. The chlorophyll is in those membranes.'],
     ['Chloroplasts fade', 'The stacks of membrane are taken apart and their chlorophyll is broken down. The chloroplasts shrink and turn yellow: carotenoids are what is left in them.'],
     ['Crimson vacuoles', 'Anthocyanin dissolves in water, so it collects in the vacuole and not in the chloroplasts. Seen from outside, the leaf\'s red is the yellow of its chloroplasts and the crimson of its vacuoles together.'],
@@ -73,11 +73,11 @@ const CAP = {
 };
 const NOTE = {
   tree: `Drawn with ${world ? world.count.toLocaleString('en') : 'a few thousand'} leaves; a real tree this size carries several times more. The white ring marks the leaf we follow. Dates are typical for Kyoto, ${LAT}° N. A fall takes seconds; here it is spread over two and a half days so that it can be seen.`,
-  leaf: 'The white ring marks a window cut through the leaf, 0.8 mm wide, so that the next scales can look inside. A fall takes seconds; here it is spread over two and a half days of the slider so that it can be seen.',
+  leaf: 'The white ring marks a window cut through the leaf, 0.8 mm wide on the grown leaf, so that the next scales can look inside. A fall takes seconds; here it is spread over two and a half days of the slider so that it can be seen.',
   tissue: 'A model: real cells are less regular, and those at a cut would be sliced open. Only walls, chloroplasts and vacuoles are drawn. The ring marks the cell the next scale shows.',
   cells: 'Only the walls, chloroplasts and vacuoles are drawn. The small ring marks where the Molecules scale looks.',
   membrane: 'Sticks are bonds between atoms: carbon grey, nitrogen blue, oxygen red, magnesium pale green; hydrogen is left out. The glowing bonds are the ones whose shared electrons take in visible light. The beads underneath are the heads of the membrane\'s fat molecules. In a real membrane the pigments sit inside it, held by proteins, which are not drawn; here they are lifted onto its face so that they can be seen. Chlorophyll comes in two kinds, a and b; a is drawn, and only one of its five oxygen atoms. In autumn the real membrane is taken apart too, and the carotenoids that remain end up in drops of fat. Each dot of light stands for a little light of one wavelength, drawn in the colour we see it as, and moving far slower than light does; a real wave of visible light is about a hundred times wider than this view. One molecule has no colour: each is drawn in the colour its pigment has in bulk.',
-  vacuole: 'Sticks are bonds between atoms; carbon is drawn pale and oxygen dark red so that they show against the red water; hydrogen is left out. The water\'s own colour hides molecules more than a few tens of nanometres away. The glowing bonds are the ones whose shared electrons take in visible light. Water is not drawn. The pigment is drawn a few times more crowded than it is in a deep red cell. Each dot of light stands for a little light of one wavelength, moving far slower than light does.',
+  vacuole: 'Sticks are bonds between atoms; carbon is drawn pale and oxygen dark red so that they show against the red water; hydrogen is left out. The water\'s own colour hides the rest of the cell, and molecules more than a hundred or so nanometres away; real cell sap is far clearer than that. The glowing bonds are the ones whose shared electrons take in visible light. Water is not drawn. The pigment is drawn a few times more crowded than it is in a deep red cell. Each dot of light stands for a little light of one wavelength, moving far slower than light does.',
 };
 const CUT = 'The foot of the leaf stalk cut lengthwise, twig on the left. Brown: cells whose walls fill with cork and seal the twig. Beside them, small cells dissolve the walls that join them, from the outside in. The pale strand is the vein, the last part to break. A diagram: real cells are smaller and far more numerous.';
 
@@ -113,7 +113,8 @@ function measure() {
   cam.W = W; cam.H = H; cam.dpr = dpr; knots(); dirty = true; kick();
 }
 
-const fitK = (i) => Math.min(free.w / STOPS[i].w, free.h / STOPS[i].h) * 0.94;
+let cellScale = 1;                       // a young leaf's cells are drawn smaller (world.js), so the Tissue and Cells views close in by as much
+const fitK = (i) => Math.min(free.w / STOPS[i].w, free.h / STOPS[i].h) * 0.94 / (i === 2 || i === 3 ? cellScale : 1);
 // The size of the view against the slider: ln(pixels per metre) as one smooth curve through the stops (a monotone cubic),
 // so that the pace of the zoom has no kink at a stop. uOf(z) reads it, zOf(u) turns it round.
 let KN = null;
@@ -124,9 +125,10 @@ function zOf(u) { let a = 0, b = LAST; for (let n = 0; n < 40; n++) { const c = 
 const zShown = () => hop ? mix(st.z, Math.min(st.z, HOP_OUT), smooth(Math.min(hop.t, 1 - hop.t) / 0.36)) : st.z;   // eased at both ends, held in the middle while the view moves across
 
 function aim(z) {
-  const i = Math.min(LAST - 1, Math.floor(z)), g = z - i, k0 = fitK(i), k1 = fitK(i + 1);
-  const k = Math.exp(uOf(z)), t = k0 / k * (1 - smooth(g));   // the next stop's point slides to the middle of the view, starting and ending at rest
-  const fa = world.frames(false), fc = world.frames(true), cut = (p) => add(fa.cutO, qrot(fa.cutQ, mul(p, 1e-6)));
+  const i = Math.min(LAST - 1, Math.floor(z)), g = z - i;
+  const fa = world.frames(false), fc = world.frames(true), cut = (p) => add(fa.cutO, qrot(fa.cutQ, mul(p, fa.unit)));
+  if (Math.abs(fa.unit * 1e6 - cellScale) > 1e-9) { cellScale = fa.unit * 1e6; knots(); }
+  const k0 = fitK(i), k1 = fitK(i + 1), k = Math.exp(uOf(z)), t = k0 / k * (1 - smooth(g));   // the next stop's point slides to the middle of the view, starting and ending at rest
   const at = lerp3(TARGETS.membrane, TARGETS.vacuole, w);                                  // where the Molecules scale looks, in the frame of the cut
   const T = [TREE_AT, fa.centre, cut([38, 0, -33]), cut(TARGETS.vacuole), cut(at)];
   const target = lerp3(T[i + 1], T[i], t);
