@@ -3,11 +3,11 @@
 // window, one cell's chloroplasts and vacuole, one chloroplast's stacks of membrane, and the
 // pigment molecules on one membrane and in the vacuole. Each part is built at its true size in its
 // own units (metres, leaf lengths, micrometres, nanometres) and placed inside the part above.
-import { program, instanced, ball, tube, square, box, add, sub, mul, dot, cross, unit, len, quatOf, qmul, qaxis, qrot, qconj, qalong, rng } from './gl.js?v=941216a0';
-import * as SH from './shaders.js?v=941216a0';
-import { leafRGB, pigments, bandTable, wavelengthRGB, encode, clamp, smooth, mix, NM0, NSTEP, sunAt, thickness } from './model.js?v=941216a0';
-import { buildTree, leafShape, place, SPOT, LOBES, DROOP, onBlade } from './tree.js?v=941216a0';
-import { pigmentShapes } from './molecules.js?v=941216a0';
+import { program, instanced, ball, tube, square, box, add, sub, mul, dot, cross, unit, len, quatOf, qmul, qaxis, qrot, qconj, qalong, rng } from './gl.js?v=30f6dae2';
+import * as SH from './shaders.js?v=30f6dae2';
+import { leafRGB, pigments, bandTable, wavelengthRGB, encode, clamp, smooth, mix, NM0, NSTEP, sunAt, thickness } from './model.js?v=30f6dae2';
+import { buildTree, leafShape, place, SPOT, LOBES, DROOP, onBlade } from './tree.js?v=30f6dae2';
+import { pigmentShapes } from './molecules.js?v=30f6dae2';
 
 // The leaf cut through, in micrometres. In the frame of the cut: x runs along the wall of the window,
 // y into the leaf behind the wall, z up through the leaf's thickness. (0, CELL_Y, 0) is the middle of the followed cell.
@@ -237,8 +237,8 @@ export function makeWorld(gl) {
       if (b.kind && p[b.kind] > 0.001) { b.z = b.end; b.dying = 1e-6; } else if (b.kind) { b.kind = ''; b.end = SUN_END; } else freshBeam(b, p);
     }
   }
-  function loadSun(k) {                                    // k: how strongly the dots are drawn
-    beams.forEach((b, i) => { const t = b.dying, r = SUN_R * (1 + 2.2 * t), v = k * (t ? 1.5 * (1 - t) * (1 - t) : smooth((b.z0 - b.z) / 18) * smooth((b.z - SUN_END) / 18));   // a dot comes into sight above the leaf and goes out of sight below it gradually sunData.set([b.x, b.y, b.z, 0, 0, 0, 1, r, r, 1, b.c[0] * v, b.c[1] * v, b.c[2] * v, 1, 12, 0, 0], i * 17); });
+  function loadSun(k) {                                    // k: how strongly the dots are drawn. A dot comes into sight above the leaf and goes out of sight below it gradually.
+    beams.forEach((b, i) => { const t = b.dying, r = SUN_R * (1 + 2.2 * t), v = k * (t ? 1.5 * (1 - t) * (1 - t) : smooth((b.z0 - b.z) / 18) * smooth((b.z - SUN_END) / 18)); sunData.set([b.x, b.y, b.z, 0, 0, 0, 1, r, r, 1, b.c[0] * v, b.c[1] * v, b.c[2] * v, 1, 12, 0, 0], i * 17); });
     N.sun.set(sunData, gl.DYNAMIC_DRAW);
   }
 
