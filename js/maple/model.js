@@ -40,6 +40,15 @@ export function dayLength(day, lat = LAT) {
   return 2 * Math.acos(c) * 12 / Math.PI;
 }
 
+// Where the Sun stands at one hour of the day by the Sun (17 = five in the afternoon), by geometry alone:
+// its height above the horizon, and its bearing from north round toward west, both in radians.
+export const HOUR = 17;
+export function sunAt(day, hour = HOUR, lat = LAT) {
+  const decl = -23.44 * Math.cos(2 * Math.PI * (day + 10) / 365) * Math.PI / 180, la = lat * Math.PI / 180, h = (hour - 12) * 15 * Math.PI / 180;
+  const sinEl = Math.sin(la) * Math.sin(decl) + Math.cos(la) * Math.cos(decl) * Math.cos(h), el = Math.asin(sinEl);
+  return { el, az: Math.acos(clamp((Math.sin(decl) - sinEl * Math.sin(la)) / (Math.cos(el) * Math.cos(la)), -1, 1)) };
+}
+
 // The tree's year in five parts, by slider value. Used for the ticks and the captions.
 export const PHASES = [
   { id: 'spring', name: 'Spring', at: 0 },
@@ -104,10 +113,18 @@ const TOP = 0.6;
 // Fraction of the light at each wavelength that comes back from a leaf (or a part of one) holding
 // these amounts. `skin` is light reflected at the surface before it meets any pigment.
 export function returned(p, out = new Float64Array(NS), depth = 1, skin = 0.035) {
-  const a = TAB.chl, b = TAB.car, c = TAB.anth, k1 = p.chl * depth * 1.25, k2 = p.car * depth * 1.5, k3 = p.anth * depth * 2.5;
+  const a = TAB.chl, b = TAB.car, c = TAB.anth, k1 = p.chl * depth * THICK.chl, k2 = p.car * depth * THICK.car, k3 = p.anth * depth * THICK.anth;
   for (let i = 0; i < NS; i++) out[i] = skin + (TOP - skin) * Math.exp(-(k1 * a[i] + k2 * b[i] + k3 * c[i] + TISSUE[i]));
   return out;
 }
+// The pigments' part of that, for light of wavelength l going once down through the leaf: how thick each
+// pigment is to it (0 = clear). The share that gets through is exp(-(their sum)).
+export const THICK = { chl: 1.25, car: 1.5, anth: 2.5 };
+export function thickness(p, l) {
+  const i = clamp(Math.round((l - NM0) / NSTEP), 0, NS - 1);
+  return { chl: p.chl * THICK.chl * TAB.chl[i], car: p.car * THICK.car * TAB.car[i], anth: p.anth * THICK.anth * TAB.anth[i] };
+}
+export const takenIn = (p, l) => { const t = thickness(p, l); return 1 - Math.exp(-(t.chl + t.car + t.anth)); };
 const enc = (v) => { v = clamp(v); return v <= 0.0031308 ? 12.92 * v : 1.055 * v ** (1 / 2.4) - 0.055; };
 // sRGB (0..1 each) of light with this spectrum, the illuminant taken as equal at every wavelength.
 export function rgbOf(spec, gain = 1) {

@@ -17,7 +17,8 @@ out vec3 vDir;
 void main() { vDir = uRay * vec3(aPos.xy, 1.0); gl_Position = vec4(aPos.xy, 0.9999, 1.0); }`;
 export const SKY_FS = HEAD + `
 in vec3 vDir; out vec4 o;
-uniform vec3 uSunW;
+uniform vec3 uSunW; uniform float uDay;      // how far the Sun is up: 0 at the horizon, 1 well above it
+vec3 day(float y) { return mix(vec3(0.5,0.69,0.9), vec3(0.075,0.25,0.6), smoothstep(0.0, 0.55, y)); }
 vec3 sky(float y) {
   vec3 c = mix(vec3(0.886,0.635,0.455), vec3(0.655,0.412,0.478), smoothstep(0.0, 0.05, y));
   c = mix(c, vec3(0.353,0.29,0.463), smoothstep(0.03, 0.12, y));
@@ -27,9 +28,9 @@ vec3 sky(float y) {
 }
 void main() {
   vec3 d = normalize(vDir);
-  vec3 c = d.y >= 0.0 ? sky(d.y) : mix(vec3(0.886,0.635,0.455) * 0.5, vec3(0.03,0.05,0.06), smoothstep(0.0, 0.12, -d.y));
+  vec3 c = d.y >= 0.0 ? mix(sky(d.y), day(d.y), uDay) : mix(mix(vec3(0.886,0.635,0.455) * 0.5, vec3(0.5,0.69,0.9), uDay), mix(vec3(0.03,0.05,0.06), vec3(0.2,0.3,0.25), uDay), smoothstep(0.0, 0.12, -d.y));
   float s = max(dot(d, uSunW), 0.0);
-  c += vec3(1.0,0.72,0.45) * (0.5 * pow(s, 40.0) + 0.22 * pow(s, 6.0));
+  c += mix(vec3(1.0,0.72,0.45), vec3(1.0,0.95,0.86), uDay) * (0.5 * pow(s, 40.0) + 0.22 * pow(s, 6.0));
   o = vec4(c, 1.0);
 }`;
 
@@ -46,14 +47,18 @@ void main() {
 export const LAND_FS = HEAD + `
 in vec3 vW; in vec3 vV; out vec4 o;
 uniform int uKind; uniform vec4 uShape; uniform vec3 uTint;
+uniform float uLum; uniform vec3 uHaze;        // how bright the daylight is, and the colour of the far air
+uniform vec4 uShade; uniform float uShadeL;    // the tree's shadow: the way to the Sun along the ground, how far off its middle lies, how dark it is; and its length
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float noise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(hash(i), hash(i + vec2(1,0)), f.x), mix(hash(i + vec2(0,1)), hash(i + vec2(1,1)), f.x), f.y); }
 void main() {
   if (uKind == 0) {
     float r = length(vW.xz);
     vec3 c = mix(vec3(0.115,0.235,0.15), vec3(0.17,0.29,0.2), noise(vW.xz * 1.7)) * (0.9 + 0.2 * noise(vW.xz * 9.0));
-    c *= 1.0 - 0.6 * exp(-dot(vW.xz - vec2(-0.6, -0.2), vW.xz - vec2(-0.6, -0.2)) / 9.0);      // the tree's shadow
-    c = mix(c, vec3(0.2,0.2,0.3), smoothstep(8.0, 60.0, r));                                    // haze with distance
+    c *= 1.0 - 0.32 * exp(-dot(vW.xz, vW.xz) / 7.0);                                            // under the tree little of the sky is seen
+    vec2 sd = vW.xz + uShade.xy * uShade.z; float al = dot(sd, uShade.xy), pe = sd.x * uShade.y - sd.y * uShade.x;
+    c *= 1.0 - uShade.w * exp(-(al * al / (uShadeL * uShadeL) + pe * pe / 7.0));                  // the tree's shadow, longer the lower the Sun
+    c = mix(c * uLum, uHaze, smoothstep(8.0, 60.0, r));                                         // haze with distance
     o = vec4(c, 1.0);
   } else {
     float a = atan(vW.z, vW.x), h = uShape.y * (0.42 + 0.2 * sin(a * 3.0 + uShape.z) + 0.13 * sin(a * 7.0 + uShape.z * 2.3) + 0.07 * abs(sin(a * 17.0 + uShape.z)) + 0.035 * abs(sin(a * 41.0)));
@@ -83,12 +88,13 @@ uniform vec3 uEarly, uLate, uVein;   // that leaf's colour a few days earlier an
 uniform vec4 uHole; uniform vec2 uHoleX;   // the window cut in it: the middle of its far wall, its half-width and its depth, in leaf lengths; and which way that wall runs
 uniform vec2 uLobe[7];               // each lobe's direction and length
 uniform float uVeinW, uSideW, uNetW, uNetCell;
+uniform float uLum;                  // how bright the daylight is
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 // how much of a pixel a line of width w covers, at distance d from its middle
 float cover(float d, float w) { float px = max(fwidth(d), 1e-9); return clamp((0.5 * w - d) / px + 0.5, 0.0, 1.0) * min(1.0, w / px); }
 void main() {
   if (uDetail == 1) { vec2 hd = vUV - uHole.xy; float hx = dot(hd, uHoleX), hy = dot(hd, vec2(-uHoleX.y, uHoleX.x)); if (abs(hx) < uHole.z && hy < 0.0 && hy > -uHole.w) discard; }
-  vec3 n = normalize(vN) * (gl_FrontFacing ? 1.0 : -1.0), v = normalize(-vV);
+  vec3 v = normalize(-vV), n = normalize(vN); if (dot(n, v) < 0.0) n = -n;     // the side that faces the eye, whichever way round a triangle was drawn (at the teeth some fold back on themselves)
   float ndl = dot(n, uSun);
   vec3 base = vCol;
   if (uDetail == 1) { float t = clamp((length(vUV - vec2(0.1, 0.0)) - 0.05) / 0.8, 0.0, 1.0); base = t < 0.5 ? mix(uEarly, vCol, t * 2.0) : mix(vCol, uLate, t * 2.0 - 1.0); }
@@ -112,9 +118,10 @@ void main() {
     c = mix(c, uVein, 0.45 * side);
   }
   c = mix(c, uDetail == 1 ? uVein : base * 1.22 + 0.02, 0.75 * main);
-  // lit from the front it is matt; with the Sun behind it, light comes through and it glows
-  vec3 col = c * (0.42 + 0.4 * max(ndl, 0.0) + 1.0 * smoothstep(0.0, 0.6, -ndl));
+  // the sunlit side is matt and bright; seen from the other side, the light that comes through makes it glow
+  vec3 col = c * (0.5 + 0.9 * max(ndl, 0.0) + 0.92 * smoothstep(0.0, 0.6, -ndl));
   col += vec3(1.0, 0.9, 0.8) * 0.12 * pow(max(dot(n, normalize(uSun + v)), 0.0), 30.0);
+  col *= uLum; col /= max(1.0, max(col.r, max(col.g, col.b)));     // brighter than the screen can show: dimmed as a whole, so that the colour the model gave is kept
   o = vec4(col, 1.0);
 }`;
 
@@ -132,6 +139,7 @@ uniform mat4 uMV, uP; uniform int uShape;       // 0 scaled as it is, 1 capsule 
 uniform vec4 uCamQ;
 uniform vec3 uPig;                               // chlorophyll, carotenoids, anthocyanin in the followed cell
 uniform float uSize[8];
+uniform float uBend;                             // the leaf's surface curves down away from the middle of the window by this much per unit of distance squared, and the cells under it follow
 out vec3 vN; out vec3 vV; out vec4 vCol; out vec3 vMat; out vec3 vL;
 vec3 rot(vec4 q, vec3 v) { vec3 t = 2.0 * cross(q.xyz, v); return v + q.w * t + cross(q.xyz, t); }
 void main() {
@@ -148,7 +156,7 @@ void main() {
   else { l = aPos * sc; n = aNor / sc; }
   if (kind == 0 && iCol.a < 0.999 && uShape == 0) l.xy *= mix(1.0, iCol.a, aPos.z * 0.5 + 0.5);   // a branch narrows toward its end
   vec4 q = uShape == 2 ? uCamQ : iQuat;
-  vec4 v = uMV * vec4(iPos + rot(q, l * grow), 1.0);
+  vec4 v = uMV * vec4(iPos - vec3(0.0, 0.0, uBend * dot(iPos.xy, iPos.xy)) + rot(q, l * grow), 1.0);
   vN = mat3(uMV) * rot(q, n); vV = v.xyz; vCol = iCol; vMat = iMat; vL = aPos;
   gl_Position = uP * v;
 }`;
@@ -158,6 +166,7 @@ uniform vec4 uBody[8], uDot[8], uVac[8];
 uniform float uFlash[64];
 uniform vec4 uFog;                  // colour and thickness of what the view is inside (the vacuole's water)
 uniform float uFogMax;              // above 0: the view is inside coloured water this deep (in metres), which tints what is seen through it
+uniform float uLum;                 // how bright the daylight is, for the tree's wood
 uniform float uFade;                // how much of a molecule built atom by atom shows: they are smaller than a pixel from far off
 float hash3(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
 void main() {
@@ -166,7 +175,7 @@ void main() {
   float ndl = max(dot(n, uSun), 0.0), ndv = max(dot(n, v), 0.0), rim = pow(1.0 - ndv, 3.0);
   float spec = pow(max(dot(n, normalize(uSun + v)), 0.0), 40.0);
   vec3 c = vCol.rgb; float a = 1.0;
-  if (kind == 0) c = c * (0.32 + 0.68 * ndl) + vec3(0.9, 0.6, 0.45) * 0.12 * rim;
+  if (kind == 0) c = (c * (0.32 + 0.68 * ndl) + vec3(0.9, 0.6, 0.45) * 0.12 * rim) * uLum;
   else if (kind == 1) { a = vCol.a + (1.0 - vCol.a) * 0.3 * rim * rim; c = c * (0.55 + 0.45 * ndl) + 0.3 * spec; }
   else if (kind == 2) { vec4 t = uVac[idx]; c = t.rgb * (0.55 + 0.45 * ndv + 0.25 * ndl); a = t.a; }
   else if (kind == 3 || kind == 7 || kind == 8 || kind == 9) {

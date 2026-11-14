@@ -79,5 +79,16 @@ for (const k of M.PIG) { const t = M.bandTable(k); let pk = 0; for (let i = 0; i
 const rs = M.returned(summer); for (let i = 0; i < M.NS; i++) ok(rs[i] > 0 && rs[i] < 1, 'the share of light that comes back is between 0 and 1');
 for (let l = 400; l <= 700; l += 10) ok(M.wavelengthRGB(l).every((v) => v >= 0 && Number.isFinite(v)), `a colour for ${l} nm`);
 
+// the Sun at five in the afternoon, and what the pigments take in
+{ const up = (d) => M.sunAt(d).el * 180 / Math.PI;
+  ok(Math.abs(up(172) - 25) < 1, `at midsummer the Sun is 25 degrees up at five (${up(172).toFixed(1)})`);
+  ok(up(172) > up(125) && up(125) > up(84) && up(84) > up(303) && up(303) > up(320) && up(320) > up(354), 'the Sun is highest in summer and lower each week of autumn');
+  ok(Math.abs(up(320)) < 1.5 && up(354) < 0, 'it is on the horizon in mid November and has set by late December');
+  for (let d = M.DAY_START; d < M.DAY_END; d++) ok(Math.abs(M.sunAt(d + 1).el - M.sunAt(d).el) < 0.01 && Math.abs(M.sunAt(d + 1).az - M.sunAt(d).az) < 0.01, 'the Sun moves smoothly from day to day');
+  const red = M.pigments(335, F);
+  ok(M.takenIn(summer, 450) > 0.9 && M.takenIn(summer, 675) > 0.9 && M.takenIn(summer, 550) < 0.6, 'a summer leaf takes in most of the blue and red light and least of the green');
+  ok(M.takenIn(red, 550) > 0.9 && M.takenIn(red, 675) < 0.3, 'a red leaf takes in the green light and lets the red go by');
+  for (let l = 400; l <= 700; l += 5) { const t = M.thickness(summer, l), r = M.returned(summer); ok(Math.abs(Math.log((r[(l - 400) / 5] - 0.035) / (0.6 - 0.035)) + t.chl + t.car + t.anth + 0.45 * Math.exp(-(l - 400) / 70)) < 1e-9, 'the dots of light and the leaf colour use the same numbers'); } }
+
 console.log(fails ? `${fails} failed` : `model: all checks passed (${T.leaves.length} leaves)`);
 process.exit(fails ? 1 : 0);
