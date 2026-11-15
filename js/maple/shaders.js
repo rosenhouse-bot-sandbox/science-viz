@@ -79,8 +79,8 @@ out vec2 vUV; out vec3 vN; out vec3 vV; out vec3 vCol; out float vH;
 vec3 rot(vec4 q, vec3 v) { vec3 t = 2.0 * cross(q.xyz, v); return v + q.w * t + cross(q.xyz, t); }
 // A point of the blade, folded as bladeAt() in tree.js folds it: each lobe creased along its middle vein, the lobes drawn together like a fan.
 vec3 blade(vec2 p, float A) {
-  float ph = uFold.x * uFold.y, A2 = A * atan(0.36397 * cos(ph)) / 0.349066, t = p.x * cos(A) + p.y * sin(A), s = p.y * cos(A) - p.x * sin(A), w = s * cos(ph);
-  return vec3(t * cos(A2) - w * sin(A2), t * sin(A2) + w * cos(A2), -abs(s) * sin(ph) - uDroop * (1.0 + uFold.z * uFold.x) * dot(p, p));
+  float ph = abs(A) < 1e-4 ? 0.0 : uFold.x * uFold.y, A2 = A * atan(0.36397 * cos(ph)) / 0.349066, t = p.x * cos(A) + p.y * sin(A), s = p.y * cos(A) - p.x * sin(A), w = s * cos(ph);
+  return vec3(t * cos(A2) - w * sin(A2), t * sin(A2) + w * cos(A2), abs(s) * sin(ph) - uDroop * (1.0 + uFold.z * uFold.x) * dot(p, p));
 }
 void main() {
   float A = uLobeA[int(aLobe.x + 0.5)]; vec3 b0 = blade(aPos.xy, A);
@@ -115,7 +115,7 @@ void main() {
   if (uDetail == 1 && uKeep != 0 && hy * float(uKeep) < 0.0) discard;
   if (uDetail == 2) {                                // the face of the cut beyond the cells that are built: a picture of those same cells, taken square on and laid end to end
     float xs = hx / uMic; if (abs(xs) < uCells) discard;
-    o = texture(uFace, vec2(xs / (2.0 * uFaceHalf) + 0.5, 1.0 - vH)); if (o.a < 0.02) discard; return;     // clear where the cells are clear: what is behind the leaf shows through its skin
+    o = texture(uFace, vec2(xs / (2.0 * uFaceHalf) + 0.5, 1.0 - vH), -1.0); if (o.a < 0.02) discard; return;     // clear where the cells are clear: what is behind the leaf shows through its skin
   }
   vec3 v = normalize(-vV), n = normalize(vN); if (dot(n, v) < 0.0) n = -n;     // the side that faces the eye, whichever way round a triangle was drawn (at the teeth some fold back on themselves)
   float ndl = dot(n, uSun);
@@ -277,8 +277,8 @@ void main() {
   }
   float small = clamp(aa / 8.0 - 0.1, 0.0, 1.0);                                                       // a mound only a few pixels across: no shading of its own
   nl = normalize(mix(nl, mix(np, vec3(0.0, 0.0, 1.0), small), in_)); shade = mix(shade, 1.0, in_);
-  vec3 tint = mix(mix(vec3(0.42, 0.45, 0.4), uTint, 0.3) * 0.85, uTint * 1.1 + 0.03, in_);
+  vec3 tint = mix(mix(vec3(0.62, 0.64, 0.56), uTint, 0.35), uTint * 1.1 + 0.03, in_);
   vec3 n = normalize(uN * nl), v = normalize(-vV);
-  vec3 c = tint * shade * (0.45 + 0.55 * max(dot(n, uSun), 0.0)) + 0.25 * pow(max(dot(n, normalize(uSun + v)), 0.0), 30.0) * (1.0 - max(flat_, in_ * 0.6));
+  vec3 c = tint * shade * (0.7 + 0.4 * max(dot(n, uSun), 0.0)) + 0.25 * pow(max(dot(n, normalize(uSun + v)), 0.0), 30.0) * (1.0 - max(flat_, in_ * 0.6));
   o = vec4(c, 1.0);
 }`;

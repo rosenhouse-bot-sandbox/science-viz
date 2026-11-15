@@ -561,7 +561,7 @@ day it falls, at every scale from the whole tree down to its pigment molecules. 
   model, drawn with WebGL, and the zoom is one camera closing on one point of it. Nothing is ever
   faded in or swapped for another picture: the tree, the leaf, its cells and their molecules are all
   there at once, each at its true size, and come into view only by getting bigger. The followed leaf
-  hangs at the end of a low twig. It is cut straight across its middle lobe: as the zoom goes in from
+  hangs at the end of a low twig. It is cut straight across, through the middle lobe and the two beside it: as the zoom goes in from
   Leaf, the piece beyond the cut slides aside (the cut is shown being made, and the line it is made along is marked in white from the Leaf scale on), and the camera goes
   into the gap and looks at the cut face, facing out from the tree so that only lawn is behind it: the leaf's layers of cells, then one
   tall cell, then the face of one stack of membrane inside one of its chloroplasts (or the water
@@ -667,9 +667,9 @@ Simplified or exaggerated, and said so on the page:
   molecules beyond a hundred or so nanometres. Real cell sap is far clearer; without this the view
   would not change as the zoom goes from micrometres to nanometres.
 - Fallen leaves rest on the tips of their lobes, level; real ones lie anyhow.
-- A leaf comes out of its bud folded like a fan (each lobe creased along its middle vein, the lobes
-  close together, the blade hanging) and opens flat as it grows. The fold is a simple one: the
-  same angle on every lobe, and every leaf of the tree as far open as the followed one. A real
+- A leaf comes out of its bud folded like a fan (the middle lobe flat, every other lobe creased along its middle vein with its
+  upper side inward, the lobes close together, the blade hanging) and opens flat as it grows. The fold is a simple one: the
+  same angle on every lobe but the middle one, and every leaf of the tree as far open as the followed one. A real
   leaf's cells are still dividing and have few air spaces then; here they are the grown leaf's
   cells, smaller.
 - The followed leaf is turned toward the afternoon Sun so that it is lit as the outside of the

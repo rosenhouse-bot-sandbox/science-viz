@@ -2,8 +2,8 @@
 // leaf's own timetable, and the outline of a leaf. Built once from a fixed seed, so every visit
 // shows the same tree. Lengths are in metres; x is to the right, y is up, z is toward the viewer,
 // and the foot of the trunk is at (0, 0, 0). No DOM.
-import { add, sub, mul, dot, cross, unit, len, quatOf, qmul, qaxis, slerp } from './gl.js?v=2b71fae6';
-import { timetable, FOCUS, pigments, mix, smooth, clamp } from './model.js?v=2b71fae6';
+import { add, sub, mul, dot, cross, unit, len, quatOf, qmul, qaxis, slerp } from './gl.js?v=389d1a6f';
+import { timetable, FOCUS, pigments, mix, smooth, clamp } from './model.js?v=389d1a6f';
 
 const UP = [0, 1, 0];
 function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
@@ -58,9 +58,9 @@ export const foldOf = (size) => 1 - smooth((size - 0.07) / 0.6);
 export const FOLD = { turn: 1.25, hang: 1.2, half: 20 * Math.PI / 180 };   // how far each half of a lobe is turned down (radians), how much more the blade hangs, and half the angle between two lobes
 // The same point on a blade that is folded: (a, b) in leaf lengths on lobe number i (the shader does the same sum).
 export function bladeAt(a, b, i, fold) {
-  const ph = fold * FOLD.turn, A = LOBES[i].a, A2 = A * Math.atan(Math.tan(FOLD.half) * Math.cos(ph)) / FOLD.half;
+  const ph = i ? fold * FOLD.turn : 0, A = LOBES[i].a, A2 = A * Math.atan(Math.tan(FOLD.half) * Math.cos(ph)) / FOLD.half;
   const t = a * Math.cos(A) + b * Math.sin(A), s = -a * Math.sin(A) + b * Math.cos(A), w = s * Math.cos(ph);
-  return [t * Math.cos(A2) - w * Math.sin(A2), t * Math.sin(A2) + w * Math.cos(A2), -Math.abs(s) * Math.sin(ph) - DROOP * (1 + FOLD.hang * fold) * (a * a + b * b)];
+  return [t * Math.cos(A2) - w * Math.sin(A2), t * Math.sin(A2) + w * Math.cos(A2), Math.abs(s) * Math.sin(ph) - DROOP * (1 + FOLD.hang * fold) * (a * a + b * b)];
 }
 
 export function buildTree(seed = 20261113) {
