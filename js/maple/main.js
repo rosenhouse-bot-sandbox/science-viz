@@ -1,9 +1,9 @@
 // Japanese maple: the controller. Two numbers drive the page: the zoom (0 = tree ... 4 = molecules)
 // and the season (0 = late March ... 1 = late December). The picture is redrawn only when one changes.
-import { dayOf, dateOf, dayLength, sunAt, takenIn, PHASES, phaseAt, LAT, clamp, smooth, mix, css, leafRGB } from './model.js?v=07ad348f';
-import { makeWorld, TARGETS, CUT as LEAF_CUT } from './world.js?v=07ad348f';
-import { quatOf, qmul, qrot, slerp, add, mul, unit, cross, lerp3 } from './gl.js?v=07ad348f';
-import { drawSpectrum, drawStalk, drawChain } from './figs.js?v=07ad348f';
+import { dayOf, dateOf, dayLength, sunAt, takenIn, PHASES, phaseAt, LAT, clamp, smooth, mix, css, leafRGB } from './model.js?v=f5366b9e';
+import { makeWorld, TARGETS, CUT as LEAF_CUT } from './world.js?v=f5366b9e';
+import { quatOf, qmul, qrot, slerp, add, mul, unit, cross, lerp3 } from './gl.js?v=f5366b9e';
+import { drawSpectrum, drawStalk, drawChain } from './figs.js?v=f5366b9e';
 import { gamepad } from '../gamepad/gamepad.js';
 
 const $ = (id) => document.getElementById(id);
@@ -72,7 +72,7 @@ const CAP = {
     ['Still red', 'Anthocyanin is not taken back into the tree. It stays in the leaf when it falls.'],
   ],
 };
-const DOTS = 'Each dot of light stands for a little sunlight of one wavelength, drawn in the colour we see it as, and moving far slower than light does. It is drawn falling straight down, as at midday, whatever the Sun in the Tree view is doing. Whether it is taken in, and how deep, is drawn by lot with the chances the page\'s model gives that wavelength on this date: by chlorophyll or a carotenoid at a chloroplast, or by anthocyanin in a vacuole, with a flash. A real leaf also scatters light about inside itself, which lets it take in more of the light we see as green than is drawn here (about three quarters of it in summer), and sends some back out of its upper side; that is not drawn, and as many dots are drawn on every date and at every wavelength from 400 to 700 nm, which is not the mix in real sunlight.';
+const DOTS = 'Each dot of light stands for a little sunlight of one wavelength, drawn in the colour we see it as, and moving far slower than light does. From Cells to Molecules the same light is drawn with smaller and smaller dots, which fall straight through until the molecules themselves are in view. It is drawn falling straight down, as at midday, whatever the Sun in the Tree view is doing. Whether it is taken in, and how deep, is drawn by lot with the chances the page\'s model gives that wavelength on this date: by chlorophyll or a carotenoid at a chloroplast, or by anthocyanin in a vacuole, with a flash. A real leaf also scatters light about inside itself, which lets it take in more of the light we see as green than is drawn here (about three quarters of it in summer), and sends some back out of its upper side; that is not drawn, and as many dots are drawn on every date and at every wavelength from 400 to 700 nm, which is not the mix in real sunlight.';
 const NOTE = {
   tree: `Drawn with ${world ? world.count.toLocaleString('en') : 'a few thousand'} leaves; a real tree this size carries several times more. The white ring marks the leaf we follow. Dates are typical for Kyoto, ${LAT}° N. A fall takes seconds; here it is spread over two and a half days so that it can be seen. Every day is shown at five in the afternoon by the Sun, with the Sun where it then stands: well up in June, within a degree of the horizon by mid-November. The sky is always clear.`,
   leaf: 'The white line is where the leaf is cut across; the ring marks the spot the next scales look at. Zoom in and the piece beyond the cut slides aside, so that the next scales can look at the cut face; a real leaf is not cut. A fall takes seconds; here it is spread over two and a half days of the slider so that it can be seen.',
@@ -91,7 +91,6 @@ let fly = null, hop = null, dirty = true, last = 0, raf = 0;
 // Season slider is being moved a flight between scales waits. These are when each was last moved by hand.
 let still = false;                       // the tests step the light themselves
 let zNew = false, sNew = false, zoomAt = -1e9, seasonAt = -1e9, lightOn = !reduced;
-const SUN_TO = 3.4;                      // closer than this the dots of sunlight are too big to draw, and only the light at the molecules is shown
 const LIGHT_FROM = 1.55;                 // the zoom from which the dots of sunlight in the leaf are big enough to see
 const HOLD = 450;                        // milliseconds
 const FLY_T = 0.45, FLY_V = 4.5;         // a flight's easing time in seconds, and its top speed: e^4.5 times larger or smaller each second
@@ -229,8 +228,8 @@ function frame(now) {
     dirty = true;
   }
   if (hop && !dating) { hop.t = Math.min(1, hop.t + dt / hop.dur); w = mix(hop.from, hop.to, smooth((hop.t - 0.36) / 0.28)); if (hop.t >= 1) hop = null; dirty = true; }
-  const zs = zShown(), lit = lightOn && !still && zs > LIGHT_FROM && (zs < SUN_TO || zs > 3.5);      // light arriving moves by itself; with reduced motion it is off until the visitor switches it on
-  if (lit) { try { world.update(dayOf(st.s)); const p = world.focus().p; if (zs > 3.5) world.stepLight(dt, st.where, p); if (zs < SUN_TO) world.stepSun(dt, p); } catch (e) { oops(e); } dirty = true; }
+  const zs = zShown(), lit = lightOn && !still && zs > LIGHT_FROM;      // light arriving moves by itself; with reduced motion it is off until the visitor switches it on
+  if (lit) { try { world.update(dayOf(st.s)); const p = world.focus().p; if (zs > 3.5) world.stepLight(dt, st.where, p); world.stepSun(dt, p); } catch (e) { oops(e); } dirty = true; }
   if (dirty) {
     dirty = false;
     try { draw(); } catch (e) { oops(e); }
