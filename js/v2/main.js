@@ -6,6 +6,7 @@ import rain from './stages/rain.js';
 import drop, { eyeAngle, bowTrack, crossAngle, CROSSINGS } from './stages/drop.js';
 import surface, { presetAngle, maxAngle } from './stages/surface.js';
 import atoms from './stages/atoms.js';
+import { gamepad } from '../gamepad/gamepad.js';
 
 const STAGES = [orbit, rain, drop, surface, atoms];
 const RAIN = STAGES.indexOf(rain), DROP = STAGES.indexOf(drop), SURFACE = STAGES.indexOf(surface), ATOMS = STAGES.indexOf(atoms);
@@ -368,6 +369,14 @@ window.addEventListener('keydown', e => {
     else if (k === '0') resetView(); else return;
     e.preventDefault();
   }
+});
+// A controller: the right stick turns the camera as the arrow keys do, the triggers zoom within the
+// scale, and the bumpers step between scales.
+gamepad({
+  look: { label: 'Turn the camera', move: (x, y, dt) => nudge(x * 1.8 * dt, -y * 1.3 * dt, 1) },
+  zoom: { label: ['Zoom out, within this scale', 'Zoom in, within this scale'], move: (v, dt) => nudge(0, 0, Math.exp(-v * 1.6 * dt)) },
+  prev: { label: () => $('prev').textContent.replace(/[‹›]/g, '').trim() + ' one scale', press: () => step(-1) },
+  next: { label: () => $('next').textContent.replace(/[‹›]/g, '').trim() + ' one scale', press: () => step(1) },
 });
 
 // ---------- labels ----------

@@ -15,6 +15,8 @@ experience is and where its code lives.
 - Each experience is self-contained: `v2/` (Rainbows), `vesicle/`, `optics/` (Optics workshop),
   `dag/` (Graph layout) and `maple/` (Japanese maple) have their own page, stylesheet (`css/`) and modules (`js/`). Do not change one while working on
   another.
+  The one thing they share is controller support, `js/gamepad/gamepad.js` and `css/gamepad.css`: each
+  page gives it a short mapping onto its own camera, zoom and scale functions.
 - Physics claims must be true. Numbers shown on screen come from the model in code
   (`js/v2/optics.js` for v2), not from text typed into a caption. Where a picture simplifies or
   exaggerates, say so on screen and in the README.
@@ -98,6 +100,12 @@ Before pushing:
   writes one shared version into every address that loads one of them (`model.js?v=...`), so that a
   browser never pairs a new file with an old cached copy of another. Both tests fail if the stamp is
   out of date.
+- After changing `js/gamepad/`, `css/gamepad.css`, a page's `gamepad({ ... })` mapping, or which
+  controls a page has, run `node tests/gamepad/run.mjs` (or with page names: `home`, `rainbows`,
+  `vesicle`, `optics`, `graph`, `maple`, `deck`). It drives each page with a simulated Xbox
+  controller at 1280 × 800 and fails if the ring cannot reach a control, a stick, trigger or bumper
+  does nothing, or the picture of the pad does not list exactly what the page maps. A new page
+  needs a mapping, and an entry in `PAGES` there.
 - A frozen screenshot does not show a jump. When a person reports one, first add the gesture to
   `tests/smooth/scenarios.mjs` and see the report show it, then fix it.
 - Load each affected page in a browser with the console open, at a desktop width and at a phone

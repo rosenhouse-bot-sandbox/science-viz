@@ -1,9 +1,10 @@
 // Japanese maple: the controller. Two numbers drive the page: the zoom (0 = tree ... 4 = molecules)
 // and the season (0 = late March ... 1 = late December). The picture is redrawn only when one changes.
-import { dayOf, dateOf, dayLength, sunAt, takenIn, PHASES, phaseAt, LAT, clamp, smooth, mix, css, leafRGB } from './model.js?v=30f6dae2';
-import { makeWorld, TARGETS } from './world.js?v=30f6dae2';
-import { quatOf, qmul, qrot, slerp, add, mul, unit, cross, lerp3 } from './gl.js?v=30f6dae2';
-import { drawSpectrum, drawStalk, drawChain } from './figs.js?v=30f6dae2';
+import { dayOf, dateOf, dayLength, sunAt, takenIn, PHASES, phaseAt, LAT, clamp, smooth, mix, css, leafRGB } from './model.js?v=f8722925';
+import { makeWorld, TARGETS } from './world.js?v=f8722925';
+import { quatOf, qmul, qrot, slerp, add, mul, unit, cross, lerp3 } from './gl.js?v=f8722925';
+import { drawSpectrum, drawStalk, drawChain } from './figs.js?v=f8722925';
+import { gamepad } from '../gamepad/gamepad.js';
 
 const $ = (id) => document.getElementById(id);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -269,6 +270,12 @@ for (const [id, step] of [['zoom', 0.05], ['season', 5]]) $(id).addEventListener
 for (const b of document.querySelectorAll('[data-where]')) b.addEventListener('click', () => look(b.dataset.where));
 cv.addEventListener('wheel', (e) => { e.preventDefault(); if (hop) return; fly = null; zoomAt = performance.now(); zNew = true; st.z = zOf(clamp(uOf(st.z) - e.deltaY * (e.deltaMode ? 0.1 : 0.004), KN.U[0], KN.U[LAST])); touch(); }, { passive: false });   // one notch is the same change of scale everywhere
 $('reload').addEventListener('click', () => location.reload());
+// A controller: the triggers zoom as the wheel does (the same change of scale each second everywhere), and the bumpers fly to the scale before or after.
+gamepad({
+  zoom: { move(v, dt) { if (hop) return; fly = null; zoomAt = performance.now(); zNew = true; st.z = zOf(clamp(uOf(st.z) + v * 3 * dt, KN.U[0], KN.U[LAST])); touch(); } },
+  prev: { label: 'Zoom out to the scale before', press: () => zoomTo(Math.ceil((fly ? fly.to : st.z) - 1e-6) - 1) },
+  next: { label: 'Zoom in to the next scale', press: () => zoomTo(Math.floor((fly ? fly.to : st.z) + 1e-6) + 1) },
+});
 $('light').checked = lightOn;
 function chain() { const el = $('chain'), r = drawChain($('figChainCv'), +el.value); el.style.setProperty('--v', ((+el.value - 3) / 8 * 100) + '%'); el.setAttribute('aria-valuetext', r.n + ' double bonds in a row'); set('chainV', r.n); set('chainCap', r.cap); }
 $('chain').addEventListener('input', chain);

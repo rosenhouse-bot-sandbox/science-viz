@@ -7,6 +7,7 @@ import { layered } from './layered.js';
 import { gridSearch } from './search.js';
 import { measure, midLabels, labelsCovered } from './common.js';
 import { runReal, cancelD2, realLayout } from './real.js';
+import { gamepad } from '../gamepad/gamepad.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('view'), ctx = canvas.getContext('2d');
@@ -470,6 +471,15 @@ canvas.addEventListener('keydown', (e) => {
   if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { setHot((hot + 1) % graph.n); e.preventDefault(); }
   else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { setHot((hot + graph.n - 1 + (hot < 0 ? 1 : 0)) % graph.n); e.preventDefault(); }
   else if (e.key === 'Escape') setHot(-1);
+});
+// A controller: the right stick picks out a node as the arrow keys do, B lets go of it, and the
+// bumpers step through the layout.
+gamepad({
+  look: { label: 'Pick out a node and its edges', step(dx, dy) { if (graph) setHot((hot + (dx + dy > 0 ? 1 : graph.n - 1 + (hot < 0 ? 1 : 0))) % graph.n); } },
+  back() { if (hot < 0) return false; setHot(-1); return true; },
+  backLabel: () => (hot >= 0 ? 'Let go of the node' : ''),
+  prev: { label: 'Previous step', press: () => $('prev').click() },
+  next: { label: 'Next step', press: () => $('next').click() },
 });
 
 addEventListener('resize', () => { const a = area(); if (layout && Math.round(a.w / a.h * 8) / 8 !== lastAspect) compute(false); kick(); });
