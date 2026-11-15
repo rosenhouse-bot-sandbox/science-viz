@@ -8,6 +8,7 @@ import { drawChart, CHART_ASPECT } from './chart.js';
 import { drawPicture } from './picture.js';
 import { drawScene, ringTaps, sliceTaps } from './scene.js';
 import { WHITE } from './glass.js';
+import { gamepad } from '../gamepad/gamepad.js';
 
 const $ = (id) => document.getElementById(id);
 const cv = $('view'), g = cv.getContext('2d');
@@ -185,6 +186,11 @@ $('next').addEventListener('click', () => { if (S.i < LEVELS.length - 1 && solve
 $('reset').addEventListener('click', () => {
   for (const q of LEVELS[S.i].params) S.p[q.id] = q.value;
   update();
+});
+// A controller: the bumpers are the two buttons of the bar (the right one is Submit while that is on offer).
+gamepad({
+  prev: { label: 'Previous challenge', press: () => $('prev').click() },
+  next: { label: () => ($('submit').hidden ? 'Next challenge, once this one is solved' : 'Submit'), press: () => ($('submit').hidden ? $('next') : $('submit')).click() },
 });
 const REDUCE = window.matchMedia('(prefers-reduced-motion:reduce)');
 

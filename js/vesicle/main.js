@@ -7,6 +7,7 @@ import { Experiment, Sampler, PARAMS, NP, T_TOTAL, FAR_P, DOCKED_P, quantiles, p
 import { IrmCamera, irmOptics, orangeBlur, orangeDefocus, moment, contrastCurve, hue, css, IRM, APO, SPAN, SPAN_DIFF, WELL, N_MEDIUM, N_LIPID } from './irm.js';
 import { Dashboard } from './inferui.js';
 import { Camera, CAM, optics, THETA_MAX, LAMBDA_EX, LAMBDA_EM, LAMBDA_EM_O, QUENCH, QUENCH_O, PKA_O, PH_IN, EV, GAP } from './vitro.js';
+import { gamepad } from '../gamepad/gamepad.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('view');
@@ -316,6 +317,21 @@ const drop = (e) => { pointers.delete(e.pointerId); pinch = 0; };
 canvas.addEventListener('pointerup', drop); canvas.addEventListener('pointercancel', drop);
 canvas.addEventListener('wheel', (e) => { e.preventDefault(); st.dist = Math.max(38, Math.min(maxDist(), st.dist * Math.exp(e.deltaY * 0.0012))); hideHint(); syncUI(); }, { passive: false });
 setTimeout(hideHint, 9000);
+
+// A controller: the right stick orbits, the triggers zoom, and the bumpers go to the stage before or after.
+function toStage(d) {
+  const SG = st.infer ? INF_STAGES : STAGES, tr = st.infer ? truthOf(st.seed) : null, i = clamp(stageIdx + d, 0, SG.length - 1);
+  const at = SG[i].arrive ? tr[5] - tr[0] : SG[i].at;
+  st.play = false;
+  if (st.infer) st.t = clamp(Math.ceil(at + tr[0]), 0, T_TOTAL); else st.p = clamp(at, -ARRIVE, 1);
+  syncUI();
+}
+gamepad({
+  look: { label: 'Orbit the camera', move(x, y, dt) { st.az = ((st.az + x * 130 * dt) % 360 + 360) % 360; st.el = clamp(st.el - y * 90 * dt, -85, 88); stopSpin(); hideHint(); syncUI(); } },
+  zoom: { move(v, dt) { st.dist = clamp(st.dist * Math.exp(-v * (st.vitro ? 3.2 : 1.6) * dt), 38, maxDist()); hideHint(); syncUI(); } },
+  prev: { label: () => (st.infer ? 'Previous piece of evidence' : 'Previous stage'), press: () => toStage(-1) },
+  next: { label: () => (st.infer ? 'Next piece of evidence' : 'Next stage'), press: () => toStage(1) },
+});
 
 // ---- camera --------------------------------------------------------------------------------------
 const cam = { view: new Float32Array(16), proj: new Float32Array(16), basis: {}, eye: [0, 0, 0], target: [0, 0, 0], w: 1, h: 1, ox: 0, oy: 0, dist: 150 };

@@ -296,6 +296,36 @@ web server (ES modules will not load from `file://`), for example:
 python3 -m http.server 8000
 ```
 
+## Controller
+
+Every page can be driven with an Xbox controller (so also with a Steam Deck, which shows up as one).
+Nothing is added to a page until a controller connects.
+
+| On the pad | What it does |
+| --- | --- |
+| Left stick, D-pad | Move a gold ring between the page's controls. On a slider, left and right change it: one notch, then faster the longer it is held. With nowhere to go, the panel scrolls. |
+| A | Press the ringed control |
+| B | Close what is open (the picture of the pad, a dialog, a picked node), else back to the landing page |
+| Right stick | Rainbows and Vesicle fusion: turn the camera. Graph layout: pick out a node. |
+| Triggers | Zoom, as hard as they are pressed (Rainbows, Vesicle fusion, Japanese maple) |
+| Bumpers | The scale, stage, challenge or step before and after |
+| View | Show or hide a picture of the pad that says what each part does on this page |
+| Menu | Back to the Deck, on a visit that started there |
+
+- A press of A or a bumper gives a short, light rumble where the pad and the browser can; not with
+  reduced motion.
+- A visit "started at the Deck" when the address it came in by ends `?from=deck`. The site then
+  remembers the page the browser says it came from, for as long as the tab is open, and Menu goes
+  back to it from any page. Otherwise Menu does nothing and the picture leaves it unlit.
+- The Optics workshop and Graph layout have no camera, and Japanese maple's is not turned by hand,
+  so the right stick or the triggers do nothing there, and the picture says so by leaving them unlit.
+
+`js/gamepad/gamepad.js` is the one module every page shares: it reads the pad each frame, moves the
+ring by where the controls are on screen, and draws the picture. Each page hands it a short mapping
+(look for `gamepad({` in its `main.js`) that calls the page's own camera, zoom and scale functions.
+`css/gamepad.css` is loaded only once a pad connects. `node tests/gamepad/run.mjs` drives every page
+with a simulated pad at 1280 × 800.
+
 ## Developing
 
 `CLAUDE.md` holds the working rules for this repository. The main one: before changing any HTML,
@@ -324,6 +354,7 @@ every push to `main`. In the repository settings, set Pages → Source to
   (`profile.js` geometry, `scene.js` molecules and drawing, `vitro.js` microscope, `shaders.js` GLSL,
   `main.js` controls).
 - `maple/index.html`, `css/maple.css`, `js/maple/*.js`: Japanese maple (see its section below).
+- `js/gamepad/`, `css/gamepad.css`: controller support, shared by every page (see Controller above).
 - `drafts/`: review boards from each design round.
 - `tests/vesicle/placement.mjs`: steps Vesicle fusion through every frame without a GPU and fails if a
   protein is on the wrong side of a membrane or pushed into one.
