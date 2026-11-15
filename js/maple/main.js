@@ -1,9 +1,9 @@
 // Japanese maple: the controller. Two numbers drive the page: the zoom (0 = tree ... 4 = molecules)
 // and the season (0 = late March ... 1 = late December). The picture is redrawn only when one changes.
-import { dayOf, dateOf, dayLength, sunAt, takenIn, PHASES, phaseAt, LAT, clamp, smooth, mix, css, leafRGB } from './model.js?v=f8722925';
-import { makeWorld, TARGETS } from './world.js?v=f8722925';
-import { quatOf, qmul, qrot, slerp, add, mul, unit, cross, lerp3 } from './gl.js?v=f8722925';
-import { drawSpectrum, drawStalk, drawChain } from './figs.js?v=f8722925';
+import { dayOf, dateOf, dayLength, sunAt, takenIn, PHASES, phaseAt, LAT, clamp, smooth, mix, css, leafRGB } from './model.js?v=ddf8c0ac';
+import { makeWorld, TARGETS, CUT as LEAF_CUT } from './world.js?v=ddf8c0ac';
+import { quatOf, qmul, qrot, slerp, add, mul, unit, cross, lerp3 } from './gl.js?v=ddf8c0ac';
+import { drawSpectrum, drawStalk, drawChain } from './figs.js?v=ddf8c0ac';
 import { gamepad } from '../gamepad/gamepad.js';
 
 const $ = (id) => document.getElementById(id);
@@ -44,7 +44,7 @@ const CAP = {
     ['The stalk lets go', 'Across the foot of the stalk, a layer of cells dissolves the walls that join them, while cork seals the twig behind. Then the leaf\'s weight breaks it off.'],
   ],
   tissue: [
-    ['Inside the leaf', 'A window is cut through the leaf (0.8 mm wide once the leaf is grown), and this is one wall of it. Full grown, the leaf is 0.14 mm thick. Under a clear skin one cell thick stand tall cells, side by side. Below them are loose cells with air between, then the lower skin.'],
+    ['Inside the leaf', 'The leaf has been cut straight across and the far piece moved aside. This is the cut face, seen looking out from the tree. Full grown, the leaf is 0.14 mm thick. Under a clear skin one cell thick stand tall cells, side by side. Below them are loose cells with air between, then the lower skin.'],
     ['Where the light is used', 'Watch the dots of sunlight fall through the leaf. Most that are taken in go in the tall cells, which hold the most chloroplasts: the green bodies. Light we see as blue or red seldom gets past them; more of the light we see as green goes deeper, and some comes out underneath. Carbon dioxide comes in through pores in the lower skin. The bundle of pipes on the right is a vein.'],
     ['Green lasts by the vein', 'Cells far from a vein lose their chlorophyll first. Those beside it keep theirs a few days longer.'],
     ['Red on the sunlit side', 'Anthocyanin is made mostly in the tall cells under the upper skin, where the light is strongest. The loose cells below make little. That is why a maple leaf is redder on top than underneath.'],
@@ -75,10 +75,10 @@ const CAP = {
 const DOTS = 'Each dot of light stands for a little sunlight of one wavelength, drawn in the colour we see it as, and moving far slower than light does. It is drawn falling straight down. Whether it is taken in, and how deep, is drawn by lot with the chances the page\'s model gives that wavelength on this date: by chlorophyll or a carotenoid at a chloroplast, or by anthocyanin in a vacuole, with a flash. A real leaf also scatters light about inside itself, which lets it take in more of the light we see as green than is drawn here (about three quarters of it in summer), and sends some back out of its upper side; that is not drawn, and as many dots are drawn on every date and at every wavelength from 400 to 700 nm, which is not the mix in real sunlight.';
 const NOTE = {
   tree: `Drawn with ${world ? world.count.toLocaleString('en') : 'a few thousand'} leaves; a real tree this size carries several times more. The white ring marks the leaf we follow. Dates are typical for Kyoto, ${LAT}° N. A fall takes seconds; here it is spread over two and a half days so that it can be seen. Every day is shown at five in the afternoon by the Sun, with the Sun where it then stands: well up in June, within a degree of the horizon by mid-November. The sky is always clear.`,
-  leaf: 'The white ring marks a window cut through the leaf, 0.8 mm wide on the grown leaf, so that the next scales can look inside. A fall takes seconds; here it is spread over two and a half days of the slider so that it can be seen.',
+  leaf: 'The white ring marks where the leaf is cut across. Zoom in and the piece beyond the cut slides aside, so that the next scales can look at the cut face; a real leaf is not cut. A fall takes seconds; here it is spread over two and a half days of the slider so that it can be seen.',
   tissue: 'A model: real cells are less regular, and those at a cut would be sliced open. Only walls, chloroplasts and vacuoles are drawn. The ring marks the cell the next scale shows. ' + DOTS,
   cells: 'Only the walls, chloroplasts and vacuoles are drawn. The small ring marks where the Molecules scale looks. ' + DOTS,
-  membrane: 'Sticks are bonds between atoms: carbon grey, nitrogen blue, oxygen red, magnesium pale green; hydrogen is left out. The glowing bonds are the ones whose shared electrons take in visible light. The beads underneath are the heads of the membrane\'s fat molecules. In a real membrane the pigments sit inside it, held by proteins, which are not drawn; here they are lifted onto its face so that they can be seen. Chlorophyll comes in two kinds, a and b; a is drawn, and only one of its five oxygen atoms. In autumn the real membrane is taken apart too, and the carotenoids that remain end up in drops of fat. Each dot of light stands for a little light of one wavelength, drawn in the colour we see it as, and moving far slower than light does; a real wave of visible light is about a hundred times wider than this view. One molecule has no colour: each is drawn in the colour its pigment has in bulk.',
+  membrane: 'Sticks are bonds between atoms: carbon grey, nitrogen blue, oxygen red, magnesium pale green; hydrogen is left out. The glowing bonds are the ones whose shared electrons take in visible light. The beads underneath are the heads of the membrane\'s fat molecules. The smooth mounds are the proteins that hold the pigments, drawn as plain lumps; they go as the chlorophyll goes. In a real membrane nearly every pigment sits inside one of them; here the pigments are lifted onto the membrane\'s face and spread out so that they can be seen. Chlorophyll comes in two kinds, a and b; a is drawn, and only one of its five oxygen atoms. In autumn the real membrane is taken apart too, and the carotenoids that remain end up in drops of fat. Each dot of light stands for a little light of one wavelength, drawn in the colour we see it as, and moving far slower than light does; a real wave of visible light is about a hundred times wider than this view. One molecule has no colour: each is drawn in the colour its pigment has in bulk.',
   vacuole: 'Sticks are bonds between atoms; carbon is drawn pale and oxygen dark red so that they show against the red water; hydrogen is left out. The water\'s own colour hides the rest of the cell, and molecules more than a hundred or so nanometres away; real cell sap is far clearer than that. The glowing bonds are the ones whose shared electrons take in visible light. Water is not drawn. The pigment is drawn a few times more crowded than it is in a deep red cell. Each dot of light stands for a little light of one wavelength, moving far slower than light does.',
 };
 const CUT = 'The foot of the leaf stalk cut lengthwise, twig on the left. Brown: cells whose walls fill with cork and seal the twig. Beside them, small cells dissolve the walls that join them, from the outside in. The pale strand is the vein, the last part to break. A diagram: real cells are smaller and far more numerous.';
@@ -130,7 +130,8 @@ const zShown = () => hop ? mix(st.z, Math.min(st.z, HOP_OUT), smooth(Math.min(ho
 
 function aim(z) {
   const i = Math.min(LAST - 1, Math.floor(z)), g = z - i;
-  const fa = world.frames(false), fc = world.frames(true), cut = (p) => add(fa.cutO, qrot(fa.cutQ, mul(p, fa.unit)));
+  const slid = LEAF_CUT.slide * smooth((z - 1.06) / 0.4);                                   // the leaf is cut across as the zoom goes in from the Leaf scale: the far part moves off, and the view goes into the gap
+  const fa = world.frames(false, slid), fc = world.frames(true, slid), cut = (p) => add(fa.cutO, qrot(fa.cutQ, mul(p, fa.unit)));
   if (Math.abs(fa.unit * 1e6 - cellScale) > 1e-9) { cellScale = fa.unit * 1e6; knots(); }
   const k0 = fitK(i), k1 = fitK(i + 1), k = Math.exp(uOf(z)), t = k0 / k * (1 - smooth(g));   // the next stop's point slides to the middle of the view, starting and ending at rest
   const at = lerp3(TARGETS.membrane, TARGETS.vacuole, w);                                  // where the Molecules scale looks, in the frame of the cut
@@ -143,7 +144,7 @@ function aim(z) {
   if (z < 1) { const b = unit([0.1, 0.22, 1]), r = unit(cross([0, 1, 0], b)); q = slerp(quatOf(r, cross(b, r), b), q, smooth(g)); }
   const dist = cam.H * P11 / (2 * k), cx = free.x + free.w / 2, cy = free.y + free.h / 2;
   cam.k = k;
-  return { eye: add(target, mul(qrot(q, [0, 0, 1]), dist)), q, W: cam.W, H: cam.H, dpr: cam.dpr, P11, ox: 2 * cx / cam.W - 1, oy: 1 - 2 * cy / cam.H, k, dist, at, where: st.where, light: lightOn };
+  return { eye: add(target, mul(qrot(q, [0, 0, 1]), dist)), q, W: cam.W, H: cam.H, dpr: cam.dpr, P11, ox: 2 * cx / cam.W - 1, oy: 1 - 2 * cy / cam.H, k, dist, at, where: st.where, light: lightOn, cut: slid };
 }
 
 function draw() {

@@ -2,8 +2,8 @@
 // leaf's own timetable, and the outline of a leaf. Built once from a fixed seed, so every visit
 // shows the same tree. Lengths are in metres; x is to the right, y is up, z is toward the viewer,
 // and the foot of the trunk is at (0, 0, 0). No DOM.
-import { add, sub, mul, dot, cross, unit, len, quatOf, qmul, qaxis, slerp } from './gl.js?v=f8722925';
-import { timetable, FOCUS, pigments, mix, smooth, clamp } from './model.js?v=f8722925';
+import { add, sub, mul, dot, cross, unit, len, quatOf, qmul, qaxis, slerp } from './gl.js?v=ddf8c0ac';
+import { timetable, FOCUS, pigments, mix, smooth, clamp } from './model.js?v=ddf8c0ac';
 
 const UP = [0, 1, 0];
 function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
@@ -106,9 +106,9 @@ export function buildTree(seed = 20261113) {
 
   // the leaf the page follows: at the end of a low twig on the near left, hanging clear of the others
   const fu = unit([-0.4, -0.2, 0.9]), ff = frame(fu, [0, 0.92, 0.36]), fsd = unit(add(fu, [0, -0.5, 0]));   // held out nearly flat, its upper side tipped a little toward the viewer
-  const look = unit(sub([-0.3, 0, -1], mul(ff.n, dot([-0.3, 0, -1], ff.n))));               // the way the close-up views look across the blade: away from the viewer, clear of the crown
+  const AWAY = [-1, 0, 0.15], look = unit(sub(AWAY, mul(ff.n, dot(AWAY, ff.n))));              // the way the close-up views look across the blade: out from the tree's left side, so that nothing of the tree is behind
   const fpl = 0.04, flen = 0.085;
-  const want = [c[0] - 0.55 * rx, lo[1] + 0.3 * (hi[1] - lo[1]), c[2] + 0.6 * rz];
+  const want = [c[0] - 0.95 * rx, lo[1] + 0.3 * (hi[1] - lo[1]), c[2] + 0.3 * rz];
   let tip = nodes[0], best = 1e9;
   for (const n of nodes) {
     if (!n.tip) continue;
@@ -119,7 +119,7 @@ export function buildTree(seed = 20261113) {
   }
   const focus = { look, node: tip.p, sd: fsd, pl: fpl, ...ff, len: flen, r1: 0.5, r2: 0.5, r3: 0.5, r4: 0.5, sunny: 1, T: FOCUS, focus: true };
   const fm = add(add(focus.node, mul(fsd, fpl)), mul(fu, flen * 0.45));
-  const kept = leaves.filter((l) => { const m = sub(add(add(l.node, mul(l.sd, l.pl)), mul(l.u, l.len * 0.45)), fm), along = dot(m, ff.n), off = len(sub(m, mul(ff.n, along))); const al = dot(m, look), ol = len(sub(m, mul(look, al))); return !(along > -0.5 && along < 0.6 && off < 0.2 + Math.abs(along) * 0.36) && !(al > 0 && al < 0.9 && ol < 0.08 + al * 0.3); });
+  const kept = leaves.filter((l) => { const m = sub(add(add(l.node, mul(l.sd, l.pl)), mul(l.u, l.len * 0.45)), fm), along = dot(m, ff.n), off = len(sub(m, mul(ff.n, along))); const al = dot(m, look), ol = len(sub(m, mul(look, al))); return !(along > -0.5 && along < 0.6 && off < 0.2 + Math.abs(along) * 0.36) && !(al > 0 && ol < 0.12 + al * 0.5); });
   kept.push(focus);
   for (const l of kept) {                                   // where it comes to rest on the lawn, and how it lies there
     const b = add(l.node, mul(l.sd, l.pl)), a = l.focus ? 2.2 : l.r3 * 6.283;
