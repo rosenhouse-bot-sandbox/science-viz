@@ -70,24 +70,32 @@ void main() {
 // ---- leaves ---------------------------------------------------------------------------------------
 // One leaf outline drawn for every leaf. The blade curves down away from its stalk.
 export const LEAF_VS = HEAD + `
-layout(location=0) in vec3 aPos;
+layout(location=0) in vec3 aPos; layout(location=1) in vec3 aLobe;      // aLobe.x: which lobe the point belongs to
 layout(location=2) in vec3 iPos; layout(location=3) in vec4 iQuat; layout(location=4) in vec4 iCol;
 uniform mat4 uMV, uP; uniform float uDroop;
+uniform float uLobeA[7]; uniform vec3 uFold;      // each lobe's angle; and how far the leaf is still folded as it was in the bud (0 to 1), how far each half lobe is turned down at most, how much more it hangs
 uniform vec3 uSlide, uThick;      // a part of the cut leaf moved off; and the leaf's thickness, for the face of the cut
 out vec2 vUV; out vec3 vN; out vec3 vV; out vec3 vCol; out float vH;
 vec3 rot(vec4 q, vec3 v) { vec3 t = 2.0 * cross(q.xyz, v); return v + q.w * t + cross(q.xyz, t); }
+// A point of the blade, folded as bladeAt() in tree.js folds it: each lobe creased along its middle vein, the lobes drawn together like a fan.
+vec3 blade(vec2 p, float A) {
+  float ph = uFold.x * uFold.y, A2 = A * atan(0.36397 * cos(ph)) / 0.349066, t = p.x * cos(A) + p.y * sin(A), s = p.y * cos(A) - p.x * sin(A), w = s * cos(ph);
+  return vec3(t * cos(A2) - w * sin(A2), t * sin(A2) + w * cos(A2), -abs(s) * sin(ph) - uDroop * (1.0 + uFold.z * uFold.x) * dot(p, p));
+}
 void main() {
-  vec3 l = vec3(aPos.xy, -uDroop * dot(aPos.xy, aPos.xy) ) - aPos.z * uThick + uSlide; vH = aPos.z;
+  float A = uLobeA[int(aLobe.x + 0.5)]; vec3 b0 = blade(aPos.xy, A);
+  vec3 l = b0 - aPos.z * uThick + uSlide; vH = aPos.z;
   vec4 v = uMV * vec4(iPos + rot(iQuat, l * iCol.a), 1.0);
-  vN = mat3(uMV) * rot(iQuat, vec3(2.0 * uDroop * aPos.xy, 1.0));
+  vec3 nb = uFold.x > 0.0 ? cross(blade(aPos.xy + vec2(1e-3, 0.0), A) - b0, blade(aPos.xy + vec2(0.0, 1e-3), A) - b0) : vec3(2.0 * uDroop * aPos.xy, 1.0);
+  vN = mat3(uMV) * rot(iQuat, nb);
   vUV = aPos.xy; vV = v.xyz; vCol = iCol.rgb; gl_Position = uP * v;
 }`;
 export const LEAF_FS = HEAD + LIGHT + `
 in vec2 vUV; in vec3 vN; in vec3 vV; in vec3 vCol; in float vH; out vec4 o;
 uniform int uDetail;                 // 1 for the leaf we follow, 2 for the face of the cut through it
 uniform vec3 uEarly, uLate, uVein;   // that leaf's colour a few days earlier and later, and its veins' colour
-uniform vec2 uCutO, uCutX; uniform int uKeep; uniform vec3 uDotC;   // the cut across it: a point on the cut line and the way the line runs; and which side of it is being drawn (0: the leaf is whole)
-uniform float uMic, uCells; uniform vec3 uTall, uLoose;   // a micrometre in leaf lengths; how far along the cut the cells are built one by one; the colours of the tall and the loose cells
+uniform vec2 uCutO, uCutX; uniform int uKeep; uniform sampler2D uFace;   // the cut across it: a point on the cut line and the way the line runs; and which side of it is being drawn (0: the leaf is whole)
+uniform float uMic, uCells, uFaceHalf;   // a micrometre in leaf lengths; how far along the cut the cells are built one by one; the colours of the tall and the loose cells
 uniform vec2 uLobe[7];               // each lobe's direction and length
 uniform float uVeinW, uSideW, uNetW, uNetCell;
 uniform float uLum;                  // how bright the daylight is
@@ -105,18 +113,9 @@ float cover(float d, float w) { float px = max(fwidth(d), 1e-9); return clamp((0
 void main() {
   vec2 hd = vUV - uCutO; float hx = dot(hd, uCutX), hy = dot(hd, vec2(-uCutX.y, uCutX.x));
   if (uDetail == 1 && uKeep != 0 && hy * float(uKeep) < 0.0) discard;
-  if (uDetail == 2) {                                // the face of the cut: the leaf's layers, as bands of cells too small to build one by one
-    float xs = hx / uMic, zc = 35.0 - vH * 136.0, px = max(fwidth(xs), 1e-4);
-    if (abs(xs) < uCells) discard;
-    float grain = clamp(2.0 / px, 0.0, 1.0);                       // the chloroplasts' speckle, until they are smaller than a pixel
-    float sp = 1.0 + grain * 0.7 * (hash(floor(vec2(xs, zc) / 2.6)) - 0.5);
-    vec3 air = uLoose * 0.2, c2 = air;
-    if (zc > 26.0) c2 = mix(uTall * 0.55, vec3(0.42, 0.48, 0.4), 0.5);
-    else if (zc < -80.0) c2 = mix(air, vec3(0.36, 0.52, 0.43), 0.7);
-    else if (zc > -16.0) { float s = abs(fract(xs / 12.4) - 0.5) * 12.4; c2 = mix(mix(uTall, uDotC, step(0.5, hash(floor(vec2(xs, zc) / 2.6) + 5.0)) * grain * 0.8 + (1.0 - grain) * 0.4), vec3(0.86, 0.94, 0.82), 0.1) * 0.74 * sp * mix(1.0, 0.8, clamp((s - 5.2) / px + 0.5, 0.0, 1.0) * grain); }
-    else if (zc < -22.0) { vec2 g = vec2(xs, zc) / 15.0, id = floor(g); float d1 = 9.0; for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) { vec2 cell = id + vec2(i, j); if (hash(cell + 11.0) < 0.26) continue; d1 = min(d1, length(cell + 0.25 + 0.5 * vec2(hash(cell), hash(cell + 7.3)) - g)); }
-      float w = px / 15.0; c2 = mix(air, uLoose * 0.5 * sp * sp, mix(1.0 - smoothstep(0.42 - w, 0.42 + w, d1), 0.5, clamp(w * 1.5, 0.0, 1.0))); }
-    o = vec4(c2 * uLum, 1.0); return;
+  if (uDetail == 2) {                                // the face of the cut beyond the cells that are built: a picture of those same cells, taken square on and laid end to end
+    float xs = hx / uMic; if (abs(xs) < uCells) discard;
+    o = texture(uFace, vec2(xs / (2.0 * uFaceHalf) + 0.5, 1.0 - vH)); if (o.a < 0.02) discard; return;     // clear where the cells are clear: what is behind the leaf shows through its skin
   }
   vec3 v = normalize(-vV), n = normalize(vN); if (dot(n, v) < 0.0) n = -n;     // the side that faces the eye, whichever way round a triangle was drawn (at the teeth some fold back on themselves)
   float ndl = dot(n, uSun);
@@ -157,7 +156,7 @@ void main() {
   col += vec3(1.0, 0.9, 0.8) * 0.12 * pow(max(dot(n, normalize(uSun + v)), 0.0), 30.0);
   if (uDetail == 1) { float w = fwidth(hy); col = mix(col, vec3(1.0), 0.85 * (1.0 - smoothstep(1.0, 2.2, abs(hy) / max(w, 1e-9))) * (1.0 - smoothstep(0.004, 0.012, w))); }   // the line the leaf is cut along, marked in white from the Leaf scale on
 
-  col *= uLum; col /= max(1.0, max(col.r, max(col.g, col.b)));     // brighter than the screen can show: dimmed as a whole, so that the colour the model gave is kept
+  col *= uLum; { float m = max(col.r, max(col.g, col.b)); if (m > 0.6) col *= (0.6 + 0.4 * (1.0 - exp(-(m - 0.6) / 0.4))) / m; }     // nearly brighter than the screen can show: eased down as a whole, so that the colour the model gave is kept and the brightest leaf still shows its veins
   o = vec4(col, 1.0);
 }`;
 
@@ -186,7 +185,7 @@ void main() {
   if (kind == 14) grow = 1.0 - clamp((uPig.x - iMat.y) / 0.12, 0.0, 1.0);
   if (kind == 7 || kind == 10) grow = clamp((uPig.x - iMat.y) / 0.06, 0.0, 1.0);
   if (kind == 8 || kind == 11) grow = clamp((uPig.y - iMat.y) / 0.06, 0.0, 1.0);
-  if (kind == 9) grow = clamp((uPig.z - iMat.y) / 0.06, 0.0, 1.0);
+  if (kind == 9 || kind == 16) grow = clamp((uPig.z - iMat.y) / 0.06, 0.0, 1.0);
   vec3 l, n;
   if (uShape == 1) { float r = min(sc.x, sc.y), sg = aPos.z > 0.0 ? 1.0 : -1.0; l = vec3(aNor.xy * sc.xy, aNor.z * r + sg * max(sc.z - r, 0.0)); n = aNor; }
   else { l = aPos * sc; n = aNor / sc; }
@@ -203,6 +202,7 @@ uniform float uFlash[64];
 uniform vec4 uFog;                  // colour and thickness of what the view is inside (the vacuole's water)
 uniform float uFogMax;              // above 0: the view is inside coloured water this deep (in metres), which tints what is seen through it
 uniform float uLum;                 // how bright the daylight is, for the tree's wood
+uniform float uNear;                // above 0: nothing nearer than this (metres) is drawn, the water included: molecules beyond it come into sight gradually, and the water's colour hides them only from there on
 uniform float uFade;                // how much of a molecule built atom by atom shows: they are smaller than a pixel from far off
 float hash3(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
 void main() {
@@ -231,11 +231,17 @@ void main() {
   else if (kind == 11) { float w = fwidth(vL.y); a = 1.0 - smoothstep(0.5, 0.5 + w, abs(vL.y)); if (a < 0.01) discard; }
   else if (kind == 12) { float r = length(vL.xy); a = exp(-r * r * 7.0); c = c * 1.3 + vec3(0.35) * exp(-r * r * 40.0); if (a < 0.01) discard; }
   else if (kind == 13) { float r = length(vL.xy), w = max(1.6 * vMat.y * vCol.a, fwidth(r) * 0.5); a = smoothstep(1.0 - 2.0 * w, 1.0 - w, r) * (1.0 - smoothstep(1.0 - w, 1.0, r)); c = vec3(1.0); if (a < 0.01) discard; }
+  else if (kind == 16) {                                                          // an anthocyanin molecule too far off to build atom by atom: the outline of its three rings
+    vec2 p = vL.xy * vec2(0.62, 0.24); float w = max(fwidth(p.x), fwidth(p.y)), lw = max(0.035, w * 0.55);
+    float dd = min(abs(length(p - vec2(-0.42, 0.0)) - 0.16), min(abs(length(p - vec2(-0.14, 0.0)) - 0.16), abs(length(p - vec2(0.3, 0.0)) - 0.16)));
+    if (p.x > 0.02 && p.x < 0.14) dd = min(dd, abs(p.y));
+    a = 1.0 - smoothstep(lw, lw + w, dd); if (uNear > 0.0) a *= smoothstep(uNear, uNear * 1.3, -vV.z); if (a < 0.01) discard;
+  }
   if (kind == 7 || kind == 8 || kind == 9) a *= uFade;
-  if (kind == 10 || kind == 11 || kind == 12) a *= clamp(2.0 / max(fwidth(vL.x), fwidth(vL.y)), 0.0, 1.0);   // smaller than a pixel: only its share of the pixel shows
+  if (kind == 10 || kind == 11 || kind == 12 || kind == 16) a *= clamp(2.0 / max(fwidth(vL.x), fwidth(vL.y)), 0.0, 1.0);   // smaller than a pixel: only its share of the pixel shows
   if (uFog.a > 0.0 && kind != 12 && kind != 13) {
     if (uFogMax > 0.0) { c = mix(uFog.rgb, c, exp(-uFog.a * min(length(vV), uFogMax))); if (a < 1.0) a = mix(1.0, a, exp(-uFog.a * min(length(vV), uFogMax))); }
-    else a *= exp(-uFog.a * length(vV));                  // a molecule: hidden by the coloured water in front of it
+    else a *= exp(-uFog.a * max(length(vV) - uNear, 0.0));                  // a molecule: hidden by the coloured water in front of it
   }
   o = vec4(c, a);
 }`;

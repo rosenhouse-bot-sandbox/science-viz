@@ -2,8 +2,8 @@
 // leaf's own timetable, and the outline of a leaf. Built once from a fixed seed, so every visit
 // shows the same tree. Lengths are in metres; x is to the right, y is up, z is toward the viewer,
 // and the foot of the trunk is at (0, 0, 0). No DOM.
-import { add, sub, mul, dot, cross, unit, len, quatOf, qmul, qaxis, slerp } from './gl.js?v=03761dd8';
-import { timetable, FOCUS, pigments, mix, smooth, clamp } from './model.js?v=03761dd8';
+import { add, sub, mul, dot, cross, unit, len, quatOf, qmul, qaxis, slerp } from './gl.js?v=2b71fae6';
+import { timetable, FOCUS, pigments, mix, smooth, clamp } from './model.js?v=2b71fae6';
 
 const UP = [0, 1, 0];
 function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
@@ -52,6 +52,16 @@ const frame = (u, n0) => { const n = unit(sub(n0, mul(u, dot(n0, u)))), v = cros
 export const DROOP = 0.16;                                 // a blade curves down away from its stalk: depth = DROOP * distance squared, in leaf lengths
 // A point on a blade, given in leaf lengths, as it is in the leaf's own frame.
 export const onBlade = (a, b) => [a, b, -DROOP * (a * a + b * b)];
+// A leaf comes out of its bud folded like a fan: each lobe is creased along its middle vein with its two halves turned down,
+// the lobes lie close together, and the whole blade hangs. fold is 1 for a leaf just out and 0 once it is flat.
+export const foldOf = (size) => 1 - smooth((size - 0.07) / 0.6);
+export const FOLD = { turn: 1.25, hang: 1.2, half: 20 * Math.PI / 180 };   // how far each half of a lobe is turned down (radians), how much more the blade hangs, and half the angle between two lobes
+// The same point on a blade that is folded: (a, b) in leaf lengths on lobe number i (the shader does the same sum).
+export function bladeAt(a, b, i, fold) {
+  const ph = fold * FOLD.turn, A = LOBES[i].a, A2 = A * Math.atan(Math.tan(FOLD.half) * Math.cos(ph)) / FOLD.half;
+  const t = a * Math.cos(A) + b * Math.sin(A), s = -a * Math.sin(A) + b * Math.cos(A), w = s * Math.cos(ph);
+  return [t * Math.cos(A2) - w * Math.sin(A2), t * Math.sin(A2) + w * Math.cos(A2), -Math.abs(s) * Math.sin(ph) - DROOP * (1 + FOLD.hang * fold) * (a * a + b * b)];
+}
 
 export function buildTree(seed = 20261113) {
   const R = rng(seed), segs = [], nodes = [], leaves = [];
@@ -105,8 +115,8 @@ export function buildTree(seed = 20261113) {
   }
 
   // the leaf the page follows: at the end of a low twig on the near left, hanging clear of the others
-  const fu = unit([-0.4, -0.2, 0.9]), ff = frame(fu, [0, 0.92, 0.36]), fsd = unit(add(fu, [0, -0.5, 0]));   // held out nearly flat, its upper side tipped a little toward the viewer
-  const AWAY = [-1, 0, 0.15], look = unit(sub(AWAY, mul(ff.n, dot(AWAY, ff.n))));              // the way the close-up views look across the blade: out from the tree's left side, so that nothing of the tree is behind
+  const fu = unit([-0.75, -0.25, -0.45]), ff = frame(fu, [0.3, 0.8, -0.5]), fsd = unit(add(fu, [0, -0.5, 0]));   // held out nearly flat, its upper side tipped toward the afternoon Sun, as most of the crown's are, so that it is lit like its neighbours
+  const AWAY = [-1, 0, -0.8], look = unit(sub(AWAY, mul(ff.n, dot(AWAY, ff.n))));              // the way the close-up views look across the blade: out from the tree's left side and down the slope of the blade, so that only lawn is behind
   const fpl = 0.04, flen = 0.085;
   const want = [c[0] - 0.95 * rx, lo[1] + 0.3 * (hi[1] - lo[1]), c[2] + 0.3 * rz];
   let tip = nodes[0], best = 1e9;
@@ -127,6 +137,10 @@ export function buildTree(seed = 20261113) {
     l.g = l.focus ? [b[0] - 0.3, up + 0.002, b[2] + 0.45] : [b[0] + (l.r2 - 0.5) * 2.4 + 0.25, up + 0.004 * l.r1, b[2] + (l.r4 - 0.5) * 2.4];
     l.rest = frame([Math.cos(a), 0, Math.sin(a)], l.focus ? [0.04, 1, 0.06] : [(l.r1 - 0.5) * 0.16, 1, (l.r2 - 0.5) * 0.16]).q;
     l.spin = unit([l.r2 - 0.5, l.r3 - 0.5, l.r4 - 0.5 + 0.01]);
+  }
+  for (const l of kept) if (!l.focus) {                     // no other leaf comes to rest on or under the followed one: the close-ups there would be of two leaves at once
+    const dx = l.g[0] - focus.g[0], dz = l.g[2] - focus.g[2], d = Math.hypot(dx, dz), CLEAR = 0.2;
+    if (d < CLEAR) { l.g[0] = focus.g[0] + (d > 1e-6 ? dx / d : 1) * CLEAR; l.g[2] = focus.g[2] + (d > 1e-6 ? dz / d : 0) * CLEAR; }
   }
   return { segs, nodes, leaves: kept, focus, bounds: { x0: lo[0], x1: hi[0], y0: lo[1], y1: hi[1], z0: lo[2], z1: hi[2] }, centre: c };
 }

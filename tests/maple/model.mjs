@@ -5,7 +5,7 @@
 //   node tests/maple/model.mjs
 import * as M from '../../js/maple/model.js';
 import { stamp } from './stamp.mjs';
-import { buildTree, place, leafShape, SPOT, DROOP } from '../../js/maple/tree.js';
+import { buildTree, place, leafShape, SPOT, DROOP, LOBES, bladeAt, foldOf, onBlade } from '../../js/maple/tree.js';
 import { qrot } from '../../js/maple/gl.js';
 
 let fails = 0;
@@ -36,6 +36,11 @@ for (const l of T.leaves) {
   { const o = place(l, M.DAY_END, {}), s = l.len * o.size; for (const [x, y] of [[1, 0], [0.6, 0.6], [0.6, -0.6], [-0.2, 0.25], [-0.2, -0.25], [0, 0]]) { const w = qrot(o.q, [x * s, y * s, -DROOP * (x * x + y * y) * s]); if (o.pos[1] + w[1] < -1e-4) { ok(false, `a fallen leaf dips ${(-(o.pos[1] + w[1]) * 1000).toFixed(1)} mm below the lawn`); break; } } } }
   ok(place(l, M.DAY_END, {}).state === 2, 'every leaf is on the ground on the last day');
 }
+// a young leaf is folded like a fan and opens flat
+ok(foldOf(0.07) === 1 && foldOf(1) === 0 && foldOf(0.3) > foldOf(0.5), 'a leaf is fully folded as it leaves the bud and flat when grown');
+for (const [x, y] of [[0.47, 0.062], [0.3, 0.2], [0.1, -0.3]]) LOBES.forEach((l, i) => { const a = bladeAt(x, y, i, 0), b = onBlade(x, y); ok(Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]) < 1e-12, 'an open leaf is the same shape whichever lobe a point is counted on'); });
+{ const e = 1e-5; for (const f of [0.3, 0.7, 1]) for (const [x, y] of [[0.47, 0.062], [0.6, -0.05]]) { const p = bladeAt(x, y, 0, f), q = bladeAt(x, y + e, 0, f), flat = Math.hypot(q[0] - p[0], q[1] - p[1], q[2] - p[2] + (onBlade(x, y + e)[2] - onBlade(x, y)[2]) * 0) / e; ok(flat > 0.9 && flat < 1.25, 'folding a lobe does not stretch it: ' + flat.toFixed(3)); } }
+{ const tip = (i, f) => bladeAt(LOBES[i].len * Math.cos(LOBES[i].a), LOBES[i].len * Math.sin(LOBES[i].a), i, f); ok(Math.hypot(tip(1, 1)[0] - tip(2, 1)[0], tip(1, 1)[1] - tip(2, 1)[1]) < 0.5 * Math.hypot(tip(1, 0)[0] - tip(2, 0)[0], tip(1, 0)[1] - tip(2, 0)[1]), 'the lobes of a folded leaf lie closer together'); }
 // sun leaves turn first and reddest
 const sunny = T.leaves.filter((l) => l.sunny > 0.8 && !l.focus), shaded = T.leaves.filter((l) => l.sunny < 0.2);
 const mean = (a, f) => a.reduce((s, x) => s + f(x), 0) / a.length;

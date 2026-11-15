@@ -3,11 +3,11 @@
 // window, one cell's chloroplasts and vacuole, one chloroplast's stacks of membrane, and the
 // pigment molecules on one membrane and in the vacuole. Each part is built at its true size in its
 // own units (metres, leaf lengths, micrometres, nanometres) and placed inside the part above.
-import { program, instanced, ball, tube, square, box, add, sub, mul, dot, cross, unit, len, quatOf, qmul, qaxis, qrot, qconj, qalong, rng } from './gl.js?v=03761dd8';
-import * as SH from './shaders.js?v=03761dd8';
-import { leafRGB, pigments, bandTable, wavelengthRGB, encode, clamp, smooth, mix, NM0, NSTEP, sunAt, thickness } from './model.js?v=03761dd8';
-import { buildTree, leafShape, place, SPOT, LOBES, DROOP, onBlade } from './tree.js?v=03761dd8';
-import { pigmentShapes } from './molecules.js?v=03761dd8';
+import { program, instanced, ball, tube, square, box, add, sub, mul, dot, cross, unit, len, quatOf, qmul, qaxis, qrot, qconj, qalong, rng } from './gl.js?v=2b71fae6';
+import * as SH from './shaders.js?v=2b71fae6';
+import { leafRGB, pigments, bandTable, wavelengthRGB, encode, clamp, smooth, mix, NM0, NSTEP, sunAt, thickness } from './model.js?v=2b71fae6';
+import { buildTree, leafShape, place, SPOT, LOBES, DROOP, bladeAt, foldOf, FOLD } from './tree.js?v=2b71fae6';
+import { pigmentShapes } from './molecules.js?v=2b71fae6';
 
 // The leaf cut through, in micrometres. In the frame of the cut: x runs along the wall of the window,
 // y into the leaf behind the wall, z up through the leaf's thickness. (0, CELL_Y, 0) is the middle of the followed cell.
@@ -28,6 +28,7 @@ export function makeWorld(gl) {
   const tree = buildTree(), L = tree.leaves, F = tree.focus, fi = L.indexOf(F);
   L.splice(fi, 1); L.push(F);                             // the followed leaf last, so the others can be drawn without it
   const S = L.map(() => ({})), fo = S[S.length - 1];
+  const DEEP = gl.getParameter(gl.DEPTH_BITS) >= 24;
   const prog = { sky: program(gl, SH.SKY_VS, SH.SKY_FS), land: program(gl, SH.LAND_VS, SH.LAND_FS), leaf: program(gl, SH.LEAF_VS, SH.LEAF_FS), solid: program(gl, SH.SOLID_VS, SH.SOLID_FS), memb: program(gl, SH.MEMB_VS, SH.MEMB_FS) };
   const M = { box: box(), ball3: ball(3), ball4: ball(4), ball1: ball(1), ball2: ball(2), tube: tube(8, 1, false), disc: tube(20, 1, true), stick: tube(6, 1, false), sq: square(), ring: tube(96, 1, false) };
   const INK = { chl: leafRGB({ chl: 1, car: 0, anth: 0 }, 1, 2.4), car: leafRGB({ chl: 0, car: 1.3, anth: 0 }, 1, 1.9), anth: leafRGB({ chl: 0, car: 0, anth: 1 }, 1, 2.3) };
@@ -37,12 +38,12 @@ export function makeWorld(gl) {
   const ringMesh = instanced(gl, M.ring, [3]); ringMesh.set(new Float32Array([0, 0, 0]));
   // a leaf: each lobe is a strip between its two edges
   function leafMesh(lobes, fine) {
-    const P = [], I = [];
-    for (const pts of lobes) { const n = pts.length / 2 - 1, b = P.length / 3; for (const p of pts) P.push(p[0], p[1], 0); for (let i = 0; i < n; i++) { const a0 = b + i, a1 = b + i + 1, b0 = b + 2 * n + 1 - i, b1 = b + 2 * n - i; I.push(a0, a1, b1, a0, b1, b0); } }
+    const P = [], I = [], lobeOf = [];
+    lobes.forEach((pts, li) => { const n = pts.length / 2 - 1, b = P.length / 3; for (const p of pts) { P.push(p[0], p[1], 0); lobeOf.push(li); } for (let i = 0; i < n; i++) { const a0 = b + i, a1 = b + i + 1, b0 = b + 2 * n + 1 - i, b1 = b + 2 * n - i; I.push(a0, a1, b1, a0, b1, b0); } });
     if (fine) {                                            // the blade is curved, and flat triangles cut across the curve: split every long edge, most finely round the window
       const mid = new Map(), want = (a, b) => { const mx = (P[a * 3] + P[b * 3]) / 2 - SPOT[0], my = (P[a * 3 + 1] + P[b * 3 + 1]) / 2 - SPOT[1]; const r = Math.hypot(mx, my); return r < 0.02 ? 0.003 : r < 0.08 ? 0.012 : 0.045; };
       const L = (a, b) => Math.hypot(P[a * 3] - P[b * 3], P[a * 3 + 1] - P[b * 3 + 1]);
-      const m = (a, b) => { const key = a < b ? a * 65536 + b : b * 65536 + a; if (!mid.has(key)) { mid.set(key, P.length / 3); P.push((P[a * 3] + P[b * 3]) / 2, (P[a * 3 + 1] + P[b * 3 + 1]) / 2, 0); } return mid.get(key); };
+      const m = (a, b) => { const key = a < b ? a * 65536 + b : b * 65536 + a; if (!mid.has(key)) { mid.set(key, P.length / 3); lobeOf.push(lobeOf[a]); P.push((P[a * 3] + P[b * 3]) / 2, (P[a * 3 + 1] + P[b * 3 + 1]) / 2, 0); } return mid.get(key); };
       const todo = []; for (let i = 0; i < I.length; i += 3) todo.push([I[i], I[i + 1], I[i + 2]]);
       I.length = 0;
       while (todo.length) {
@@ -52,23 +53,26 @@ export function makeWorld(gl) {
       }
       if (P.length / 3 > 65535) throw new Error('leaf mesh too fine: ' + P.length / 3);
     }
-    return { pos: new Float32Array(P), nor: new Float32Array(P.length), idx: new Uint16Array(I) };
+    const nor = new Float32Array(P.length); lobeOf.forEach((li, k) => { nor[k * 3] = li; });   // which lobe each point is on, for the fold of a young leaf
+    return { pos: new Float32Array(P), nor, idx: new Uint16Array(I) };
   }
   const leaves = instanced(gl, leafMesh(leafShape.mid), [3, 4, 4]), leafData = new Float32Array(L.length * 11);
   const oneLeaf = instanced(gl, leafMesh(leafShape.toothed, true), [3, 4, 4]);
   // the face of the cut, away from the middle where the cells are built one by one: a ribbon as deep as the leaf is thick, wherever the cut line crosses the blade
   const cutFace = (() => {
-    const inside = (x, y) => leafShape.toothed.some((pts) => { let c = false; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) if ((pts[i][1] > y) !== (pts[j][1] > y) && x < (pts[j][0] - pts[i][0]) * (y - pts[i][1]) / (pts[j][1] - pts[i][1]) + pts[i][0]) c = !c; return c; });
-    const P = [], I = [], X = cutLocalAlong(), STEP = 0.002; let prev = false;
+    const inPoly = (pts, x, y) => { let c = false; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) if ((pts[i][1] > y) !== (pts[j][1] > y) && x < (pts[j][0] - pts[i][0]) * (y - pts[i][1]) / (pts[j][1] - pts[i][1]) + pts[i][0]) c = !c; return c; };
+    const lobeAt = (x, y) => { let best = -1, bs = 9; LOBES.forEach((l, li) => { const sd = Math.abs(y * Math.cos(l.a) - x * Math.sin(l.a)); if (sd < bs && inPoly(leafShape.toothed[li], x, y)) { best = li; bs = sd; } }); return best; };   // where two lobes overlap, the one whose middle vein is nearer: it lies on top when the leaf is folded
+    const P = [], I = [], Lb = [], X = cutLocalAlong(), STEP = 0.002; let prev = -1;
     for (let t = -1.2; t <= 1.2; t += STEP) {
-      const x = SPOT[0] + X[0] * t, y = SPOT[1] + X[1] * t, on = inside(x, y);
-      if (on) { const b = P.length / 3; P.push(x, y, 0, x, y, 1); if (prev) I.push(b - 2, b - 1, b, b, b - 1, b + 1); }
+      const x = SPOT[0] + X[0] * t, y = SPOT[1] + X[1] * t, on = lobeAt(x, y);
+      if (on >= 0) { const b = P.length / 3; P.push(x, y, 0, x, y, 1); Lb.push(on, 0, 0, on, 0, 0); if (prev === on) I.push(b - 2, b - 1, b, b, b - 1, b + 1); }
       prev = on;
     }
-    const m = instanced(gl, { pos: new Float32Array(P), nor: new Float32Array(P.length), idx: new Uint16Array(I) }, [3, 4, 4]); m.set(new Float32Array([0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1]));
+    const m = instanced(gl, { pos: new Float32Array(P), nor: new Float32Array(Lb), idx: new Uint16Array(I) }, [3, 4, 4]); m.set(new Float32Array([0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1]));
     return m;
   })();
   const stalks = instanced(gl, M.tube, LAYOUT), stalkData = new Float32Array(L.length * 17);
+  const lobeAngles = new Float32Array(LOBES.map((l) => l.a));
   const lobeDirs = new Float32Array(LOBES.flatMap((l) => [Math.cos(l.a) * l.len, Math.sin(l.a) * l.len]));
 
   // ---- the tree's branches ------------------------------------------------------------------------
@@ -98,7 +102,7 @@ export function makeWorld(gl) {
     (close ? cells.vacCapsFine : cells.vacCaps).add(pos, ID, [2.3, 2.3, half - 3.2], [0, 0, 0, 1], [2, 0, tone]);
     const rings = s.row < 2 ? 7 : 4, per = s.row < 2 ? 5 : 3, big = s.row < 2 ? 1 : 1.45;
     for (let j = 0; j < rings; j++) for (let m = 0; m < per; m++) {
-      const a = -Math.PI / 2 + (m + (j & 1) * 0.5) * 2 * Math.PI / per + (main ? 0 : (hash(s.i * 7 + j, m + s.row * 3) - 0.5) * 0.5), z = cz + (j - (rings - 1) / 2) * (2 * half - 5) / rings + (main ? 0 : (hash(s.i * 9 + j, m) - 0.5) * 1.2);
+      const a = -Math.PI / 2 + (m + ((main ? j + 1 : j) & 1) * 0.5) * 2 * Math.PI / per + (main ? 0 : (hash(s.i * 7 + j, m + s.row * 3) - 0.5) * 0.5), z = cz + (j - (rings - 1) / 2) * (2 * half - 5) / rings + (main ? 0 : (hash(s.i * 9 + j, m) - 0.5) * 1.2);
       const p = [s.x + Math.cos(a) * WALL_R, s.y + Math.sin(a) * WALL_R, z], q = rotZ(a), sc = [1.2 * big, 2.2 * big, 2.5 * big];
       if (cellRec && Math.sin(a) < -0.25) cellRec.plast.push(p);
       if (!main) { (close ? cells.ball3 : cells.ball1).add(p, q, sc, [0, 0, 0, 1], [4, 0, tone]); continue; }
@@ -107,13 +111,17 @@ export function makeWorld(gl) {
       cells.env.add(p, q, sc, [0, 0, 0, 1], [6, 0, tone]);
       for (let g = 0; g < 26; g++) {
         const v = (rnd() - 0.5) * 3.0, w = (rnd() - 0.5) * 4.2, u = (rnd() - 0.5) * 1.1, rad = 0.17 + 0.07 * rnd(), hh = 0.05 + 0.08 * rnd(), th = 0.06 + 0.9 * rnd();
-        if ((u / 0.78) ** 2 + (v / 1.55) ** 2 + (w / 2.1) ** 2 > 1 || (followed && Math.hypot(v, w) < 0.75)) continue;
+        if ((u / 0.78) ** 2 + (v / 1.55) ** 2 + (w / 2.1) ** 2 > 1 || (followed && Math.hypot(v, w) < 0.47)) continue;
         cells.disc.add(add(p, qrot(q, [u, v, w])), qmul(q, toX), [rad, rad, hh], [0, 0, 0, 1], [5, th, 0]);
       }
       for (let g = 0; g < 16; g++) {                      // drops of fat that fill with carotenoids as the stacks are taken apart
         const v = (rnd() - 0.5) * 3.2, w = (rnd() - 0.5) * 4.2, u = (rnd() - 0.5) * 1.3, rad = 0.2 + 0.16 * rnd();
-        if ((u / 0.85) ** 2 + (v / 1.7) ** 2 + (w / 2.1) ** 2 > 1 || (followed && Math.hypot(v, w) < 0.6)) continue;
+        if ((u / 0.85) ** 2 + (v / 1.7) ** 2 + (w / 2.1) ** 2 > 1 || (followed && Math.hypot(v, w) < 0.5)) continue;
         cells.ball3.add(add(p, qrot(q, [u, v, w])), ID, [rad, rad, rad], [0, 0, 0, 1], [14, 0.1 + 0.8 * rnd(), tone]);
+      }
+      if (followed) for (let k = 0; k < 7; k++) {         // single sheets of the same membrane run out from the stack's edge to the stacks round it
+        const a = k * 2.4 + 0.4, l = 0.3 + 0.12 * rnd(), lq = qmul(qmul(q, toX), rotZ(a));
+        cells.disc.add(add(p, qrot(lq, [0.2 + l, 0, 0.012 + 0.02 * k])), lq, [l, 0.07 + 0.05 * rnd(), 0.0045], [0, 0, 0, 1], [5, 0.15 + 0.1 * k, 0]);
       }
       if (followed) for (let k = 0; k < 8; k++) cells.disc.add(add(p, qrot(q, [(3.5 - k) * 0.02, 0, 0])), qmul(q, toX), [0.24, 0.24, 0.0085], [0, 0, 0, 1], [5, k === 0 ? -1 : 0.1 * k, 0]);   // the stack the zoom goes into; its outer disc stays to the end
     }
@@ -189,7 +197,15 @@ export function makeWorld(gl) {
     }
     all.sort((a, b) => len(a.p) - len(b.p));
     all.forEach((m, n2) => { const id = Math.min(n2, 63); if (n2 < 63) vac.list.push({ x: m.p[0], y: m.p[1], z: m.p[2], kind: 'anth', th: m.th, id }); molecule(vac.balls, vac.sticks, shapes.anth, m.p, m.q, 9, m.th, id, INK.anth.map((v) => mix(v, 1, 0.82)), EL_PALE); }); }   // drawn pale so that it shows against the red of the water round it
-  const N = { memBalls: mk(M.ball1, mem.balls), memSticks: mk(M.stick, mem.sticks), memFlat: mk(M.sq, mem.flat), vacBalls: mk(M.ball1, vac.balls), vacSticks: mk(M.stick, vac.sticks), light: instanced(gl, M.sq, LAYOUT), sun: instanced(gl, M.sq, LAYOUT), rings: instanced(gl, M.sq, LAYOUT) };
+  // Beyond those, out to a quarter of a micrometre: the same molecules as flat outlines, thinning with distance, so that the water is not empty on the way in
+  const vacFar = new Batch();
+  for (const [r0, r1, pitch] of [[VAC_NM, 40, 5.5], [40, 100, 7.5], [100, 250, 10]]) { const n = Math.ceil(r1 / pitch), pale = INK.anth.map((v) => mix(v, 1, 0.82));
+    for (let k = -n; k <= n; k++) for (let j = -n; j <= n; j++) for (let i = -n; i <= n; i++) {
+      const p = [(i + (hash(i + r0, j * 7 + k) - 0.5) * 0.8) * pitch, (j + (hash(j, k * 5 + i + r0) - 0.5) * 0.8) * pitch, (k + (hash(k + r0, i * 3 + j) - 0.5) * 0.8) * pitch], r = len(p);
+      if (r < r0 || r >= r1 || hash(i * 11 + k, j * 13 - k + r0) > 0.8) continue;
+      vacFar.add(p, qaxis(unit([hash(i, j + r0) - 0.5, hash(j, k) - 0.5, hash(k, i + r0) - 0.5]), hash(i + j, k + r0) * 6.283), [0.62, 0.24, 1], [...pale, 1], [16, 0.04 + 0.92 * hash(i + 77 + k * 3, j - 19 + r0), 0]);
+    } }
+  const N = { vacFar: mk(M.sq, vacFar), memBalls: mk(M.ball1, mem.balls), memSticks: mk(M.stick, mem.sticks), memFlat: mk(M.sq, mem.flat), vacBalls: mk(M.ball1, vac.balls), vacSticks: mk(M.stick, vac.sticks), light: instanced(gl, M.sq, LAYOUT), sun: instanced(gl, M.sq, LAYOUT), rings: instanced(gl, M.sq, LAYOUT) };
 
   // ---- light: dots that each stand for a little light of one wavelength ---------------------------
   const PH = 34, photons = Array.from({ length: PH }, () => ({ y: 99 })), flash = new Float32Array(64), R = rng(77);
@@ -281,15 +297,21 @@ export function makeWorld(gl) {
   function cutLocalAlong() { const n0 = unit([2 * DROOP * SPOT[0], 2 * DROOP * SPOT[1], 1]), wl = qrot(qconj(F.q), F.look), Y = unit(sub(wl, mul(n0, dot(wl, n0)))), X = cross(Y, n0); return unit([X[0], X[1], 0]); }
   // ---- frames -----------------------------------------------------------------------------------------
   // The followed leaf, and the frame of the cut in it (x along the wall, y into the leaf, z up through it), in the world.
-  const cutLocal = (() => {                                // the frame of the cut, in the leaf's own axes
-    const n0 = unit([2 * DROOP * SPOT[0], 2 * DROOP * SPOT[1], 1]), wl = qrot(qconj(F.q), F.look), Y = unit(sub(wl, mul(n0, dot(wl, n0)))), X = cross(Y, n0);
-    return { q: quatOf(X, Y, n0), along: unit([X[0], X[1], 0]), y: Y, n: n0 };
-  })();
+  const cutLocal = { along: cutLocalAlong(), q: ID, y: [0, 1, 0], n: [0, 0, 1], top: [0, 0, 0], fold: -1 };   // the frame of the cut, in the leaf's own axes; it turns with the blade while a young leaf is still folded
+  function setCut(fold) {
+    if (fold === cutLocal.fold) return; cutLocal.fold = fold;
+    const e = 1e-4, A = cutLocal.along, p0 = bladeAt(SPOT[0], SPOT[1], 0, fold), tx = sub(bladeAt(SPOT[0] + A[0] * e, SPOT[1] + A[1] * e, 0, fold), p0), ty = sub(bladeAt(SPOT[0] - A[1] * e, SPOT[1] + A[0] * e, 0, fold), p0);
+    let n = unit(cross(tx, ty)); if (n[2] < 0) n = mul(n, -1);
+    const X = unit(tx), Y = cross(n, X);
+    cutLocal.q = quatOf(X, Y, n); cutLocal.y = Y; cutLocal.n = n; cutLocal.top = p0; cutLocal.stretch = len(tx) / e;   // the blade's curve stretches the drawn surface a little along the cut, most while it hangs folded
+  }
+  setCut(0);
   const SKIN_GAP = 1.5;                                    // the tops of the skin cells lie this far (micrometres) under the leaf's drawn surface, which stands for its waxy coat
   function frames(calm, cut = 0) {                         // cut: how far the part of the leaf beyond the cut has been moved off, in leaf lengths
     const unit = 1e-6 * Math.sqrt(fo.size);                 // a young leaf's cells are smaller: the cut and its cells are drawn at the square root of the leaf's size
-    const q = calm ? fo.calm : fo.q, sc = F.len * fo.size, tq = qmul(q, cutLocal.q), top = add(fo.pos, qrot(q, mul(add(onBlade(SPOT[0], SPOT[1]), mul(cutLocal.y, cut)), sc)));
-    return { leafPos: fo.pos, leafQ: q, leafScale: sc, cutQ: tq, unit, cutO: sub(top, mul(qrot(tq, [0, 0, 1]), (SEC.top + SKIN_GAP) * unit)), centre: add(fo.pos, qrot(q, mul(onBlade(0.42, 0), sc))) };
+    const fold = foldOf(fo.size); setCut(fold);
+    const q = calm ? fo.calm : fo.q, sc = F.len * fo.size, tq = qmul(q, cutLocal.q), top = add(fo.pos, qrot(q, mul(add(cutLocal.top, mul(cutLocal.y, cut)), sc)));
+    return { leafPos: fo.pos, leafQ: q, leafScale: sc, cutQ: tq, unit, cutO: sub(top, mul(qrot(tq, [0, 0, 1]), (SEC.top + SKIN_GAP) * unit)), centre: add(fo.pos, qrot(q, mul(bladeAt(0.42, 0, 0, fold), sc))), fold };
   }
 
   // ---- drawing ----------------------------------------------------------------------------------------
@@ -308,8 +330,45 @@ export function makeWorld(gl) {
     if (!keepDepth) gl.clear(gl.DEPTH_BUFFER_BIT);
   }
   const use = (p) => { gl.useProgram(p.p); if (p.u.uMV) gl.uniformMatrix4fv(p.u.uMV, false, mv); if (p.u.uP) gl.uniformMatrix4fv(p.u.uP, false, pm); if (p.u.uSun) gl.uniform3fv(p.u.uSun, sunV); return p.u; };
-  const solid = (shape, fog) => { const u = use(prog.solid); gl.uniform1i(u.uShape, shape); gl.uniform4fv(u.uCamQ, qmul(qconj(gq), cam.q)); gl.uniform1f(u.uFogMax, 0); gl.uniform4fv(u.uBody, pal.body); gl.uniform4fv(u.uDot, pal.dot); gl.uniform4fv(u.uVac, pal.vac); gl.uniform1fv(u.uSize, pal.size); gl.uniform3f(u.uPig, fo.p.chl, fo.p.car, fo.p.anth); gl.uniform1fv(u.uFlash, flash); gl.uniform4fv(u.uFog, fog || [0, 0, 0, 0]); gl.uniform1f(u.uFade, 1); gl.uniform1f(u.uLum, 1); gl.uniform1f(u.uBend, 0); return u; };
-  const blend = (on, additive) => { if (on) { gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, additive ? gl.ONE : gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); } else { gl.disable(gl.BLEND); gl.depthMask(true); } };
+  const solid = (shape, fog) => { const u = use(prog.solid); gl.uniform1i(u.uShape, shape); gl.uniform4fv(u.uCamQ, qmul(qconj(gq), cam.q)); gl.uniform1f(u.uFogMax, 0); gl.uniform4fv(u.uBody, pal.body); gl.uniform4fv(u.uDot, pal.dot); gl.uniform4fv(u.uVac, pal.vac); gl.uniform1fv(u.uSize, pal.size); gl.uniform3f(u.uPig, fo.p.chl, fo.p.car, fo.p.anth); gl.uniform1fv(u.uFlash, flash); gl.uniform4fv(u.uFog, fog || [0, 0, 0, 0]); gl.uniform1f(u.uFade, 1); gl.uniform1f(u.uLum, 1); gl.uniform1f(u.uBend, 0); gl.uniform1f(u.uNear, 0); return u; };
+  let baking = false;                                      // while the picture of the cut face is taken, how clear each part is is kept too
+  const blend = (on, additive) => { if (on) { gl.enable(gl.BLEND); if (baking) gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA); else gl.blendFunc(gl.SRC_ALPHA, additive ? gl.ONE : gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); } else { gl.disable(gl.BLEND); gl.depthMask(true); } };
+
+  function drawCells(sol) {
+    sol(0); C.back.draw(); C.ball1.draw(); C.ball3.draw(); C.disc.draw(); sol(1); C.caps.draw();
+    blend(true);
+    sol(1); C.vacCaps.draw(); C.vacCapsFine.draw(); sol(0); C.vacBall.draw(); C.env.draw();
+    sol(1); C.glassCaps.draw(); C.glassCapsFine.draw(); sol(0); C.glassBall.draw();
+    blend(false);
+  }
+  // The face of the cut is far longer than the stretch of it whose cells are built. The rest shows a picture of those same cells, taken
+  // square on to the face with no perspective, and repeated along the cut. It is taken again whenever the date changes.
+  const FACE = { w: 2048, h: 320, half: (EDGE_I + 0.5) * SEC.pitch, day: NaN, tex: null, fbo: null };
+  function bakeFace(f) {
+    // the picture is taken along the same slant the camera looks down the face at, so that the rows of cells behind the front one show through the clear skin as they do in the cells that are built
+    const eye = mul(qrot(qconj(f.cutQ), sub(cam.eye, f.cutO)), 1 / f.unit), slant = Math.round(clamp((eye[2] - (SEC.top + SEC.bottom) / 2) / Math.min(eye[1], -1e-6), -1.2, 0.4) * 40) / 40;
+    if (FACE.day === day && FACE.slant === slant) return; FACE.day = day; FACE.slant = slant;
+    if (!FACE.tex) {
+      FACE.tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, FACE.tex); gl.texStorage2D(gl.TEXTURE_2D, 12, gl.RGBA8, FACE.w, FACE.h);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      FACE.fbo = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, FACE.fbo); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, FACE.tex, 0);
+      const rb = gl.createRenderbuffer(); gl.bindRenderbuffer(gl.RENDERBUFFER, rb); gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, FACE.w, FACE.h); gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, rb);
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, FACE.fbo); gl.viewport(0, 0, FACE.w, FACE.h);
+    gl.disable(gl.BLEND); gl.depthMask(true); gl.enable(gl.DEPTH_TEST); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    const was = cam, wasQ = gq, bq = qmul(f.cutQ, quatOf([1, 0, 0], [0, 0, 1], [0, -1, 0]));     // looking into the face: x along it, the leaf's upper side up
+    cam = { ...cam, q: bq, r: qrot(bq, [1, 0, 0]), u: qrot(bq, [0, 1, 0]), b: qrot(bq, [0, 0, 1]) }; gq = f.cutQ;
+    sunV.set([dot(sun.light, cam.r), dot(sun.light, cam.u), dot(sun.light, cam.b)]);
+    const FAR = 20000, zc = (SEC.top + SEC.bottom) / 2, hh = (SEC.top - SEC.bottom) / 2 + SKIN_GAP, a = -2 / 120;       // seen from so far off that every line of sight is as good as parallel
+    mv.fill(0); mv[0] = 1; mv[6] = -1; mv[9] = 1; mv[13] = -zc; mv[14] = -FAR; mv[15] = 1;
+    for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) n3[i * 3 + j] = mv[i * 4 + j];
+    mv[5] = -slant;
+    pm.fill(0); pm[0] = 1 / FACE.half; pm[5] = 1 / hh; pm[10] = a; pm[14] = -1 + a * (FAR - 30); pm[15] = 1;      // from 30 micrometres in front of the face to 90 behind it
+    baking = true; drawCells((shape) => solid(shape, null)); baking = false;
+    gl.bindTexture(gl.TEXTURE_2D, FACE.tex); gl.generateMipmap(gl.TEXTURE_2D);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null); cam = was; gq = wasQ;
+    sunV.set([dot(sun.light, cam.r), dot(sun.light, cam.u), dot(sun.light, cam.b)]); gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+  }
 
   // view: { eye, q (the camera's turn: its x is right, y up, z back toward the viewer), W, H, dpr, P11, ox, oy, k (pixels per metre at what it looks at), dist, where, light }
   function draw(view) {
@@ -320,6 +379,7 @@ export function makeWorld(gl) {
     gl.disable(gl.BLEND); gl.depthMask(true); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.disable(gl.CULL_FACE);
     gl.clearColor(0.02, 0.03, 0.06, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     const f = frames(false, view.cut || 0), um = view.k * f.unit, kn = view.k * 1e-9, d = view.dist, diag = Math.hypot(view.W, view.H), rings = new Batch();
+    if (view.cut > 0) bakeFace(f);
     const ring = (at, r, unitPx) => { const px = r * unitPx; if (px < 0.4 || px > diag) return; rings.add(at, ID, [r, r, 1], [1, 1, 1, Math.min(1, px / 3.2)], [13, 1 / px, 0]); };
     const drawRings = (unitPx) => { if (!rings.a.length) return; N.rings.set(rings.data(), gl.DYNAMIC_DRAW); solid(2); gl.disable(gl.DEPTH_TEST); blend(true); N.rings.draw(); blend(false); gl.enable(gl.DEPTH_TEST); rings.a.length = 0; };
 
@@ -336,31 +396,27 @@ export function makeWorld(gl) {
       const s = Math.max(sun.sin, 0.05);                    // the crown's middle is about 2.6 m up, so its shadow lies that far over the Sun's height off, and is stretched by as much
       gl.uniform4f(u.uShade, sun.ground[0], sun.ground[1], Math.min(2.6 * Math.sqrt(1 - s * s) / s, 40), 0.55 * smooth(sun.sin / 0.12)); gl.uniform1f(u.uShadeL, Math.min(2.7 / s, 40)); quad.draw(); }
     gl.uniform1f(solid(0).uLum, lum); branches.draw(); if (0.0011 * view.k > 0.2) stalks.draw();
-    { const u = use(prog.leaf); gl.uniform1f(u.uLum, lum); gl.uniform1f(u.uDroop, DROOP); gl.uniform1i(u.uDetail, 0); gl.uniform2fv(u.uLobe, lobeDirs); gl.uniform1f(u.uVeinW, 0.011);
+    { const u = use(prog.leaf); gl.uniform1f(u.uLum, lum); gl.uniform1f(u.uDroop, DROOP); gl.uniform1i(u.uDetail, 0); gl.uniform2fv(u.uLobe, lobeDirs); gl.uniform1fv(u.uLobeA, lobeAngles); gl.uniform3f(u.uFold, f.fold, FOLD.turn, FOLD.hang); gl.uniform1f(u.uVeinW, 0.011);
       gl.bindVertexArray(leaves.vao); gl.drawElementsInstanced(gl.TRIANGLES, leaves.n, gl.UNSIGNED_SHORT, 0, L.length - 1); }
     ring(f.centre, 0.17, view.k); drawRings();
 
     // the followed leaf, in leaf lengths
-    const leafDetail = () => { const u = use(prog.leaf); gl.uniform1f(u.uLum, lum); gl.uniform1f(u.uDroop, DROOP); gl.uniform1i(u.uDetail, 1); gl.uniform2fv(u.uLobe, lobeDirs);
+    const leafDetail = () => { const u = use(prog.leaf); gl.uniform1f(u.uLum, lum); gl.uniform1f(u.uDroop, DROOP); gl.uniform1i(u.uDetail, 1); gl.uniform2fv(u.uLobe, lobeDirs); gl.uniform1fv(u.uLobeA, lobeAngles); gl.uniform3f(u.uFold, f.fold, FOLD.turn, FOLD.hang);
       const mm = 1e-3 / f.leafScale, hl = f.unit / f.leafScale;
       gl.uniform1f(u.uVeinW, 0.011); gl.uniform1f(u.uSideW, 0.004); gl.uniform1f(u.uNetW, 0.016 * mm); gl.uniform1f(u.uNetCell, 0.55 * mm);
       gl.uniform3fv(u.uEarly, shade(-5, 1.08)); gl.uniform3fv(u.uLate, shade(4, 0.84)); gl.uniform3fv(u.uVein, shade(-9, 1.22));
       gl.uniform2f(u.uCutO, SPOT[0], SPOT[1]); gl.uniform2f(u.uCutX, cutLocal.along[0], cutLocal.along[1]);
-      gl.uniform3fv(u.uThick, mul(cutLocal.n, (SEC.top - SEC.bottom + 2 * SKIN_GAP) * hl)); gl.uniform1f(u.uMic, hl); gl.uniform1f(u.uCells, CUT.half + 34);
-      const tall = pal.body.subarray(0, 3), tv = pal.vac.subarray(0, 4), low = pal.body.subarray(16, 19), lv = pal.vac.subarray(16, 20);
-      gl.uniform3f(u.uTall, mix(tall[0], tv[0], tv[3] * 0.55), mix(tall[1], tv[1], tv[3] * 0.55), mix(tall[2], tv[2], tv[3] * 0.55));
-      gl.uniform3fv(u.uDotC, pal.dot.subarray(0, 3));
-      gl.uniform3f(u.uLoose, mix(low[0], lv[0], lv[3] * 0.55), mix(low[1], lv[1], lv[3] * 0.55), mix(low[2], lv[2], lv[3] * 0.55));
+      gl.uniform3fv(u.uThick, mul(cutLocal.n, (SEC.top - SEC.bottom + 2 * SKIN_GAP) * hl)); gl.uniform1f(u.uMic, hl / cutLocal.stretch); gl.uniform1f(u.uCells, FACE.half - 8);                // the picture begins a little inside the last built cells and in front of them, so that no gap opens between the two from any side
       if (!(view.cut > 0)) { gl.uniform1i(u.uKeep, 0); gl.uniform3f(u.uSlide, 0, 0, 0); oneLeaf.draw(); return; }
       // the leaf is cut across: the part beyond the cut is moved off along the leaf, and its cut face shows the layers inside
       gl.uniform1i(u.uKeep, 1); gl.uniform3fv(u.uSlide, mul(cutLocal.y, view.cut)); oneLeaf.draw();
-      gl.uniform1i(u.uDetail, 2); cutFace.draw(); gl.uniform1i(u.uDetail, 1);
+      gl.uniform1i(u.uDetail, 2); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, FACE.tex); gl.uniform1i(u.uFace, 0); gl.uniform1f(u.uFaceHalf, FACE.half); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA); cutFace.draw(); gl.disable(gl.BLEND); gl.uniform1i(u.uDetail, 1);
       gl.uniform1i(u.uKeep, -1); gl.uniform3f(u.uSlide, 0, 0, 0); oneLeaf.draw(); };
     group(f.leafPos, f.leafQ, f.leafScale, Math.max(d * 0.05, 2e-5), Math.max(d * 40, 1));
     leafDetail();
 
     // the cells round the window, in micrometres. The leaf's surface is laid down again first, unseen, so that it hides the cells under it.
-    const cn = Math.max(d * 0.05, 2e-8), cf = Math.max(d * 60, 3e-3);
+    const cn = Math.max(d * 0.05, DEEP ? 2e-11 : 2e-8), cf = Math.max(d * 60, 3e-3);   // near enough for the molecules on the membrane too, where the screen can tell such depths apart
     group(f.leafPos, f.leafQ, f.leafScale, cn, cf);
     gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(-1, -4);                             // the surface wins wherever a cell's top comes level with it
     gl.colorMask(false, false, false, false); leafDetail(); gl.colorMask(true, true, true, true);
@@ -369,14 +425,10 @@ export function makeWorld(gl) {
     // Inside the followed cell's vacuole the view is through its water: the deeper in, the more the water's own colour hides the cell round it.
     const eyeC = mul(qrot(qconj(f.cutQ), sub(cam.eye, f.cutO)), 1 / f.unit), deep = Math.min(2.3 - Math.hypot(eyeC[0], eyeC[1] - TARGETS.vacuole[1]), SEC.tall / 2 - 3.2 - Math.abs(eyeC[2]));
     const vt = pal.vac.subarray(0, 4), water = [mix(0.6, vt[0] * 0.8, vt[3]), mix(0.68, vt[1] * 0.8, vt[3]), mix(0.6, vt[2] * 0.8, vt[3]), 1 / (0.5 * f.unit)];
-    const bend = DROOP * f.unit / f.leafScale;             // the blade's curve, in the cut's own units: a young leaf is as curved as a grown one but its cells are nearly as big, so it matters most in spring
+    const bend = DROOP * (1 + FOLD.hang * f.fold) * f.unit / f.leafScale;             // the blade's curve, in the cut's own units: a young leaf is as curved as a grown one but its cells are nearly as big, so it matters most in spring
     const sol = (shape) => { const u = solid(shape, deep > 0 ? water : null); if (deep > 0) gl.uniform1f(u.uFogMax, deep * 3 * f.unit); gl.uniform1f(u.uBend, bend); return u; };
     if (um > 0.002) {
-      sol(0); C.back.draw(); C.ball1.draw(); C.ball3.draw(); C.disc.draw(); sol(1); C.caps.draw();
-      blend(true);
-      sol(1); C.vacCaps.draw(); C.vacCapsFine.draw(); sol(0); C.vacBall.draw(); C.env.draw();
-      sol(1); C.glassCaps.draw(); C.glassCapsFine.draw(); sol(0); C.glassBall.draw();
-      blend(false);
+      drawCells(sol);
     }
     // the sunlight coming down through the cells: dots, far too small to see from the Leaf scale and too big to draw from close to
     { const px = SUN_R * um, k = 1 - smooth((px - 48) / 45);
@@ -388,14 +440,14 @@ export function makeWorld(gl) {
       const nq = qmul(tq, quatOf([1, 0, 0], [0, 0, 1], [0, -1, 0]));                       // on the membrane: x along it, y up it (toward the top of the leaf), z out of it toward the window
       const near = Math.max(d * 0.05, 2e-11), far = Math.max(d * 60, 1e-6), fog = [0, 0, 0, 1 / 120e-9];   // the water's own colour hides what is more than a hundred or so nanometres off
       const fade = smooth((kn - 0.3) / 1.5), seeThrough = (on) => { if (on) { gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); } else gl.disable(gl.BLEND); };
-      group(at([0, MEMBRANE_Y - 0.0003, 0]), nq, 1e-9, near, far);
+      if (DEEP) group(at([0, MEMBRANE_Y - 0.0003, 0]), nq, 1e-9, cn, cf, true); else group(at([0, MEMBRANE_Y - 0.0003, 0]), nq, 1e-9, near, far);   // the membrane is the face of a stack inside a chloroplast: what is in front of it hides it
       { const u = use(prog.memb); gl.uniform1f(u.uR, 240); gl.uniform1f(u.uChl, fo.p.chl); gl.uniformMatrix3fv(u.uN, false, n3); gl.uniform3fv(u.uTint, pal.dot.subarray(0, 3).map((v) => v * 1.2 / 0.85)); quad.draw(); }
       blend(true); solid(0); N.memFlat.draw(); blend(false);
       if (fade > 0) { seeThrough(fade < 1); gl.uniform1f(solid(0).uFade, fade); N.memBalls.draw(); N.memSticks.draw(); seeThrough(false); }
       if (view.light && view.where === 'membrane') { loadLight(); solid(2); blend(true, true); N.light.draw(); blend(false); }
       if (view.where === 'membrane') ring([0, 0, 0], 340, kn); drawRings();
       group(at(TARGETS.vacuole), nq, 1e-9, Math.max(d * 0.55, 2e-11), far);
-      seeThrough(true); solid(0, fog); N.vacBalls.draw(); N.vacSticks.draw(); seeThrough(false);
+      seeThrough(true); if (d < 1.5e-6) { gl.uniform1f(solid(0, fog).uNear, Math.max(d * 0.55, 2e-11)); gl.depthMask(false); N.vacFar.draw(); gl.depthMask(true); } gl.uniform1f(solid(0, fog).uNear, Math.max(d * 0.55, 2e-11)); N.vacBalls.draw(); N.vacSticks.draw(); seeThrough(false);
       if (view.light && view.where === 'vacuole') { loadLight(); solid(2); blend(true, true); N.light.draw(); blend(false); }
       if (view.where === 'vacuole') ring([0, 0, 0], 340, kn); drawRings();
     }
