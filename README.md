@@ -651,6 +651,9 @@ Simplified or exaggerated, and said so on the page:
   measurements. Absorption bands are illustrative fits.
 - The tree has about 7,600 leaves; a real one this size carries several times more. Leaves near
   the followed leaf's face and behind it are left out so that it can be seen and seen through.
+- From Cells to Molecules the falling light is drawn at three more sizes of dot, each a tenth of the
+  one before, so that some are in view at every zoom; these fall straight through without being
+  taken in.
 - The dots of sunlight in the leaf fall straight down, far slower than light, and as many are
   drawn on every date and at every wavelength from 400 to 700 nm (not the mix in real sunlight). A real leaf also scatters light about inside itself, which lets it take in
   more of the light we see as green than is drawn (about three quarters of it in summer) and sends some back out

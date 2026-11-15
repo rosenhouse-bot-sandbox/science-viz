@@ -3,11 +3,11 @@
 // window, one cell's chloroplasts and vacuole, one chloroplast's stacks of membrane, and the
 // pigment molecules on one membrane and in the vacuole. Each part is built at its true size in its
 // own units (metres, leaf lengths, micrometres, nanometres) and placed inside the part above.
-import { program, instanced, ball, tube, square, box, add, sub, mul, dot, cross, unit, len, quatOf, qmul, qaxis, qrot, qconj, qalong, rng } from './gl.js?v=07ad348f';
-import * as SH from './shaders.js?v=07ad348f';
-import { leafRGB, pigments, bandTable, wavelengthRGB, encode, clamp, smooth, mix, NM0, NSTEP, sunAt, thickness } from './model.js?v=07ad348f';
-import { buildTree, leafShape, place, SPOT, LOBES, DROOP, bladeAt, foldOf, FOLD } from './tree.js?v=07ad348f';
-import { pigmentShapes } from './molecules.js?v=07ad348f';
+import { program, instanced, ball, tube, square, box, add, sub, mul, dot, cross, unit, len, quatOf, qmul, qaxis, qrot, qconj, qalong, rng } from './gl.js?v=f5366b9e';
+import * as SH from './shaders.js?v=f5366b9e';
+import { leafRGB, pigments, bandTable, wavelengthRGB, encode, clamp, smooth, mix, NM0, NSTEP, sunAt, thickness } from './model.js?v=f5366b9e';
+import { buildTree, leafShape, place, SPOT, LOBES, DROOP, bladeAt, foldOf, FOLD } from './tree.js?v=f5366b9e';
+import { pigmentShapes } from './molecules.js?v=f5366b9e';
 
 // The leaf cut through, in micrometres. In the frame of the cut: x runs along the wall of the window,
 // y into the leaf behind the wall, z up through the leaf's thickness. (0, CELL_Y, 0) is the middle of the followed cell.
@@ -205,7 +205,7 @@ export function makeWorld(gl) {
       if (r < r0 || r >= r1 || hash(i * 11 + k, j * 13 - k + r0) > 0.8) continue;
       vacFar.add(p, qaxis(unit([hash(i, j + r0) - 0.5, hash(j, k) - 0.5, hash(k, i + r0) - 0.5]), hash(i + j, k + r0) * 6.283), [0.62, 0.24, 1], [...pale, 1], [16, 0.04 + 0.92 * hash(i + 77 + k * 3, j - 19 + r0), 0]);
     } }
-  const N = { vacFar: mk(M.sq, vacFar), memBalls: mk(M.ball1, mem.balls), memSticks: mk(M.stick, mem.sticks), memFlat: mk(M.sq, mem.flat), vacBalls: mk(M.ball1, vac.balls), vacSticks: mk(M.stick, vac.sticks), light: instanced(gl, M.sq, LAYOUT), sun: instanced(gl, M.sq, LAYOUT), rings: instanced(gl, M.sq, LAYOUT) };
+  const N = { vacFar: mk(M.sq, vacFar), memBalls: mk(M.ball1, mem.balls), memSticks: mk(M.stick, mem.sticks), memFlat: mk(M.sq, mem.flat), vacBalls: mk(M.ball1, vac.balls), vacSticks: mk(M.stick, vac.sticks), light: instanced(gl, M.sq, LAYOUT), sun: instanced(gl, M.sq, LAYOUT), mid: instanced(gl, M.sq, LAYOUT), rings: instanced(gl, M.sq, LAYOUT) };
 
   // ---- light: dots that each stand for a little light of one wavelength ---------------------------
   const PH = 34, photons = Array.from({ length: PH }, () => ({ y: 99 })), flash = new Float32Array(64), R = rng(77);
@@ -256,12 +256,23 @@ export function makeWorld(gl) {
   // Moves the sunlight on by dt seconds. p: the followed leaf's pigments.
   function stepSun(dt, p) {
     if (!beamsSet) { beamsSet = true; for (const b of beams) freshBeam(b, p); for (let i = 0; i < 400; i++) stepSun(0.05 * (0.5 + RS()), p); }   // run on unseen first, so that the light is already falling all the way down when it is first shown
+    stepMid(dt);
     for (const b of beams) {
       if (b.dying) { b.dying += dt / DIE; if (b.dying >= 1) freshBeam(b, p); continue; }
       b.z -= dt * SUN_V;
       if (b.z > b.end) continue;
       if (b.kind && p[b.kind] > 0.001) { b.z = b.end; b.dying = 1e-6; } else if (b.kind) { b.kind = ''; b.end = SUN_END; } else freshBeam(b, p);
     }
+  }
+  // Between the dots drawn among the cells and the ones drawn among the molecules the scale changes several thousand times, and a dot
+  // big enough to see at one end is far too big at the other. So the same falling light is drawn at three sizes in between as well, each a tenth of the one before, each
+  // round the place being looked at, each in sight only while its dots are between a pixel and a few dozen pixels across. These fall straight through.
+  const MID_R = [0.26, 0.025, 0.0025], MID_N = 40, RM = rng(523), midData = new Float32Array(MID_R.length * MID_N * 17);
+  const mids = MID_R.map(() => Array.from({ length: MID_N }, () => { const l = 400 + 300 * RM(); return { u: RM(), x: (RM() - 0.5) * 80, y: (RM() - 0.5) * 16, c: wavelengthRGB(l).map((v) => encode(v * 1.7)) }; }));
+  function stepMid(dt) { for (const tier of mids) for (const m of tier) { m.u += dt / 12; if (m.u >= 1) { m.u -= 1; m.x = (RM() - 0.5) * 80; m.y = (RM() - 0.5) * 16; const l = 400 + 300 * RM(); m.c = wavelengthRGB(l).map((v) => encode(v * 1.7)); } } }
+  function loadMid(wall, ks) {                              // drawn round the place looked at, in its own nanometres: x along, y up the leaf, z toward the viewer. wall: there is a membrane at z = 0, and the light is kept in front of it
+    mids.forEach((tier, t) => tier.forEach((m, i) => { const r = MID_R[t] * 1000, v = ks[t] * smooth(m.u / 0.15) * smooth((1 - m.u) / 0.15); midData.set([m.x * r, (60 - 120 * m.u) * r, (wall ? (m.y + 9) * 0.5 : m.y) * r, 0, 0, 0, 1, r, r, 1, m.c[0] * v, m.c[1] * v, m.c[2] * v, 1, 12, 0, 0], (t * MID_N + i) * 17); }));
+    N.mid.set(midData, gl.DYNAMIC_DRAW);
   }
   function loadSun(k) {                                    // k: how strongly the dots are drawn. A dot comes into sight above the leaf and goes out of sight below it gradually.
     beams.forEach((b, i) => { const t = b.dying, r = SUN_R * (1 + 2.2 * t), v = k * (t ? 1.5 * (1 - t) * (1 - t) : smooth((b.z0 - b.z) / 18) * smooth((b.z - SUN_END) / 18)); sunData.set([b.x, b.y, b.z, 0, 0, 0, 1, r, r, 1, b.c[0] * v, b.c[1] * v, b.c[2] * v, 1, 12, 0, 0], i * 17); });
@@ -444,10 +455,13 @@ export function makeWorld(gl) {
       { const u = use(prog.memb); gl.uniform1f(u.uR, 240); gl.uniform1f(u.uChl, fo.p.chl); gl.uniformMatrix3fv(u.uN, false, n3); gl.uniform3fv(u.uTint, pal.dot.subarray(0, 3).map((v) => v * 1.2 / 0.85)); quad.draw(); }
       blend(true); solid(0); N.memFlat.draw(); blend(false);
       if (fade > 0) { seeThrough(fade < 1); gl.uniform1f(solid(0).uFade, fade); N.memBalls.draw(); N.memSticks.draw(); seeThrough(false); }
+      const ks = MID_R.map((r) => smooth((r * 1000 * kn - 0.5) / 1.5) * (1 - smooth((r * 1000 * kn - 48) / 45))), mid = (wall) => { if (!view.light || !beamsSet || !ks.some((k) => k > 0)) return; loadMid(wall, ks); solid(2); gl.disable(gl.DEPTH_TEST); blend(true, true); N.mid.draw(); blend(false); gl.enable(gl.DEPTH_TEST); };
+      if (view.where === 'membrane') mid(true);
       if (view.light && view.where === 'membrane') { loadLight(); solid(2); blend(true, true); N.light.draw(); blend(false); }
       if (view.where === 'membrane') ring([0, 0, 0], 340, kn); drawRings();
       group(at(TARGETS.vacuole), nq, 1e-9, Math.max(d * 0.55, 2e-11), far);
       seeThrough(true); if (d < 1.5e-6) { gl.uniform1f(solid(0, fog).uNear, Math.max(d * 0.55, 2e-11)); gl.depthMask(false); N.vacFar.draw(); gl.depthMask(true); } gl.uniform1f(solid(0, fog).uNear, Math.max(d * 0.55, 2e-11)); N.vacBalls.draw(); N.vacSticks.draw(); seeThrough(false);
+      if (view.where === 'vacuole') mid(false);
       if (view.light && view.where === 'vacuole') { loadLight(); solid(2); blend(true, true); N.light.draw(); blend(false); }
       if (view.where === 'vacuole') ring([0, 0, 0], 340, kn); drawRings();
     }
