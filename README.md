@@ -530,11 +530,12 @@ day it falls, at every scale from the whole tree down to its pigment molecules. 
   model, drawn with WebGL, and the zoom is one camera closing on one point of it. Nothing is ever
   faded in or swapped for another picture: the tree, the leaf, its cells and their molecules are all
   there at once, each at its true size, and come into view only by getting bigger. The followed leaf
-  hangs at the end of a low twig. A window 0.8 mm wide is cut through it on its middle lobe, and the
-  camera goes in through the window and looks at the cut wall: the leaf's layers of cells, then one
+  hangs at the end of a low twig. It is cut straight across its middle lobe: as the zoom goes in from
+  Leaf, the piece beyond the cut slides aside (the cut is shown being made), and the camera goes
+  into the gap and looks at the cut face, facing out from the tree so that only lawn is behind it: the leaf's layers of cells, then one
   tall cell, then the face of one stack of membrane inside one of its chloroplasts (or the water
   of its vacuole). A white ring marks the point each scale zooms into (the leaf on the tree, the
-  window on the leaf, the cell in the wall, the spot in the cell), and the Zoom slider has a tick
+  cut on the leaf, the cell in the wall, the spot in the cell), and the Zoom slider has a tick
   and a name at each stop. The scale bar at the top right is measured at the point looked at. The
   size of the view is one smooth curve along the slider (no change of pace at a stop), a flight to
   a stop eases in and out and keeps its speed if another stop is pressed on the way, and things
@@ -628,21 +629,25 @@ Simplified or exaggerated, and said so on the page:
   own: a leaf's colour is still computed from its pigments and only dimmed or brightened as a whole.
 - A fall takes seconds; it is spread over two and a half days of the slider so that it can be seen.
   Fallen leaves keep their colour (real ones brown within days).
-- A young leaf's cells are drawn smaller: the window and its cells are sized by the square root of
+- A young leaf's cells are drawn smaller: the cut face and its cells are sized by the square root of
   the leaf's size, and the Tissue and Cells views close in by as much (the scale bar stays true).
   Chloroplasts and molecules inside are not resized.
 - Inside the vacuole the water's colour hides the cell round it within a few micrometres, and
   molecules beyond a hundred or so nanometres. Real cell sap is far clearer; without this the view
   would not change as the zoom goes from micrometres to nanometres.
 - Fallen leaves rest on the tips of their lobes, level; real ones lie anyhow.
-- The window in the leaf is the picture's own device. The cells are a model: regular shapes,
+- The cut across the leaf is the picture's own device; no real leaf is cut. Cells are built for
+  0.84 mm of the cut face round the marked spot, and the rest of the face is painted in the same
+  layers. The leaf's surface (veins down to the finest net, the fields between them, their relief)
+  is a drawn pattern, not a measured one. The cells are a model: regular shapes,
   whole at the cut where real ones would be sliced open, and only their walls, chloroplasts and
   vacuoles are drawn. Only the followed cell's chloroplasts have their membrane stacks drawn; the
   rest carry dark dots in their place.
 - Molecules are flat, without hydrogen atoms, and chlorophyll's side groups are stubs (one of its
   five oxygen atoms is drawn). Real pigments sit inside the membrane, held by proteins; here the
-  proteins are left out and the pigments are lifted onto the membrane's face so that they can be
-  seen. Water is left out. The membrane stays to the end of the year at this scale, though in a
+  proteins are plain mounds 10 to 15 nm across (real ones are of several kinds and far more
+  crowded), and the pigments are lifted onto the membrane's face and spread evenly over it so that
+  they can be seen. The mounds go as the chlorophyll goes. Water is left out. The membrane stays to the end of the year at this scale, though in a
   real cell it is taken apart and the remaining carotenoids end up in drops of fat. In the chain
   slider's drawing, double bonds outside the row are not drawn. Only the 63 molecules nearest the middle are built
   atom by atom; those further off are flat outlines. One molecule has no colour: each is drawn in

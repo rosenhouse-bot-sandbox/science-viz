@@ -73,27 +73,51 @@ export const LEAF_VS = HEAD + `
 layout(location=0) in vec3 aPos;
 layout(location=2) in vec3 iPos; layout(location=3) in vec4 iQuat; layout(location=4) in vec4 iCol;
 uniform mat4 uMV, uP; uniform float uDroop;
-out vec2 vUV; out vec3 vN; out vec3 vV; out vec3 vCol;
+uniform vec3 uSlide, uThick;      // a part of the cut leaf moved off; and the leaf's thickness, for the face of the cut
+out vec2 vUV; out vec3 vN; out vec3 vV; out vec3 vCol; out float vH;
 vec3 rot(vec4 q, vec3 v) { vec3 t = 2.0 * cross(q.xyz, v); return v + q.w * t + cross(q.xyz, t); }
 void main() {
-  vec3 l = vec3(aPos.xy, -uDroop * dot(aPos.xy, aPos.xy));
+  vec3 l = vec3(aPos.xy, -uDroop * dot(aPos.xy, aPos.xy) ) - aPos.z * uThick + uSlide; vH = aPos.z;
   vec4 v = uMV * vec4(iPos + rot(iQuat, l * iCol.a), 1.0);
   vN = mat3(uMV) * rot(iQuat, vec3(2.0 * uDroop * aPos.xy, 1.0));
   vUV = aPos.xy; vV = v.xyz; vCol = iCol.rgb; gl_Position = uP * v;
 }`;
 export const LEAF_FS = HEAD + LIGHT + `
-in vec2 vUV; in vec3 vN; in vec3 vV; in vec3 vCol; out vec4 o;
-uniform int uDetail;                 // 1 for the leaf we follow
+in vec2 vUV; in vec3 vN; in vec3 vV; in vec3 vCol; in float vH; out vec4 o;
+uniform int uDetail;                 // 1 for the leaf we follow, 2 for the face of the cut through it
 uniform vec3 uEarly, uLate, uVein;   // that leaf's colour a few days earlier and later, and its veins' colour
-uniform vec4 uHole; uniform vec2 uHoleX;   // the window cut in it: the middle of its far wall, its half-width and its depth, in leaf lengths; and which way that wall runs
+uniform vec2 uCutO, uCutX; uniform int uKeep;   // the cut across it: a point on the cut line and the way the line runs; and which side of it is being drawn (0: the leaf is whole)
+uniform float uMic, uCells; uniform vec3 uTall, uLoose;   // a micrometre in leaf lengths; how far along the cut the cells are built one by one; the colours of the tall and the loose cells
 uniform vec2 uLobe[7];               // each lobe's direction and length
 uniform float uVeinW, uSideW, uNetW, uNetCell;
 uniform float uLum;                  // how bright the daylight is
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float noise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(hash(i), hash(i + vec2(1,0)), f.x), mix(hash(i + vec2(0,1)), hash(i + vec2(1,1)), f.x), f.y); }
+// A net of fields, each "cell" across: how far this point is from the nearest line between two fields, and a number of the field's own
+vec3 net(vec2 uv, float cell) {
+  vec2 g = uv / cell; g += 0.22 * (vec2(noise(g * 1.9), noise(g * 1.9 + 31.7)) - 0.5);          // real veins wander: the lines between fields are not ruled straight
+  vec2 id = floor(g), own = id; float d1 = 9.0, d2 = 9.0;
+  for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) { vec2 k = id + vec2(i, j); float dd = length(k + vec2(hash(k), hash(k + 7.3)) - g); if (dd < d1) { d2 = d1; d1 = dd; own = k; } else if (dd < d2) d2 = dd; }
+  return vec3((d2 - d1) * 0.5 * cell, hash(own + 3.7), 0.0);
+}
 // how much of a pixel a line of width w covers, at distance d from its middle
 float cover(float d, float w) { float px = max(fwidth(d), 1e-9); return clamp((0.5 * w - d) / px + 0.5, 0.0, 1.0) * min(1.0, w / px); }
 void main() {
-  if (uDetail == 1) { vec2 hd = vUV - uHole.xy; float hx = dot(hd, uHoleX), hy = dot(hd, vec2(-uHoleX.y, uHoleX.x)); if (abs(hx) < uHole.z && hy < 0.0 && hy > -uHole.w) discard; }
+  vec2 hd = vUV - uCutO; float hx = dot(hd, uCutX), hy = dot(hd, vec2(-uCutX.y, uCutX.x));
+  if (uDetail == 1 && uKeep != 0 && hy * float(uKeep) < 0.0) discard;
+  if (uDetail == 2) {                                // the face of the cut: the leaf's layers, as bands of cells too small to build one by one
+    float xs = hx / uMic, zc = 35.0 - vH * 136.0, px = max(fwidth(xs), 1e-4);
+    if (abs(xs) < uCells) discard;
+    float grain = clamp(2.0 / px, 0.0, 1.0);                       // the chloroplasts' speckle, until they are smaller than a pixel
+    float sp = 1.0 + grain * 0.7 * (hash(floor(vec2(xs, zc) / 2.6)) - 0.5);
+    vec3 air = uLoose * 0.2, c2 = air;
+    if (zc > 26.0) c2 = mix(uTall * 0.55, vec3(0.42, 0.48, 0.4), 0.5);
+    else if (zc < -80.0) c2 = mix(air, vec3(0.36, 0.52, 0.43), 0.7);
+    else if (zc > -16.0) { float s = abs(fract(xs / 12.4) - 0.5) * 12.4; c2 = uTall * 0.8 * sp * mix(1.0, 0.8, clamp((s - 5.2) / px + 0.5, 0.0, 1.0) * grain); }
+    else if (zc < -22.0) { vec2 g = vec2(xs, zc) / 15.0, id = floor(g); float d1 = 9.0; for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) { vec2 cell = id + vec2(i, j); if (hash(cell + 11.0) < 0.26) continue; d1 = min(d1, length(cell + 0.25 + 0.5 * vec2(hash(cell), hash(cell + 7.3)) - g)); }
+      float w = px / 15.0; c2 = mix(air, uLoose * 0.5 * sp * sp, mix(1.0 - smoothstep(0.42 - w, 0.42 + w, d1), 0.5, clamp(w * 1.5, 0.0, 1.0))); }
+    o = vec4(c2 * uLum, 1.0); return;
+  }
   vec3 v = normalize(-vV), n = normalize(vN); if (dot(n, v) < 0.0) n = -n;     // the side that faces the eye, whichever way round a triangle was drawn (at the teeth some fold back on themselves)
   float ndl = dot(n, uSun);
   vec3 base = vCol;
@@ -109,17 +133,27 @@ void main() {
       if (k >= 1.0 && k <= n9 && abs(s) < 0.15 * L) side = max(side, cover(abs(q - k * gap) * 0.8, uSideW));
     }
   }
-  vec3 c = base;
+  vec3 c = base; float relief = 0.0;
   if (uDetail == 1) {
-    // the net of small veins
-    vec2 g = vUV / uNetCell, id = floor(g); float d1 = 9.0, d2 = 9.0;
-    for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) { vec2 cell = id + vec2(i, j); float dd = length(cell + vec2(hash(cell), hash(cell + 7.3)) - g); if (dd < d1) { d2 = d1; d1 = dd; } else if (dd < d2) d2 = dd; }
-    c = mix(c, uVein, 0.3 * cover((d2 - d1) * 0.5 * uNetCell, uNetW));
-    c = mix(c, uVein, 0.45 * side);
+    // What a leaf's upper side shows from close by. Veins branch into finer and finer veins that close into a net of small fields;
+    // the blade is puckered between them, and no two fields are quite the same shade. Finest of all, the skin's own cells.
+    vec3 big = net(vUV, uNetCell * 4.0), small = net(vUV, uNetCell), skin = net(vUV, uNetCell / 22.0);
+    float px = length(fwidth(vUV)), v3 = cover(big.x, uNetW * 3.2), v4 = cover(small.x, uNetW), v5 = cover(skin.x, uNetW * 0.12);
+    float blotch = noise(vUV / (uNetCell * 9.0)) - 0.5, fine = noise(vUV / (uNetCell * 0.35)) - 0.5;
+    c = blotch > 0.0 ? mix(c, uLate, min(1.0, blotch * 1.3)) : mix(c, uEarly, min(1.0, -blotch * 1.3));     // the pigments are not spread evenly: patches run a few days ahead or behind
+    c *= 1.0 + 0.16 * (small.y - 0.5) + 0.1 * (big.y - 0.5) + 0.1 * fine + 0.07 * (skin.y - 0.5) * clamp(uNetCell / 22.0 / px - 0.5, 0.0, 1.0);
+    c = mix(c, c * 0.8, 0.5 * v5);
+    c = mix(c, uVein, 0.4 * v4);
+    c = mix(c, uVein, 0.55 * v3);
+    c = mix(c, uVein, 0.6 * side);
+    // relief: the veins lie in grooves and the fields between them bulge, so each catches the light on one side
+    float h = 0.8 * smoothstep(0.0, uNetCell * 0.42, small.x) + 0.5 * smoothstep(0.0, uNetCell * 1.1, big.x) - 0.5 * max(v3, max(side, main));
+    vec2 lit = normalize(uSun.xy + vec2(1e-4, 0.0));
+    relief = dot(vec2(dFdx(h), dFdy(h)), lit) / max(px, 1e-9) * uMic * 20.0 * clamp(uNetW * 2.0 / px, 0.0, 1.0);
   }
   c = mix(c, uDetail == 1 ? uVein : base * 1.22 + 0.02, 0.75 * main);
   // the sunlit side is matt and bright; seen from the other side, the light that comes through makes it glow
-  vec3 col = c * (0.5 + 0.9 * max(ndl, 0.0) + 0.92 * smoothstep(0.0, 0.6, -ndl));
+  vec3 col = c * (0.5 + 0.9 * max(ndl, 0.0) + 0.92 * smoothstep(0.0, 0.6, -ndl)) * (1.0 + clamp(relief, -0.4, 0.45));
   col += vec3(1.0, 0.9, 0.8) * 0.12 * pow(max(dot(n, normalize(uSun + v)), 0.0), 30.0);
   col *= uLum; col /= max(1.0, max(col.r, max(col.g, col.b)));     // brighter than the screen can show: dimmed as a whole, so that the colour the model gave is kept
   o = vec4(col, 1.0);
@@ -212,17 +246,31 @@ out vec2 vXY; out vec3 vV;
 void main() { vec3 w = vec3(aPos.xy * uR, 0.0); vXY = w.xy; vec4 v = uMV * vec4(w, 1.0); vV = v.xyz; gl_Position = uP * v; }`;
 export const MEMB_FS = HEAD + LIGHT + `
 in vec2 vXY; in vec3 vV; out vec4 o;
-uniform float uR; uniform vec3 uTint; uniform mat3 uN;     // uN: the membrane's own axes in the camera's frame
+uniform float uR, uChl; uniform vec3 uTint; uniform mat3 uN;     // uN: the membrane's own axes in the camera's frame
+float h2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 void main() {
   if (length(vXY) > uR) discard;
   // heads 0.8 nm apart, in rows that interlock
   vec2 g = vec2(vXY.x / 0.8, vXY.y / 0.693); float row = floor(g.y + 0.5); g.x += 0.5 * mod(row, 2.0);
   vec2 d = vec2((fract(g.x + 0.5) - 0.5) * 0.8, (g.y - row) * 0.693); float r = length(d) / 0.42;
-  float px = fwidth(vXY.x) / 0.8, flat_ = clamp(px * 1.5 - 0.3, 0.0, 1.0);                     // once a head is smaller than a pixel only the average is seen
+  float px = fwidth(vXY.x) / 0.8, flat_ = clamp(px * 3.0 - 0.5, 0.0, 1.0);                     // once a head is only a pixel or two across only the average is seen
   vec3 nl = r < 1.0 ? normalize(vec3(d / 0.42, sqrt(1.0 - r * r) * 1.3)) : vec3(0.0, 0.0, 1.0);
   nl = normalize(mix(nl, vec3(0.0, 0.0, 1.0), flat_));
-  vec3 n = normalize(uN * nl), v = normalize(-vV);
   float shade = mix(r < 1.0 ? 1.0 : 0.6, 0.85, flat_);
-  vec3 c = uTint * shade * (0.45 + 0.55 * max(dot(n, uSun), 0.0)) + 0.25 * pow(max(dot(n, normalize(uSun + v)), 0.0), 30.0) * (1.0 - flat_);
+  // the proteins that hold the pigments: mounds some 10 to 16 nm across standing out of the fat, fewer as the chlorophyll goes
+  const float CELL = 17.0; vec2 q = vXY / CELL, qi = floor(q); float in_ = 0.0; vec3 np = vec3(0.0, 0.0, 1.0); float aa = fwidth(vXY.x) * 1.2;
+  for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
+    vec2 id = qi + vec2(float(i), float(j)); float h = h2(id);
+    float here = clamp((uChl - (0.03 + 0.85 * h2(id + 7.3))) / 0.06, 0.0, 1.0); if (here <= 0.0) continue;
+    vec2 c0 = (id + 0.5 + 0.5 * (vec2(h, h2(id + 3.1)) - 0.5)) * CELL, e = vXY - c0; float an = h2(id + 11.9) * 3.1416, cs = cos(an), sn = sin(an);
+    e = vec2(cs * e.x + sn * e.y, cs * e.y - sn * e.x) / (vec2(7.6, 5.2) * mix(0.75, 1.0, h) * here);
+    float rr = length(e), k = 1.0 - smoothstep(1.0 - aa / 5.0, 1.0 + aa / 5.0, rr);
+    if (k > in_) { in_ = k; float zz = sqrt(max(1.0 - min(rr, 1.0) * min(rr, 1.0), 0.0)); vec2 t = vec2(cs * e.x - sn * e.y, sn * e.x + cs * e.y); np = normalize(vec3(t * 0.9, zz + 0.45)); }
+  }
+  float small = clamp(aa / 5.0, 0.0, 1.0);                                                       // a mound only a few pixels across: no shading of its own
+  nl = normalize(mix(nl, mix(np, vec3(0.0, 0.0, 1.0), small), in_)); shade = mix(shade, 1.0, in_);
+  vec3 tint = mix(uTint * 0.8, uTint * 1.12 + 0.03, in_);
+  vec3 n = normalize(uN * nl), v = normalize(-vV);
+  vec3 c = tint * shade * (0.45 + 0.55 * max(dot(n, uSun), 0.0)) + 0.25 * pow(max(dot(n, normalize(uSun + v)), 0.0), 30.0) * (1.0 - max(flat_, in_ * 0.6));
   o = vec4(c, 1.0);
 }`;
