@@ -667,13 +667,25 @@ Simplified or exaggerated, and said so on the page:
   molecules beyond a hundred or so nanometres. Real cell sap is far clearer; without this the view
   would not change as the zoom goes from micrometres to nanometres.
 - Fallen leaves rest on the tips of their lobes, level; real ones lie anyhow.
+- A leaf comes out of its bud folded like a fan (each lobe creased along its middle vein, the lobes
+  close together, the blade hanging) and opens flat as it grows. The fold is a simple one: the
+  same angle on every lobe, and every leaf of the tree as far open as the followed one. A real
+  leaf's cells are still dividing and have few air spaces then; here they are the grown leaf's
+  cells, smaller.
+- The followed leaf is turned toward the afternoon Sun so that it is lit as the outside of the
+  crown is, and the close-ups look down the slope of its blade, away from the tree. The brightest
+  leaves are eased down rather than cut off at the screen's brightest, so a sunlit leaf is drawn
+  less bright against a shaded one than it is.
 - The cut across the leaf is the picture's own device; no real leaf is cut. Cells are built for
-  0.84 mm of the cut face round the marked spot, and the rest of the face is painted in the same
-  layers. The leaf's surface (veins down to the finest net, the fields between them, their relief)
+  0.9 mm of the cut face round the marked spot. The rest of the face shows a picture of those same
+  cells, taken square on and repeated every 0.9 mm along the cut, so a vein comes round more often
+  there than veins are really spaced. The leaf's surface (veins down to the finest net, the fields between them, their relief)
   is a drawn pattern, not a measured one. The cells are a model: regular shapes,
   whole at the cut where real ones would be sliced open, and only their walls, chloroplasts and
   vacuoles are drawn. Only the followed cell's chloroplasts have their membrane stacks drawn; the
-  rest carry dark dots in their place.
+  rest carry dark dots in their place. In the followed chloroplast a few single sheets of membrane
+  run from the followed stack toward its neighbours; a real one has many more, winding round
+  every stack.
 - Molecules are flat, without hydrogen atoms, and chlorophyll's side groups are stubs (one of its
   five oxygen atoms is drawn). Real pigments sit inside the membrane, held by proteins; here the
   proteins are plain mounds 10 to 15 nm across (real ones are of several kinds and far more
@@ -685,7 +697,10 @@ Simplified or exaggerated, and said so on the page:
   atom by atom; those further off are flat outlines. One molecule has no colour: each is drawn in
   the colour its pigment has in bulk, and in the vacuole the atoms are drawn pale and dark red so
   that they show against the red water. Anthocyanin is drawn a few times more crowded than it is
-  in a deep red cell (about 18 mM here; a red leaf's vacuoles hold several mM). The dots of light move far slower than
+  in a deep red cell (about 18 mM here; a red leaf's vacuoles hold several mM) at the middle of the view, and thinner
+  further out; beyond 15 nm the molecules are outlines of their three rings, out to a quarter of a
+  micrometre and no further. The water's colour is drawn hiding them only from the nearest thing
+  drawn onward, not from the eye. The dots of light move far slower than
   light, and one dot stands for a little light of one wavelength. When chlorophyll is broken down
   the caption gives the enzymes' order (magnesium out, tail off, ring opened); the picture only
   takes each molecule away in its turn.

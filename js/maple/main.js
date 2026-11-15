@@ -1,9 +1,9 @@
 // Japanese maple: the controller. Two numbers drive the page: the zoom (0 = tree ... 4 = molecules)
 // and the season (0 = late March ... 1 = late December). The picture is redrawn only when one changes.
-import { dayOf, dateOf, dayLength, sunAt, takenIn, PHASES, phaseAt, LAT, clamp, smooth, mix, css, leafRGB } from './model.js?v=03761dd8';
-import { makeWorld, TARGETS, CUT as LEAF_CUT } from './world.js?v=03761dd8';
-import { quatOf, qmul, qrot, slerp, add, mul, unit, cross, lerp3 } from './gl.js?v=03761dd8';
-import { drawSpectrum, drawStalk, drawChain } from './figs.js?v=03761dd8';
+import { dayOf, dateOf, dayLength, sunAt, takenIn, PHASES, phaseAt, LAT, clamp, smooth, mix, css, leafRGB } from './model.js?v=2b71fae6';
+import { makeWorld, TARGETS, CUT as LEAF_CUT } from './world.js?v=2b71fae6';
+import { quatOf, qmul, qrot, slerp, add, mul, unit, cross, lerp3 } from './gl.js?v=2b71fae6';
+import { drawSpectrum, drawStalk, drawChain } from './figs.js?v=2b71fae6';
 import { gamepad } from '../gamepad/gamepad.js';
 
 const $ = (id) => document.getElementById(id);
@@ -37,7 +37,7 @@ const CAP = {
     ['Leaf fall', 'A leaf falls once the layer of cells that held its stalk to the twig has come apart. The leaf we follow, ringed in white, is the last to go.'],
   ],
   leaf: [
-    ['One leaf unfolds', 'The leaf has seven pointed lobes, each with a vein down its middle. The veins bring water in and carry sugar out.'],
+    ['One leaf unfolds', 'It comes out of the bud folded like a fan and opens flat as it grows. The leaf has seven pointed lobes, each with a vein down its middle. The veins bring water in and carry sugar out.'],
     ['Green', 'Chlorophyll absorbs light near 440 nm and near 675 nm. Light around 550 nm is absorbed least, so more of it comes back or passes through than at other wavelengths, and we see the leaf as green.'],
     ['Chlorophyll is taken apart', 'The leaf dismantles the proteins that hold its chlorophyll and sends their nitrogen back into the tree. The chlorophyll is broken down. Green lasts longest beside the veins.'],
     ['Red', 'The leaf makes a new pigment, an anthocyanin, from sugar that builds up in it. Anthocyanin absorbs light from about 480 to 580 nm. What comes back is mostly longer than 600 nm, which we see as red.'],
@@ -79,7 +79,7 @@ const NOTE = {
   tissue: 'A model: real cells are less regular, and those at a cut would be sliced open. Only walls, chloroplasts and vacuoles are drawn. The ring marks the cell the next scale shows. ' + DOTS,
   cells: 'Only the walls, chloroplasts and vacuoles are drawn. The small ring marks where the Molecules scale looks. ' + DOTS,
   membrane: 'Sticks are bonds between atoms: carbon grey, nitrogen blue, oxygen red, magnesium pale green; hydrogen is left out. The glowing bonds are the ones whose shared electrons take in visible light. The beads underneath are the heads of the membrane\'s fat molecules, which have no colour of their own; they are tinted with the colour the pigments give the whole membrane. The smooth mounds are the proteins that hold the pigments, drawn as plain lumps; they go as the chlorophyll goes. In a real membrane nearly every pigment sits inside one of them; here the pigments are lifted onto the membrane\'s face and spread out so that they can be seen. Chlorophyll comes in two kinds, a and b; a is drawn, and only one of its five oxygen atoms. In autumn the real membrane is taken apart too, and the carotenoids that remain end up in drops of fat. Each dot of light stands for a little light of one wavelength, drawn in the colour we see it as, and moving far slower than light does; a real wave of visible light is about a hundred times wider than this view. One molecule has no colour: each is drawn in the colour its pigment has in bulk.',
-  vacuole: 'Sticks are bonds between atoms; carbon is drawn pale and oxygen dark red so that they show against the red water; hydrogen is left out. The water\'s own colour hides the rest of the cell, and molecules more than a hundred or so nanometres away; real cell sap is far clearer than that. The glowing bonds are the ones whose shared electrons take in visible light. Water is not drawn. The pigment is drawn a few times more crowded than it is in a deep red cell. Each dot of light stands for a little light of one wavelength, moving far slower than light does.',
+  vacuole: 'Sticks are bonds between atoms; carbon is drawn pale and oxygen dark red so that they show against the red water; hydrogen is left out. The water\'s own colour hides the rest of the cell, and molecules more than a hundred or so nanometres away; real cell sap is far clearer than that. The glowing bonds are the ones whose shared electrons take in visible light. Water is not drawn. The pigment is drawn a few times more crowded than it is in a deep red cell, and only the molecules nearest the middle are built atom by atom; those further off are outlines of their three rings. Each dot of light stands for a little light of one wavelength, moving far slower than light does.',
 };
 const CUT = 'The foot of the leaf stalk cut lengthwise, twig on the left. Brown: cells whose walls fill with cork and seal the twig. Beside them, small cells dissolve the walls that join them, from the outside in. The pale strand is the vein, the last part to break. A diagram: real cells are smaller and far more numerous.';
 
