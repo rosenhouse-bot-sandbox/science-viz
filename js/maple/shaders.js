@@ -86,7 +86,7 @@ export const LEAF_FS = HEAD + LIGHT + `
 in vec2 vUV; in vec3 vN; in vec3 vV; in vec3 vCol; in float vH; out vec4 o;
 uniform int uDetail;                 // 1 for the leaf we follow, 2 for the face of the cut through it
 uniform vec3 uEarly, uLate, uVein;   // that leaf's colour a few days earlier and later, and its veins' colour
-uniform vec2 uCutO, uCutX; uniform int uKeep;   // the cut across it: a point on the cut line and the way the line runs; and which side of it is being drawn (0: the leaf is whole)
+uniform vec2 uCutO, uCutX; uniform int uKeep; uniform vec3 uDotC;   // the cut across it: a point on the cut line and the way the line runs; and which side of it is being drawn (0: the leaf is whole)
 uniform float uMic, uCells; uniform vec3 uTall, uLoose;   // a micrometre in leaf lengths; how far along the cut the cells are built one by one; the colours of the tall and the loose cells
 uniform vec2 uLobe[7];               // each lobe's direction and length
 uniform float uVeinW, uSideW, uNetW, uNetCell;
@@ -113,7 +113,7 @@ void main() {
     vec3 air = uLoose * 0.2, c2 = air;
     if (zc > 26.0) c2 = mix(uTall * 0.55, vec3(0.42, 0.48, 0.4), 0.5);
     else if (zc < -80.0) c2 = mix(air, vec3(0.36, 0.52, 0.43), 0.7);
-    else if (zc > -16.0) { float s = abs(fract(xs / 12.4) - 0.5) * 12.4; c2 = uTall * 0.8 * sp * mix(1.0, 0.8, clamp((s - 5.2) / px + 0.5, 0.0, 1.0) * grain); }
+    else if (zc > -16.0) { float s = abs(fract(xs / 12.4) - 0.5) * 12.4; c2 = mix(mix(uTall, uDotC, step(0.5, hash(floor(vec2(xs, zc) / 2.6) + 5.0)) * grain * 0.8 + (1.0 - grain) * 0.4), vec3(0.86, 0.94, 0.82), 0.1) * 0.74 * sp * mix(1.0, 0.8, clamp((s - 5.2) / px + 0.5, 0.0, 1.0) * grain); }
     else if (zc < -22.0) { vec2 g = vec2(xs, zc) / 15.0, id = floor(g); float d1 = 9.0; for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) { vec2 cell = id + vec2(i, j); if (hash(cell + 11.0) < 0.26) continue; d1 = min(d1, length(cell + 0.25 + 0.5 * vec2(hash(cell), hash(cell + 7.3)) - g)); }
       float w = px / 15.0; c2 = mix(air, uLoose * 0.5 * sp * sp, mix(1.0 - smoothstep(0.42 - w, 0.42 + w, d1), 0.5, clamp(w * 1.5, 0.0, 1.0))); }
     o = vec4(c2 * uLum, 1.0); return;
@@ -147,14 +147,16 @@ void main() {
     c = mix(c, uVein, 0.55 * v3);
     c = mix(c, uVein, 0.6 * side);
     // relief: the veins lie in grooves and the fields between them bulge, so each catches the light on one side
-    float h = 0.8 * smoothstep(0.0, uNetCell * 0.42, small.x) + 0.5 * smoothstep(0.0, uNetCell * 1.1, big.x) - 0.5 * max(v3, max(side, main));
+    float h = 0.8 * smoothstep(0.0, uNetCell * 0.42, small.x) + 0.5 * smoothstep(0.0, uNetCell * 1.1, big.x);
     vec2 lit = normalize(uSun.xy + vec2(1e-4, 0.0));
     relief = dot(vec2(dFdx(h), dFdy(h)), lit) / max(px, 1e-9) * uMic * 20.0 * clamp(uNetW * 2.0 / px, 0.0, 1.0);
   }
   c = mix(c, uDetail == 1 ? uVein : base * 1.22 + 0.02, 0.75 * main);
   // the sunlit side is matt and bright; seen from the other side, the light that comes through makes it glow
-  vec3 col = c * (0.5 + 0.9 * max(ndl, 0.0) + 0.92 * smoothstep(0.0, 0.6, -ndl)) * (1.0 + clamp(relief, -0.4, 0.45));
+  vec3 col = c * (0.62 + 0.85 * max(ndl, 0.0) + 0.72 * smoothstep(0.0, 0.6, -ndl)) * (1.0 + clamp(relief, -0.4, 0.45));
   col += vec3(1.0, 0.9, 0.8) * 0.12 * pow(max(dot(n, normalize(uSun + v)), 0.0), 30.0);
+  if (uDetail == 1) { float w = fwidth(hy); col = mix(col, vec3(1.0), 0.85 * (1.0 - smoothstep(1.0, 2.2, abs(hy) / max(w, 1e-9))) * (1.0 - smoothstep(0.004, 0.012, w))); }   // the line the leaf is cut along, marked in white from the Leaf scale on
+
   col *= uLum; col /= max(1.0, max(col.r, max(col.g, col.b)));     // brighter than the screen can show: dimmed as a whole, so that the colour the model gave is kept
   o = vec4(col, 1.0);
 }`;
@@ -253,7 +255,7 @@ void main() {
   // heads 0.8 nm apart, in rows that interlock
   vec2 g = vec2(vXY.x / 0.8, vXY.y / 0.693); float row = floor(g.y + 0.5); g.x += 0.5 * mod(row, 2.0);
   vec2 d = vec2((fract(g.x + 0.5) - 0.5) * 0.8, (g.y - row) * 0.693); float r = length(d) / 0.42;
-  float px = fwidth(vXY.x) / 0.8, flat_ = clamp(px * 3.0 - 0.5, 0.0, 1.0);                     // once a head is only a pixel or two across only the average is seen
+  float px = fwidth(vXY.x) / 0.8, flat_ = clamp(px * 5.0 - 0.6, 0.0, 1.0);                     // once a head is only a pixel or two across only the average is seen
   vec3 nl = r < 1.0 ? normalize(vec3(d / 0.42, sqrt(1.0 - r * r) * 1.3)) : vec3(0.0, 0.0, 1.0);
   nl = normalize(mix(nl, vec3(0.0, 0.0, 1.0), flat_));
   float shade = mix(r < 1.0 ? 1.0 : 0.6, 0.85, flat_);
@@ -267,9 +269,9 @@ void main() {
     float rr = length(e), k = 1.0 - smoothstep(1.0 - aa / 5.0, 1.0 + aa / 5.0, rr);
     if (k > in_) { in_ = k; float zz = sqrt(max(1.0 - min(rr, 1.0) * min(rr, 1.0), 0.0)); vec2 t = vec2(cs * e.x - sn * e.y, sn * e.x + cs * e.y); np = normalize(vec3(t * 0.9, zz + 0.45)); }
   }
-  float small = clamp(aa / 5.0, 0.0, 1.0);                                                       // a mound only a few pixels across: no shading of its own
+  float small = clamp(aa / 8.0 - 0.1, 0.0, 1.0);                                                       // a mound only a few pixels across: no shading of its own
   nl = normalize(mix(nl, mix(np, vec3(0.0, 0.0, 1.0), small), in_)); shade = mix(shade, 1.0, in_);
-  vec3 tint = mix(uTint * 0.8, uTint * 1.12 + 0.03, in_);
+  vec3 tint = mix(mix(vec3(0.42, 0.45, 0.4), uTint, 0.3) * 0.85, uTint * 1.1 + 0.03, in_);
   vec3 n = normalize(uN * nl), v = normalize(-vV);
   vec3 c = tint * shade * (0.45 + 0.55 * max(dot(n, uSun), 0.0)) + 0.25 * pow(max(dot(n, normalize(uSun + v)), 0.0), 30.0) * (1.0 - max(flat_, in_ * 0.6));
   o = vec4(c, 1.0);

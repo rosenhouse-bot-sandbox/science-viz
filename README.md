@@ -531,7 +531,7 @@ day it falls, at every scale from the whole tree down to its pigment molecules. 
   faded in or swapped for another picture: the tree, the leaf, its cells and their molecules are all
   there at once, each at its true size, and come into view only by getting bigger. The followed leaf
   hangs at the end of a low twig. It is cut straight across its middle lobe: as the zoom goes in from
-  Leaf, the piece beyond the cut slides aside (the cut is shown being made), and the camera goes
+  Leaf, the piece beyond the cut slides aside (the cut is shown being made, and the line it is made along is marked in white from the Leaf scale on), and the camera goes
   into the gap and looks at the cut face, facing out from the tree so that only lawn is behind it: the leaf's layers of cells, then one
   tall cell, then the face of one stack of membrane inside one of its chloroplasts (or the water
   of its vacuole). A white ring marks the point each scale zooms into (the leaf on the tree, the
@@ -647,7 +647,8 @@ Simplified or exaggerated, and said so on the page:
   five oxygen atoms is drawn). Real pigments sit inside the membrane, held by proteins; here the
   proteins are plain mounds 10 to 15 nm across (real ones are of several kinds and far more
   crowded), and the pigments are lifted onto the membrane's face and spread evenly over it so that
-  they can be seen. The mounds go as the chlorophyll goes. Water is left out. The membrane stays to the end of the year at this scale, though in a
+  they can be seen. The mounds go as the chlorophyll goes. The membrane's fat molecules have no colour of their own;
+  they are tinted with a little of the colour the pigments give the whole membrane. Water is left out. The membrane stays to the end of the year at this scale, though in a
   real cell it is taken apart and the remaining carotenoids end up in drops of fat. In the chain
   slider's drawing, double bonds outside the row are not drawn. Only the 63 molecules nearest the middle are built
   atom by atom; those further off are flat outlines. One molecule has no colour: each is drawn in
