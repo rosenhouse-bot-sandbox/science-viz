@@ -135,8 +135,8 @@ for (const [name, width, height, motion] of [['desktop', 1280, 800, 'no-preferen
     await page.waitForTimeout(1200);
     s = await state();
     if (s.s !== s0) fail(`${name}: the year moved on during a flight between scales`);
-    await page.waitForFunction(() => window.__maple.st.z === 3, null, { timeout: 600000 }); await page.waitForTimeout(4000);
-    if (!((await state()).s > s0)) fail(`${name}: the year did not go on after the flight ended`);
+    await page.waitForFunction(() => window.__maple.st.z === 3, null, { timeout: 600000 }); // drawn in software a frame of the Cells view can take several seconds, so wait for the date to move rather than for a fixed time
+    await page.waitForFunction((s0) => window.__maple.st.s > s0, s0, { timeout: 120000 }).catch(() => fail(`${name}: the year did not go on after the flight ended`));
     await page.focus('#zoom'); for (let i = 0; i < 8; i++) { await page.keyboard.press('ArrowRight'); await page.waitForTimeout(40); }
     await page.click('[data-where=vacuole]'); await page.waitForTimeout(300); await page.click('[data-where=membrane]');
     await stops[1].click(); await page.waitForTimeout(500); await put('season', 400); await page.waitForTimeout(100); await put('season', 410);

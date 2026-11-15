@@ -3,11 +3,11 @@
 // window, one cell's chloroplasts and vacuole, one chloroplast's stacks of membrane, and the
 // pigment molecules on one membrane and in the vacuole. Each part is built at its true size in its
 // own units (metres, leaf lengths, micrometres, nanometres) and placed inside the part above.
-import { program, instanced, ball, tube, square, box, add, sub, mul, dot, cross, unit, len, quatOf, qmul, qaxis, qrot, qconj, qalong, rng } from './gl.js?v=389d1a6f';
-import * as SH from './shaders.js?v=389d1a6f';
-import { leafRGB, pigments, bandTable, wavelengthRGB, encode, clamp, smooth, mix, NM0, NSTEP, sunAt, thickness } from './model.js?v=389d1a6f';
-import { buildTree, leafShape, place, SPOT, LOBES, DROOP, bladeAt, foldOf, FOLD } from './tree.js?v=389d1a6f';
-import { pigmentShapes } from './molecules.js?v=389d1a6f';
+import { program, instanced, ball, tube, square, box, add, sub, mul, dot, cross, unit, len, quatOf, qmul, qaxis, qrot, qconj, qalong, rng } from './gl.js?v=07ad348f';
+import * as SH from './shaders.js?v=07ad348f';
+import { leafRGB, pigments, bandTable, wavelengthRGB, encode, clamp, smooth, mix, NM0, NSTEP, sunAt, thickness } from './model.js?v=07ad348f';
+import { buildTree, leafShape, place, SPOT, LOBES, DROOP, bladeAt, foldOf, FOLD } from './tree.js?v=07ad348f';
+import { pigmentShapes } from './molecules.js?v=07ad348f';
 
 // The leaf cut through, in micrometres. In the frame of the cut: x runs along the wall of the window,
 // y into the leaf behind the wall, z up through the leaf's thickness. (0, CELL_Y, 0) is the middle of the followed cell.
@@ -379,7 +379,7 @@ export function makeWorld(gl) {
     gl.disable(gl.BLEND); gl.depthMask(true); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.disable(gl.CULL_FACE);
     gl.clearColor(0.02, 0.03, 0.06, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     const f = frames(false, view.cut || 0), um = view.k * f.unit, kn = view.k * 1e-9, d = view.dist, diag = Math.hypot(view.W, view.H), rings = new Batch();
-    if (view.cut > 0) bakeFace(f);
+    if (view.cut > 0 && (!FACE.tex || view.W / um > FACE.half * 0.5)) bakeFace(f);   // close in, only built cells are in view: the picture of them is not needed, and taking it on every date would halve the frame rate
     const ring = (at, r, unitPx) => { const px = r * unitPx; if (px < 0.4 || px > diag) return; rings.add(at, ID, [r, r, 1], [1, 1, 1, Math.min(1, px / 3.2)], [13, 1 / px, 0]); };
     const drawRings = (unitPx) => { if (!rings.a.length) return; N.rings.set(rings.data(), gl.DYNAMIC_DRAW); solid(2); gl.disable(gl.DEPTH_TEST); blend(true); N.rings.draw(); blend(false); gl.enable(gl.DEPTH_TEST); rings.a.length = 0; };
 
