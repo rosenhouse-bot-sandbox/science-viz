@@ -75,7 +75,7 @@ for (const [name, width, height, motion] of quick ? SIZES.slice(0, 1) : SIZES) {
   if (stops.length !== 5) fail(`${name}: expected five scales, found ${stops.length}`);
   const titles = new Set();
   for (let i = stops.length - 1; i >= 0; i--) {
-    await put('cycle', i === 4 ? 362 : i === 3 ? 360 : 95);
+    await put('cycle', i === 4 ? 356 : i === 3 ? 360 : 95);
     await stops[i].click();
     if (motion === 'reduce') { await frame(); if (Math.abs((await state()).z - i) > 1e-6) fail(`${name}: with reduced motion the zoom did not go straight to scale ${i}`); }
     await idle(); await frame(); await page.waitForTimeout(250);
@@ -121,7 +121,8 @@ for (const [name, width, height, motion] of quick ? SIZES.slice(0, 1) : SIZES) {
   if (!(await page.getAttribute('#zoom', 'aria-valuetext')) || !/\d+ degrees, \w+/.test(await page.getAttribute('#cycle', 'aria-valuetext'))) fail(`${name}: a slider has no spoken value`);
 
   // Play loops over the burn at Flame and at Molecules
-  for (const [z, lo, hi] of [[3, 325, 402], [4, 350, 372]]) {
+  const burns = await page.evaluate(() => window.__engine.model.SPOT_BURNS);
+  for (const [z, lo, hi] of [[3, 325, 402], [4, burns - 4.5, burns + 8.5]]) {
     await put('zoom', z); await put('cycle', 100); await idle(); await page.click('#play');
     await page.waitForTimeout(1500); const a = (await state()).phi; await page.waitForTimeout(1500); const b = (await state()).phi;
     if (a < lo || a > hi || b < lo || b > hi) fail(`${name}: Play at scale ${z} left the burn (${a.toFixed(1)}°, ${b.toFixed(1)}°)`);
@@ -184,7 +185,7 @@ for (const [name, width, height, motion] of quick ? SIZES.slice(0, 1) : SIZES) {
     for (const a of full ? [95, 362, 600] : [362]) { await put('cycle', a); await sweep('zoom', 0, 4, full ? 0.01 : 0.02, `a zoom in at ${a}°`); }
     for (const z of full ? [0, 1, 2, 3] : [2]) { await put('zoom', z); await sweep('cycle', 0, 720, full ? 2 : 4, `one cycle at scale ${z}`); }
     await put('zoom', 3); await sweep('cycle', 325, 402, 0.5, 'the burn at the Flame scale');
-    await put('zoom', 4); await sweep('cycle', 352, 372, 0.5, 'the burn at the Molecules scale');
+    await put('zoom', 4); await sweep('cycle', Math.round(burns) - 6, Math.round(burns) + 10, 0.5, 'the burn at the Molecules scale');
   }
   await fits('at the end');
   await page.close();

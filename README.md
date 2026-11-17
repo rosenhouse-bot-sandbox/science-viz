@@ -776,7 +776,7 @@ What is computed, not typed:
 Where the picture simplifies, which the page also says:
 
 - Dots stand for gas. They are far fewer and far larger than molecules, and colored (air pale blue,
-  fuel amber, burned gas orange, cooled burned gas gray), though air and gasoline vapor are colorless.
+  fuel green, burned gas orange, cooled burned gas gray), though air and gasoline vapor are colorless.
   Between the Flame and Molecules stops the dots are drawn at three smaller sizes in turn so that
   something is in view at every zoom; past them, the space between molecules is drawn dark.
 - Burned gas is drawn glowing orange. A real gasoline flame gives off only faint light, at short
@@ -787,8 +787,12 @@ Where the picture simplifies, which the page also says:
 - At Molecules the burn of the group is stretched over 4° of crank so that it can be followed, and the
   molecules' own motion is slowed far more than the engine's.
 - The injector is drawn 12 mm to one side of the middle of the cylinder so that the cut shows it.
-  The timing belt is at the end of the engine nearest the driver; in most cars it is at the other end.
-- Not drawn: oil, coolant, the throttle, the gearbox, the exhaust system, the alternator and its belt.
+  The engine is drawn set lengthwise with its belt end toward the driver; in a car that end faces the
+  front, or the side when the engine is set crosswise, as in most cars. Burned gas left from the last
+  cycle is drawn as a gray layer on the piston; really it mixes through the fresh air, and at
+  Molecules it is not drawn. Real molecules fly straight between collisions; here each drifts about
+  one place so that it stays in view.
+- Not drawn: oil, coolant, the throttle, the flywheel, the gearbox, the exhaust system, the alternator and its belt.
   Knock is left out: it does not happen at this light load.
 
 The picture is drawn by stepping each pixel's ray through distance functions in a fragment shader

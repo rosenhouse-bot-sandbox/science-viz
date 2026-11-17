@@ -50,11 +50,12 @@ export function valveGap(phi) {
 }
 
 // ---- the burn: lit by the spark before the top, spreading from the plug as a front
-export const SPARK = 335, INJECT = [60, 130];
+export const SPARK = 335, INJECT = [70, 95];      // the spray lasts about 1.7 thousandths of a second
 export const flameR = (phi) => (phi < SPARK ? 0 : 0.066 * Math.pow((phi - SPARK) / 55, 1.5));   // how far the front has got from the plug, m
 export const flameAt = (dist) => SPARK + 55 * Math.pow(dist / 0.066, 2 / 3);                     // the angle at which the front reaches a point
 export const FLAME_OUT = flameAt(0.047);          // the front has reached the farthest corner
-export const SPOT = [XC + 0.0015, DECK + 0.0055, 0.0125];    // the spot in the gas that the Molecules scale looks at
+export const GAS_CUT = X4 - 0.0015;     // at the Flame scale the gas is cut just in front of the spark plug, so the flame is seen from its start
+export const SPOT = [X4 + 0.002, DECK + 0.0055, 0.0125];    // the spot in the gas that the Molecules scale looks at
 export const SPOT_DIST = Math.hypot(SPOT[0] - PLUG_GAP[0], SPOT[1] - PLUG_GAP[1], SPOT[2] - PLUG_GAP[2]);
 export const SPOT_BURNS = flameAt(SPOT_DIST);
 
@@ -66,7 +67,7 @@ const K_B = 1.380649e-23, R_GAS = 287;
 export const P_IN = 0.50e5;        // in the intake pipe at this light load, with the throttle mostly shut
 export const P_OUT = 1.05e5;       // in the exhaust pipe
 export const T_IN = 335;           // the fresh charge once mixed with what was left from the last burn, K
-export const AIR_FUEL = 14.7, LEFT_OVER = 0.10, HEAT = 43.4e6, KEPT = 0.72;   // share of the fuel's heat that stays in the gas
+export const AIR_FUEL = 15.0, LEFT_OVER = 0.10, HEAT = 43.4e6, KEPT = 0.72;   // share of the fuel's heat that stays in the gas
 const N = 1440, STEP = 0.5;
 const P = new Float64Array(N + 1), TU = new Float64Array(N + 1), TB = new Float64Array(N + 1), XB = new Float64Array(N + 1), TM = new Float64Array(N + 1);
 export const burnedShare = (phi) => (phi < SPARK + 5 ? 0 : 1 - Math.exp(-5 * Math.pow((phi - SPARK - 5) / 55, 3)));
@@ -84,9 +85,11 @@ export const burnedShare = (phi) => (phi < SPARK + 5 ? 0 : 1 - Math.exp(-5 * Mat
     TU[i] = phi <= IVC ? T_IN : T_IN * Math.pow(p / P_IN, 0.33 / 1.33);
     TM[i] = phi <= IVC ? T_IN : phi <= EVO ? p * volume(phi) / (mass * R_GAS) : 0;
   }
-  // burned gas: about 2,450 K where the front has just passed near the top, then following the pressure and losing heat to the walls
+  // burned gas: about 2,300 K where the front has just passed the spot, then following the pressure and losing heat to the walls
   const iRef = Math.round(SPOT_BURNS / STEP), pRef = P[iRef];
-  for (let i = 0; i <= N; i++) { const phi = i * STEP; TB[i] = phi < SPARK ? 0 : 2450 * Math.pow(P[i] / pRef, 0.24 / 1.24) * (1 - 0.2 * smooth(380, 540, phi)); if (phi > EVO) TM[i] = TB[i]; }
+  for (let i = 0; i <= N; i++) { const phi = i * STEP; TB[i] = phi < SPARK ? 0 : 2300 * Math.pow(P[i] / pRef, 0.24 / 1.24) * (1 - 0.2 * smooth(380, 540, phi)); }
+  // once the exhaust valve opens, all the gas is burned gas: its average follows the burned gas from the value it had
+  { const iE = Math.round(EVO / STEP); for (let i = iE + 1; i <= N; i++) TM[i] = TM[iE] * TB[i] / TB[iE]; }
 })();
 const at = (A, phi) => { const x = wrap(phi) / STEP, i = Math.floor(x), f = x - i; return A[i] + (A[Math.min(N, i + 1)] - A[i]) * f; };
 export const pressure = (phi) => at(P, phi);                 // Pa
@@ -105,8 +108,9 @@ export const burnAt = (phi) => (wrap(phi) < SPARK ? 0 : clamp((wrap(phi) - SPOT_
 export function gasAt(phi) {
   phi = wrap(phi);
   const x = burnAt(phi), p = pressure(phi);
-  const T = x <= 0 ? tempUnburned(phi) : mix(tempUnburned(phi), tempBurned(phi), smooth(0, 1, x));
-  return { p, T, burn: x, perNm3: p / (K_B * T) * 1e-27, fuel: phi > INJECT[0] && x < 1 };
+  // at the very start of intake the spot still holds the last of the old burned gas, which the fresh air replaces
+  const T = phi < 44 ? mix(tempBurned(719.5), T_IN, smooth(0, 44, phi)) : x <= 0 ? tempUnburned(phi) : mix(tempUnburned(phi), tempBurned(phi), smooth(0, 1, x));
+  return { p, T, burn: x, perNm3: p / (K_B * T) * 1e-27, fuel: phi > INJECT[0] + 10 && x < 1 };
 }
 // One fuel molecule's worth of a mixture with exactly enough air: C8H18 + 12.5 O2 (+ 47 N2) -> 8 CO2 + 9 H2O (+ 47 N2)
 export const MIX = { fuel: 2, o2: 25, n2: 94, co2: 16, h2o: 18 };

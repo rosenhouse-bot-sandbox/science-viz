@@ -1,7 +1,7 @@
 // Engine: the molecules. One small group of gas at the spot the Molecules scale looks at: two fuel molecules
 // with exactly the oxygen they need and the nitrogen that comes with it in air. Every atom is followed through
 // the burn, so that none appears or disappears: 2 C8H18 + 25 O2 -> 16 CO2 + 18 H2O.
-import { MIX, gasAt, groupEdge, INJECT, wrap, smooth, mix, clamp } from './model.js?v=111b13da';
+import { MIX, gasAt, groupEdge, INJECT, wrap, smooth, mix, clamp } from './model.js?v=87d625ab';
 
 export const ATOM = {      // radius in nm (about 0.85 of the van der Waals radius), and the usual model colors
   C: { r: 0.145, col: [0.17, 0.18, 0.20] }, H: { r: 0.095, col: [0.90, 0.90, 0.90] }, O: { r: 0.130, col: [0.86, 0.13, 0.10] }, N: { r: 0.133, col: [0.16, 0.32, 0.92] },
@@ -78,7 +78,7 @@ const rot = (m, off, tau) => {     // turn a place in the molecule by the molecu
 // Where a molecule's middle is, in nm from the spot. tau is the molecules' own clock.
 export function centre(m, phi, tau, L) {
   const p = wrap(phi), flow = 4 * smooth(676, 720, p) - 4 * (1 - smooth(0, 44, p));        // old gas leaves and fresh air arrives across the view
-  const late = m.kind === 'fuel' ? 3 * (1 - smooth(INJECT[0] + 30, INJECT[1] + 10, p)) : 0;   // the fuel comes in from above once it is sprayed
+  const late = m.kind === 'fuel' ? 3 * (1 - smooth(INJECT[0] + 10, INJECT[1] + 25, p)) : 0;   // the fuel comes in from above once it is sprayed
   return [0, 1, 2].map((i) => (m.c0[i] - 0.5 + m.amp[i] * Math.sin(m.w[i] * tau * m.slow + m.ph[i]) + (i === 0 ? flow : i === 1 ? late : 0)) * L);
 }
 // Fills out (x y z radius, r g b a per atom) and returns how many atoms were written.
