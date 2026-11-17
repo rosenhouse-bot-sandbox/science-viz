@@ -21,7 +21,7 @@ export const ROOF_SLOPE = 0.35;
 export const PITCH = 0.096;         // from one cylinder to the next
 export const X4 = -0.144;           // cylinder 4, the one the page zooms into, along the crankshaft
 export const XC = -0.1615;          // the cross cut: through the middle of cylinder 4's nearer pair of valves
-export const VALVE_AXIS = [0, 0.9455, 0.3256], VALVE_SEAT = [0, DECK + 0.0083, 0.019], VALVE_R = [0.0135, 0.0122];
+export const VALVE_AXIS = [0, 0.9455, 0.3256], VALVE_SEAT = [0, DECK + 0.0083, 0.019], VALVE_R = [0.016, 0.0138];
 export const PLUG_GAP = [X4, DECK + 0.0092, 0];
 export const FIRING = [1, 3, 4, 2];
 export const OFFSET = [0, 540, 180, 360];      // how far each cylinder's cycle runs behind cylinder 1's
@@ -66,7 +66,7 @@ export const MPH = 60, SPEED = MPH * 0.44704, RPM = 2400, DEG_PER_S = RPM * 6;
 const K_B = 1.380649e-23, R_GAS = 287;
 export const P_IN = 0.50e5;        // in the intake pipe at this light load, with the throttle mostly shut
 export const P_OUT = 1.05e5;       // in the exhaust pipe
-export const T_IN = 335;           // the fresh charge once mixed with what was left from the last burn, K
+export const T_IN = 385;           // the fresh charge once mixed with what was left from the last burn, K
 export const AIR_FUEL = 15.0, LEFT_OVER = 0.10, HEAT = 43.4e6, KEPT = 0.72;   // share of the fuel's heat that stays in the gas
 const N = 1440, STEP = 0.5;
 const P = new Float64Array(N + 1), TU = new Float64Array(N + 1), TB = new Float64Array(N + 1), XB = new Float64Array(N + 1), TM = new Float64Array(N + 1);
@@ -85,11 +85,13 @@ export const burnedShare = (phi) => (phi < SPARK + 5 ? 0 : 1 - Math.exp(-5 * Mat
     TU[i] = phi <= IVC ? T_IN : T_IN * Math.pow(p / P_IN, 0.33 / 1.33);
     TM[i] = phi <= IVC ? T_IN : phi <= EVO ? p * volume(phi) / (mass * R_GAS) : 0;
   }
-  // burned gas: about 2,300 K where the front has just passed the spot, then following the pressure and losing heat to the walls
-  const iRef = Math.round(SPOT_BURNS / STEP), pRef = P[iRef];
-  for (let i = 0; i <= N; i++) { const phi = i * STEP; TB[i] = phi < SPARK ? 0 : 2300 * Math.pow(P[i] / pRef, 0.24 / 1.24) * (1 - 0.2 * smooth(380, 540, phi)); }
-  // once the exhaust valve opens, all the gas is burned gas: its average follows the burned gas from the value it had
-  { const iE = Math.round(EVO / STEP); for (let i = iE + 1; i <= N; i++) TM[i] = TM[iE] * TB[i] / TB[iE]; }
+  // burned gas: about 2,300 K where the front has just passed the spot, then following the pressure. Once all the gas has
+  // burned it is one gas, at the cylinder's average; after the exhaust valve opens it cools as its pressure falls.
+  const iRef = Math.round(SPOT_BURNS / STEP), pRef = P[iRef], iE = Math.round(EVO / STEP);
+  for (let i = 0; i <= iE; i++) { const phi = i * STEP; TB[i] = phi < SPARK ? 0 : mix(2300 * Math.pow(P[i] / pRef, 0.24 / 1.24), TM[i], smooth(385, 430, phi)); }
+  for (let i = iE + 1; i <= N; i++) TM[i] = TB[i] = TM[iE] * Math.pow(P[i] / P[iE], 0.24 / 1.24);
+  // and through the first part of intake the old gas still in the cylinder is replaced and diluted by fresh air
+  for (let i = 0; i * STEP < 90; i++) TM[i] = mix(TM[N], T_IN, smooth(0, 90, i * STEP));
 })();
 const at = (A, phi) => { const x = wrap(phi) / STEP, i = Math.floor(x), f = x - i; return A[i] + (A[Math.min(N, i + 1)] - A[i]) * f; };
 export const pressure = (phi) => at(P, phi);                 // Pa
@@ -109,14 +111,15 @@ export function gasAt(phi) {
   phi = wrap(phi);
   const x = burnAt(phi), p = pressure(phi);
   // at the very start of intake the spot still holds the last of the old burned gas, which the fresh air replaces
-  const T = phi < 44 ? mix(tempBurned(719.5), T_IN, smooth(0, 44, phi)) : x <= 0 ? tempUnburned(phi) : mix(tempUnburned(phi), tempBurned(phi), smooth(0, 1, x));
+  const T = phi < 44 ? mix(tempBurned(719.5), T_IN, smooth(-18, 44, phi)) : phi > 702 ? mix(tempBurned(phi), T_IN, smooth(702, 764, phi)) : x <= 0 ? tempUnburned(phi) : mix(tempUnburned(phi), tempBurned(phi), smooth(0, 1, x));
   return { p, T, burn: x, perNm3: p / (K_B * T) * 1e-27, fuel: phi > INJECT[0] + 10 && x < 1 };
 }
 // One fuel molecule's worth of a mixture with exactly enough air: C8H18 + 12.5 O2 (+ 47 N2) -> 8 CO2 + 9 H2O (+ 47 N2)
 export const MIX = { fuel: 2, o2: 25, n2: 94, co2: 16, h2o: 18 };
 export const GROUP_BEFORE = MIX.fuel + MIX.o2 + MIX.n2, GROUP_AFTER = MIX.co2 + MIX.h2o + MIX.n2;
 // the edge, in nm, of the cube that this group of molecules fills
-export function groupEdge(phi) { const g = gasAt(phi), n = mix(GROUP_BEFORE, GROUP_AFTER, g.burn); return Math.cbrt(n / g.perNm3); }
+export const groupCount = (phi) => mix(GROUP_BEFORE, GROUP_AFTER, gasAt(phi).burn * (1 - smooth(690, 720, wrap(phi))));     // at the end of the cycle the burned group is replaced by a fresh one
+export function groupEdge(phi) { return Math.cbrt(groupCount(phi) / gasAt(phi).perNm3); }
 
 export const STROKES = ['Intake', 'Compression', 'Power', 'Exhaust'];
 export const strokeOf = (phi) => Math.floor(wrap(phi) / 180);

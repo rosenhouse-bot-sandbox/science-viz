@@ -13,7 +13,7 @@ const float OFF[4] = float[4](0., 540., 180., 360.);          // firing order 1-
 const vec3 AX = vec3(0., 0.9455, 0.3256);                      // valve axis, 19 degrees from upright
 const float X4 = -0.144;
 const float IX = -0.012;      // the injector is drawn 12 mm to one side of the cylinder's middle, so that the cross cut bares it
-const vec3 INJ0 = vec3(IX, DECK + 0.0015, 0.0375), INJ1 = vec3(IX, DECK + 0.031, 0.102), INJ2 = vec3(IX, DECK + 0.041, 0.126);   // tip, bend, end
+const vec3 INJ0 = vec3(IX, DECK + 0.0015, 0.0375), INJ1 = vec3(IX, DECK + 0.031, 0.102), INJ2 = vec3(IX, DECK + 0.032, 0.126);   // tip, bend, end
 const vec3 VS = vec3(0., DECK + 0.0083, 0.019);                // valve seat centre (folded: z is away from the middle)
 
 float hash(vec3 p){ p = fract(p * vec3(.1031, .1030, .0973)); p += dot(p, p.yxz + 33.33); return fract((p.x + p.y) * p.z); }
@@ -55,10 +55,11 @@ vec2 headD(vec3 p){
   vec3 f = vec3(abs(xl) - VX, p.y, abs(p.z));
   float pd = portDist(f);
   vec3 q = f - VS; float t = dot(q, AX), rad = length(q - AX * t);
-  float seat = max(rad - 0.0142, max(-0.004 - t, t - 0.003));
+  float rv = p.z > 0. ? 0.016 : 0.0138;
+  float seat = max(rad - rv - 0.0007, max(-0.004 - t, t - 0.003));
   float pocket = max(rad - 0.013, 0.050 - t);
   float well = max(length(vec2(xl, p.z)) - 0.0105, DECK + 0.045 - p.y);
-  d = max(d, -min(min(ch, pd - 0.011), min(seat, min(pocket, well))));
+  d = max(d, -min(min(ch, pd - (rv - 0.003)), min(seat, min(pocket, well))));
   vec2 r = vec2(d, 7.);
   float po = portDist(vec3(max(f.x, 0.), f.yz));       // outside the head the two ports of a cylinder are one pipe
   float tube = max(max(po - 0.0145, -(po - 0.011)), max(0.088 - f.z, f.z - 0.19));
@@ -105,10 +106,10 @@ vec2 moving(vec3 p){
     vec3 f = vec3(abs(xl) - VX, p.y, abs(p.z));
     float lift = sgn > 0. ? liftIn(phi) : liftEx(phi);
     vec3 q = f - (VS - AX * lift); float t = dot(q, AX), rad = length(q - AX * t);
-    float rv = sgn > 0. ? 0.0135 : 0.0122;
+    float rv = sgn > 0. ? 0.016 : 0.0138;
     float hd = max(rad - mix(rv, 0.003, clamp(t / 0.011, 0., 1.)), max(-0.0012 - t, t - 0.098));
     U(r, hd, sgn > 0. ? 14. : 15.);
-    U(r, min(max(rad - 0.0124, max(0.091 - t, t - 0.096)), max(rad - 0.005, max(0.096 - t, t - 0.104))), 25.);    // the spring's cap, and the narrow follower the cam's bump rides on
+    U(r, min(max(rad - 0.0124, max(0.091 - t, t - 0.096)), max(rad - mix(0.005, 0.0008, clamp((t - 0.096) / 0.008, 0., 1.)), max(0.096 - t, t - 0.104))), 25.);    // the spring's cap, and the pointed follower the cam's bump rides on
     // spring: rings between the head and the tappet
     vec3 q0 = f - VS; float t0 = dot(q0, AX);
     float lo = 0.052, hi = 0.091 - lift, n = 6., pitch = (hi - lo) / n;
@@ -126,7 +127,7 @@ vec2 moving(vec3 p){
     // spark plug and its coil
     vec3 s = vec3(xl, p.y - DECK, p.z);
     float pl = cylY(s, 0.006, 0.0145, 0.046);
-    pl = min(pl, cylY(s, 0.0013, 0.0102, 0.015));
+    pl = min(pl, cylY(s, 0.0013, 0.0096, 0.015));
     pl = min(pl, min(seg(s, vec3(0., 0.0145, 0.0048), vec3(0., 0.0078, 0.0048)), seg(s, vec3(0., 0.0078, 0.0048), vec3(0., 0.0078, -0.0008))) - 0.0009);
     pl = min(pl, cylY(s, 0.0092, 0.046, 0.058));
     U(r, pl, 17.);
@@ -177,7 +178,7 @@ float bodyD(vec3 p){
   float d = min(lo, cab) - 0.0;
   float h = clamp(.5 + .5 * (cab - lo) / 0.1, 0., 1.); d = mix(cab, lo, h) - 0.1 * h * (1. - h);
   float well = max(length(vec2(abs(p.x) - 1.30, p.y - 0.33)) - 0.40, 0.50 - abs(p.z));
-  float bay = box(p, vec3(1.42, 0.455, 0.), vec3(0.60, 0.335, 0.62), 0.02);
+  float bay = box(p, vec3(1.42, 0.455, 0.), vec3(0.60, 0.335, 0.46), 0.02);      // narrower than the wheel wells, so an inner fender is left
   return max(d, -min(well, bay));
 }
 float carCut(vec3 p){ return max(0.75 - p.x, min(0.32 - p.z, 0.70 - p.y)); }   // negative inside the piece that slides
@@ -234,9 +235,12 @@ vec4 gasAt(vec3 p){
   float xl; float j = cylOf(p.x, xl); float phi = phiOf(j);
   float top = pinY(phi) + 0.030, rad = length(vec2(xl, p.z));
   float roof = DECK + 0.015 - 0.35 * abs(p.z);
-  vec3 AIR = vec3(0.62, 0.82, 1.0), FUEL = vec3(0.30, 0.95, 0.42), BURN = vec3(1.0, 0.42, 0.08), FRONT = vec3(0.86, 0.80, 1.0), EXH = vec3(0.70, 0.66, 0.62);
+  vec3 AIR = vec3(0.36, 0.64, 1.0), FUEL = vec3(0.30, 0.95, 0.42), BURN = vec3(1.0, 0.42, 0.08), FRONT = vec3(0.86, 0.80, 1.0), EXH = vec3(0.56, 0.47, 0.40);
+  float others = j == 3. ? 1. : clamp(1. - uEnd / 0.24, 0., 1.);     // once the end of the engine is off, only the cylinder looked into shows its gas
   if (rad < BORE - 0.0006 && p.y > top + 0.0006 && p.y < roof - 0.0004) {
-    if (uLift > 1e-4 && p.y < DECK && p.z < 0.) return vec4(0.);
+    // where the near half of the block is lifted off, the gas is left out too; once the end is off, the cylinder looked into shows all of its gas
+    float part = uLift > 1e-4 && p.y < DECK && p.z < 0. ? (j == 3. ? clamp(uEnd / 0.24, 0., 1.) : 0.) : 1.;
+    if (part <= 0.) return vec4(0.);
     float h = DECK + 0.008 - top;
     bool closed = phi >= 180. && phi < 540.;
     float sq = closed ? H0 / h : 1.;
@@ -244,37 +248,42 @@ vec4 gasAt(vec3 p){
     float Rf = 0.066 * pow(max(phi - 335., 0.) / 55., 1.5);
     bool lit = phi > 335. && rf < Rf;
     vec3 cs = vec3(0.); float as = 0.;
-    if (lit) { float hot = 1. - smoothstep(372., 640., phi); hot *= hot; float a = (30. + 260. * step(XC + 0.001, uGasCut)) * hot * (0.55 + 0.9 * noise(p * 110.)); cs += mix(BURN, vec3(1.25, 0.5, 0.1), hot * .6) * (0.5 + 0.35 * hot) * a; as += a; }
-    if (phi > 335. && phi < 392.) { float e = (rf - Rf) / 0.0007, f = exp(-e * e) * 2600.; cs += FRONT * 2.6 * f; as += f; }
+    float hot = 1. - smoothstep(372., 640., phi); hot *= hot;
+    if (lit) { float a = (30. * clamp(sq, 1., 10.) + 200. * step(XC + 0.001, uGasCut)) * others * hot * (0.55 + 0.9 * noise(p * 110.)); cs += mix(BURN, vec3(1.25, 0.5, 0.1), hot * .6) * (0.5 + 0.35 * hot) * a; as += a; }
+    if (phi > 335. && phi < 392.) { float e = (rf - Rf) / 0.0007, f = exp(-e * e) * 2600. * others; cs += FRONT * 2.6 * f; as += f; }
     if (phi > 335. && phi < 339.) { float f = exp(-dot(g, g) / (0.0014 * 0.0014)) * 9000.; cs += vec3(2.4, 2.2, 3.0) * f; as += f; }     // the spark, across the plug's gap
     if (uGas > 1.5) {
-      vec3 u = vec3(xl, (p.y - top) * sq, p.z);
-      vec4 d = dots(u, 0.0056, 0.00085 * clamp(sqrt(sq), 1., 2.2), 1. / sq); d.x *= uDots;
+      float lay = (p.y - top) * sq;                       // height above the piston, as a share of the gas
+      float k3 = pow(sq, 1. / 3.);                         // squeezed gas: the same dots closer together in every direction
+      vec3 u = vec3(xl, p.y - top, p.z) * k3;
+      vec4 d = dots(u, 0.0056, 0.00085 * mix(1., k3, .35), 1.); d.x *= uDots * others;
       vec3 f = vec3(xl, p.y, p.z);
       bool fuelHere = phi > 70. && (phi > 150. || length(f - INJ0) < (phi - 70.) / 80. * 0.13);
-      vec3 col = lit || u.y < 0.0165 ? EXH : (fuelHere && d.y < 0.0667 ? FUEL : AIR);
-      float a = (col == EXH ? 1700. : col == FUEL ? 5200. : 1500.) * d.x;
-      if (phi > 70. && phi < 95. && p.z > -0.03) {   // the spray: a cone of fuel from the injector's tip
-        vec3 v = f - INJ0, dirS = normalize(vec3(0., -0.50, -0.87));
+      vec3 col = lit ? mix(EXH, BURN, sqrt(hot)) : lay < 0.0165 ? EXH : (fuelHere && d.y < 0.0667 ? FUEL : AIR);
+      float a = (col == FUEL ? 5200. : col == AIR ? 1900. : 2200.) * d.x;
+      if (phi > 70. && phi < 125. && p.z > -0.03) {   // the spray: a cone of fuel from the injector's tip, whose last drops take a moment to turn to vapor
+        float left = 1. - smoothstep(95., 125., phi);
+        vec3 v = f - INJ0, dirS = normalize(vec3(0., -0.62, -0.79));
         float tt = dot(v, dirS), rr = length(v - dirS * tt);
-        if (tt > 0.0005 && tt < 0.062 && rr < 0.0012 + tt * 0.30) { vec4 d2 = dots(f * 1.9, 0.0056, 0.0012, 1.); d2.x *= uDots; if (d2.x * 1.2 > d.x) { col = FUEL; a = 6500. * d2.x; } }
+        if (tt > 0.0005 && tt < 0.062 && rr < 0.0012 + tt * 0.15) { vec4 d2 = dots(f * 1.9, 0.0056, 0.0012, 1.); d2.x *= uDots * left; if (d2.x * 1.2 > d.x) { col = FUEL; a = 6500. * d2.x; } }
       }
       cs += col * a; as += a;
     }
-    return as > 0. ? vec4(cs / as, as) : vec4(0.);
+    return as > 0. ? vec4(cs / as, as * part) : vec4(0.);
   }
   if (uGas > 1.5 && p.y > DECK) {   // the ports: air waiting in the intake, old exhaust in the exhaust; each moves while its valve is open
     vec3 f = vec3(abs(xl) - VX, p.y, abs(p.z));
     if ((f.z > 0.09 ? portDist(vec3(max(f.x, 0.), f.yz)) : portDist(f)) < 0.0102 && f.z > 0.022) {
       float flow = p.z > 0. ? clamp(mod(phi + 10., 720.), 0., 230.) / 230. : -clamp(mod(phi - 490., 720.), 0., 240.) / 240.;
       vec4 d = dotsP(vec3(xl, f.yz) + vec3(0., 0., 0.0784 * flow), 0.0056, 0.00085);
-      return p.z > 0. ? vec4(AIR, 1500. * d.x * uDots) : vec4(EXH, 1700. * d.x * uDots);
+      return p.z > 0. ? vec4(AIR, 1500. * d.x * uDots * others) : vec4(EXH, 1700. * d.x * uDots * others);
     }
   }
   return vec4(0.);
 }
 
-vec3 hatch(vec3 base, vec3 p){ float s = fract((p.y + p.z + p.x) * 260.); return base * (0.93 + 0.07 * step(.5, s)); }
+float gPx = 0.;      // the size of a pixel where the ray landed, m
+vec3 hatch(vec3 base, vec3 p, float f){ float s = fract((p.y + p.z + p.x) * f); return base * (0.93 + 0.07 * step(.5, s) * clamp(1.5 - gPx * f * 3., 0., 1.)); }
 
 void main(){
   vec2 ndc = (gl_FragCoord.xy / uRes) * 2. - 1. - uCenter; ndc.x *= uRes.x / uRes.y;
@@ -285,7 +294,7 @@ void main(){
   vec3 col = sky(rd);
   if (hit) {
     vec3 p = ro + rd * t, n = normal(p, max(px * t, 0.00008)), e = toE(p), ne = vec3(-n.x, n.y, -n.z);
-    float piece = fract(m); m = floor(m);
+    float piece = fract(m); m = floor(m); gPx = px * t;
     if (piece > .4) e -= vec3(0., 0., uEnd); else if (piece > .2) e -= vec3(0., uLift, 0.);
     vec3 base = vec3(.5); float metal = 0., rough = .5; bool cutFace = false;
     if (m == 1.) { base = vec3(0.62, 0.03, 0.03); rough = .22;
@@ -294,7 +303,7 @@ void main(){
       if (glass) { base = vec3(0.04, 0.06, 0.09); rough = .08; metal = .6; }
       if (q.x > 2.03 && q.y > 0.52 && q.y < 0.66 && abs(q.z) > 0.42) { base = vec3(1.5, 1.45, 1.2); }
       if (q.x < -2.03 && q.y > 0.56 && q.y < 0.70 && abs(q.z) > 0.45) { base = vec3(0.9, 0.05, 0.03); }
-      if (uCarSlide > 1e-4 && abs(carCut(q)) < 0.004) { base = hatch(vec3(0.80, 0.77, 0.71), q * .12); rough = .9; metal = 0.; }
+      if (uCarSlide > 1e-4 && abs(carCut(q)) < 0.004) { base = hatch(vec3(0.80, 0.77, 0.71), q, 31.); rough = .9; metal = 0.; }
       else if (bodyD(q) < -0.006) { base = vec3(0.07, 0.075, 0.085); rough = .8; metal = 0.; }
     }
     else if (m == 3.) { float rr = min(length(vec2(abs(p.x) - 1.3, p.y - 0.33)), length(vec2(p.x - 1.3 - uCarSlide, p.y - 0.33)));
@@ -318,8 +327,8 @@ void main(){
     else if (m == 15.) { base = vec3(1.0, 0.45, 0.25); metal = .9; rough = .35; }
     else if (m == 16.) { base = vec3(0.50, 0.52, 0.56); metal = .9; rough = .3; }
     else if (m == 17.) { base = vec3(0.70, 0.68, 0.62); metal = .9; rough = .35; }
-    else if (m == 18.) { base = vec3(0.93, 0.92, 0.88); rough = .3; }
-    else if (m == 19.) { base = vec3(0.03, 0.03, 0.035); rough = .7; }
+    else if (m == 18.) { base = vec3(0.98, 0.93, 0.78); rough = .3; }
+    else if (m == 19.) { base = vec3(0.16, 0.17, 0.20); rough = .7; }
     else if (m == 20.) { base = vec3(0.55, 0.56, 0.58); metal = .9; rough = .4; }
     else if (m == 21.) { base = vec3(0.12, 0.62, 0.30); rough = .4; }
     else if (m == 22.) { base = vec3(0.16, 0.17, 0.19); rough = .6; }
@@ -331,9 +340,10 @@ void main(){
       bool onR = uEnd > 1e-4 && abs(rearCut(e)) < 0.0005 && (abs(ne.x) > .9 || abs(e.x - XC) > 0.001);
       cutFace = onL || onR;
     }
-    if (cutFace) { base = hatch(m == 8. || m == 9. || m == 22. ? vec3(0.55, 0.56, 0.60) : m == 23. ? vec3(0.78, 0.66, 0.58) : vec3(0.80, 0.77, 0.71), e); metal = 0.; rough = .95; }
+    if (cutFace) { base = hatch(m == 8. || m == 9. || m == 22. ? vec3(0.55, 0.56, 0.60) : m == 23. ? vec3(0.78, 0.66, 0.58) : vec3(0.80, 0.77, 0.71), e, 260.); metal = 0.; rough = .95; }
     float sc = clamp(t * 0.012, 0.004, 0.12);
     float sh = shadow(p + n * max(0.0005, px * t * 2.), uSun, clamp(t * 1.5, 0.5, 12.), 10.);
+    if (m >= 6.) sh = 0.35 + 0.65 * sh;       // softer shadows among the engine's parts
     float occ = ao(p, n, sc);
     float dif = max(dot(n, uSun), 0.) * sh;
     vec3 sunC = vec3(1.0, 0.95, 0.86) * 2.6, skyC = vec3(0.45, 0.6, 0.9) * .5;

@@ -764,20 +764,22 @@ What is computed, not typed:
 - Pressure and temperature, in half-degree steps: intake at half an atmosphere (a light load, with the
   throttle mostly shut), compression of the trapped gas without heat exchange, a burn that releases the
   fuel's heat along an S-shaped curve from the spark over about 60°, expansion, and the fall to exhaust
-  pressure once the exhaust valve opens. The peak is about 23 atmospheres, 14° after the top.
+  pressure once the exhaust valve opens. The peak is about 21 atmospheres, 14° after the top. The air comes in at 385 K, warmed by the hot
+  port and valve.
   Seventy-two percent of the fuel's heat is kept in the gas; the rest is taken as lost to the walls.
 - The flame front's distance from the plug, which sets where the glow is drawn and when the spot the
   Molecules stop looks at burns.
 - At Molecules, a group of 121 molecules (2 fuel, 25 oxygen, 94 nitrogen) in a cube whose edge
-  follows the pressure and temperature at that spot (about 22 nm during intake, 12 nm at the spark).
+  follows the pressure and temperature at that spot (about 23 nm during intake, 13 nm at the spark).
   Every atom is followed through the reaction into 16 carbon dioxide and 18 water molecules; the
-  nitrogen is unchanged.
+  nitrogen is unchanged. As the exhaust stroke ends the burned molecules leave the view one after
+  another and fresh air arrives the same way, so the count goes from 128 back to 121 without a jump.
 
 Where the picture simplifies, which the page also says:
 
-- Dots stand for gas. They are far fewer and far larger than molecules, and colored (air pale blue,
-  fuel green, burned gas orange, cooled burned gas gray), though air and gasoline vapor are colorless.
-  Between the Flame and Molecules stops the dots are drawn at three smaller sizes in turn so that
+- Dots stand for gas. They are far fewer and far larger than molecules, and colored (air blue,
+  fuel green, burned gas orange, cooled burned gas tan), though air and gasoline vapor are colorless.
+  Between the Flame and Molecules stops the dots are drawn at five smaller sizes in turn, each a tenth of the last, so that
   something is in view at every zoom; past them, the space between molecules is drawn dark.
 - Burned gas is drawn glowing orange. A real gasoline flame gives off only faint light, at short
   visible wavelengths, which we see as blue.
@@ -789,9 +791,14 @@ Where the picture simplifies, which the page also says:
 - The injector is drawn 12 mm to one side of the middle of the cylinder so that the cut shows it.
   The engine is drawn set lengthwise with its belt end toward the driver; in a car that end faces the
   front, or the side when the engine is set crosswise, as in most cars. Burned gas left from the last
-  cycle is drawn as a gray layer on the piston; really it mixes through the fresh air, and at
+  cycle is drawn as a tan layer on the piston; really it mixes through the fresh air, and at
   Molecules it is not drawn. Real molecules fly straight between collisions; here each drifts about
-  one place so that it stays in view.
+  one place so that it stays in view. Atoms are drawn a little smaller than their real size so that
+  each molecule's shape can be seen. The group of molecules is repeated side by side, each copy
+  turned a different way, to fill the view.
+- The valves are 32 mm (intake) and 28 mm (exhaust) across and the spark plug's gap is 0.9 mm, as
+  in a real engine of this size. The fuel spray is drawn as one narrow cone; a real injector makes
+  several.
 - Not drawn: oil, coolant, the throttle, the flywheel, the gearbox, the exhaust system, the alternator and its belt.
   Knock is left out: it does not happen at this light load.
 

@@ -97,7 +97,7 @@ ok(M.burnAt(M.SPOT_BURNS + M.BURN_SPAN[0] - 1e-6) === 0 && M.burnAt(M.SPOT_BURNS
   let first = null;
   for (const a of [200, 330, M.SPOT_BURNS - 2, M.SPOT_BURNS, M.SPOT_BURNS + 1, M.SPOT_BURNS + 2, M.SPOT_BURNS + 4, 450]) {
     const n = place(g, a, 3.7, out, 1), t = els(n);
-    ok(n === total, `${n} atoms are drawn at ${a.toFixed(1)}° (expected ${total})`);
+    ok(n === total * 27, `${n} atoms are drawn at ${a.toFixed(1)}° (expected ${total} in each of 27 copies of the group)`);
     if (!first) first = t; else ok(JSON.stringify(Object.values(t).sort()) === JSON.stringify(Object.values(first).sort()), `the same atoms of each element are drawn at ${a.toFixed(1)}°`);
     for (let i = 0; i < n * 8; i++) ok(Number.isFinite(out[i]), 'atom positions are numbers');
   }
@@ -115,7 +115,7 @@ ok(M.burnAt(M.SPOT_BURNS + M.BURN_SPAN[0] - 1e-6) === 0 && M.burnAt(M.SPOT_BURNS
   ok(WORLD_FS.includes(`mod(phi + ${-M.IVO}., 720.) / ${M.IVC - M.IVO}.`) && WORLD_FS.includes(`mod(phi - ${M.EVO}., 720.) / ${M.EVC - M.EVO}.`), 'the shader has the model\'s valve timing');
   ok(WORLD_FS.includes(`0.066 * pow(max(phi - ${M.SPARK}., 0.) / 55., 1.5)`), 'the shader has the model\'s flame front');
   ok(WORLD_FS.includes('vec3(0., 0.9455, 0.3256)') && M.VALVE_AXIS.join() === '0,0.9455,0.3256', 'the shader has the model\'s valve axis');
-  ok(WORLD_FS.includes(`phi > ${M.INJECT[0]}. && phi < ${M.INJECT[1]}.`), 'the shader sprays fuel over the model\'s angles');
+  ok(WORLD_FS.includes(`phi > ${M.INJECT[0]}. && phi < 125.`) && WORLD_FS.includes(`smoothstep(${M.INJECT[1]}., 125., phi)`), 'the shader sprays fuel over the model\'s angles');
 }
 
 console.log(fails ? `${fails} failed` : 'engine model: all checks passed');
