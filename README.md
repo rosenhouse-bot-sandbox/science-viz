@@ -307,7 +307,7 @@ Nothing is added to a page until a controller connects.
 | A | Press the ringed control |
 | B | Close what is open (the picture of the pad, a dialog, a picked node), else back to the landing page |
 | Right stick | Rainbows and Vesicle fusion: turn the camera. Graph layout: pick out a node. |
-| Triggers | Zoom, as hard as they are pressed (Rainbows, Vesicle fusion, Japanese maple) |
+| Triggers | Zoom, as hard as they are pressed (Rainbows, Vesicle fusion, Japanese maple, Engine) |
 | Bumpers | The scale, stage, challenge or step before and after |
 | View | Show or hide a picture of the pad that says what each part does on this page |
 | Menu | Back to the Deck, on a visit that started there |
@@ -317,7 +317,7 @@ Nothing is added to a page until a controller connects.
 - A visit "started at the Deck" when the address it came in by ends `?from=deck`. The site then
   remembers the page the browser says it came from, for as long as the tab is open, and Menu goes
   back to it from any page. Otherwise Menu does nothing and the picture leaves it unlit.
-- The Optics workshop and Graph layout have no camera, and Japanese maple's is not turned by hand,
+- The Optics workshop and Graph layout have no camera, and Japanese maple's and Engine's are not turned by hand,
   so the right stick or the triggers do nothing there, and the picture says so by leaving them unlit.
 
 `js/gamepad/gamepad.js` is the one module every page shares: it reads the pad each frame, moves the
@@ -354,6 +354,7 @@ every push to `main`. In the repository settings, set Pages → Source to
   (`profile.js` geometry, `scene.js` molecules and drawing, `vitro.js` microscope, `shaders.js` GLSL,
   `main.js` controls).
 - `maple/index.html`, `css/maple.css`, `js/maple/*.js`: Japanese maple (see its section below).
+- `engine/index.html`, `css/engine.css`, `js/engine/*.js`: Engine (see its section below).
 - `js/gamepad/`, `css/gamepad.css`: controller support, shared by every page (see Controller above).
 - `drafts/`: review boards from each design round.
 - `tests/vesicle/placement.mjs`: steps Vesicle fusion through every frame without a GPU and fails if a
@@ -722,3 +723,82 @@ rotations; `figs.js` the panel pictures; `main.js` the camera and controls. `css
 stylesheet.
 `node tests/maple/model.mjs` checks the model without a browser; `node tests/maple/page.mjs` presses
 every control in a real one and steps both sliders end to end looking for jumps.
+
+## Engine
+
+A page at `engine/`: a gasoline car engine, from the car on the road down to the molecules in the
+flame. Two controls drive it, as on the maple page.
+
+- **Zoom** is continuous, with five named stops: Car (the view is about 5 m wide), Engine (0.7 m),
+  Cylinder (0.3 m), Flame (0.13 m) and Molecules (8 nm). The page is one 3D model. Between stops the
+  camera moves or a cut piece moves; nothing fades and no picture is swapped for another. Three cuts
+  open the model as the zoom goes in, each a straight plane whose face is drawn pale and hatched, and
+  each cut piece stays in view while it moves: the hood and near fender slide forward off the car; the
+  near half of the engine block and its cover lift off the pistons; the end slice of the engine slides
+  sideways off cylinder 4, through the middle of its nearer pair of valves. Moving parts (pistons, rods,
+  crankshaft, camshafts, valves, spark plug, injector) are never cut.
+- **One cycle** is the crank angle of cylinder 4, from 0° to 720° (two turns of the crankshaft, four
+  strokes), with a Play button. Time is slower the further in the zoom is: real speed at Car, then
+  slowed 60, 600, 6,000 and 60,000 times. At Flame, Play loops over the burn (325° to 402°); at
+  Molecules, over the few degrees in which the flame front passes the spot looked at. The zoom and the
+  crank angle never move together: while the zoom moves, the engine waits.
+- **Labels** with leader lines are on the picture at the Engine, Cylinder, Flame and Molecules stops
+  (none at Car). They are DOM elements placed from 3D points of the model, each shown only near its
+  stop, and each term has a line of explanation under it the first time it appears.
+- The panel gives the stroke in words, three numbers, and a chart of the pressure in cylinder 4
+  through the cycle with the present moment marked. At Molecules it also gives the reaction,
+  2 C₈H₁₈ + 25 O₂ → 16 CO₂ + 18 H₂O.
+
+The engine (`js/engine/model.js`): four cylinders in a row, 2.0 liters (bore 84 mm, stroke 90 mm,
+connecting rod 145 mm), compression ratio 10.5 to 1 from the drawn geometry, two camshafts above four
+valves per cylinder, fuel sprayed straight into the cylinder. Burning order 1, 3, 4, 2. The intake
+valve opens 10° before the top and closes 40° after the bottom; the exhaust valve opens 50° before
+the bottom and closes 10° after the top; both lift 9 mm. The spark is 25° before the top. The car
+cruises at 60 mph with the crankshaft at 2,400 turns a minute, so 1° of crank takes 69 millionths of
+a second.
+
+What is computed, not typed:
+
+- Piston height from the crank angle, crank throw and rod length. Valve lift from the timing above;
+  the camshafts' bumps are drawn from the same lift curve, at half the crankshaft's speed.
+- Pressure and temperature, in half-degree steps: intake at half an atmosphere (a light load, with the
+  throttle mostly shut), compression of the trapped gas without heat exchange, a burn that releases the
+  fuel's heat along an S-shaped curve from the spark over about 60°, expansion, and the fall to exhaust
+  pressure once the exhaust valve opens. The peak is about 23 atmospheres, 14° after the top.
+  Seventy-two percent of the fuel's heat is kept in the gas; the rest is taken as lost to the walls.
+- The flame front's distance from the plug, which sets where the glow is drawn and when the spot the
+  Molecules stop looks at burns.
+- At Molecules, a group of 121 molecules (2 fuel, 25 oxygen, 94 nitrogen) in a cube whose edge
+  follows the pressure and temperature at that spot (about 22 nm during intake, 12 nm at the spark).
+  Every atom is followed through the reaction into 16 carbon dioxide and 18 water molecules; the
+  nitrogen is unchanged.
+
+Where the picture simplifies, which the page also says:
+
+- Dots stand for gas. They are far fewer and far larger than molecules, and colored (air pale blue,
+  fuel amber, burned gas orange, cooled burned gas gray), though air and gasoline vapor are colorless.
+  Between the Flame and Molecules stops the dots are drawn at three smaller sizes in turn so that
+  something is in view at every zoom; past them, the space between molecules is drawn dark.
+- Burned gas is drawn glowing orange. A real gasoline flame gives off only faint light, at short
+  visible wavelengths, which we see as blue.
+- Iso-octane stands for the hundreds of hydrocarbons in gasoline. The burn is drawn as one step; the
+  real one goes through many short-lived fragments. About 1 molecule in 100 of real burned gas is
+  carbon monoxide or nitric oxide, and air is about 1% argon; none of these are drawn.
+- At Molecules the burn of the group is stretched over 4° of crank so that it can be followed, and the
+  molecules' own motion is slowed far more than the engine's.
+- The injector is drawn 12 mm to one side of the middle of the cylinder so that the cut shows it.
+  The timing belt is at the end of the engine nearest the driver; in most cars it is at the other end.
+- Not drawn: oil, coolant, the throttle, the gearbox, the exhaust system, the alternator and its belt.
+  Knock is left out: it does not happen at this light load.
+
+The picture is drawn by stepping each pixel's ray through distance functions in a fragment shader
+(`js/engine/shaders.js`). While something moves it is drawn at a lower resolution, which the page
+adjusts to keep the frame rate, and once at full resolution when it comes to rest. With reduced
+motion the engine does not start by itself and zooms are immediate. If the graphics context is lost
+the page loads itself again at the same zoom and angle.
+
+Code: `model.js` the engine's geometry, timing, pressure and gas; `mol.js` the molecules and where
+each atom goes; `shaders.js` the car, engine and gas; `main.js` the camera, cuts, labels, panel and
+controls. `css/engine.css` is the stylesheet. `node tests/engine/model.mjs` checks the model without a
+browser; `node tests/engine/page.mjs` presses every control in a real one and steps both sliders end
+to end looking for jumps.

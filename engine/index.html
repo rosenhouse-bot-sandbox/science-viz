@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self'; base-uri 'none'; object-src 'none'; form-action 'none'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>Engine</title>
+<meta name="description" content="How a car's gasoline engine works, from the car on the road down to the molecules of fuel and air as they burn.">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#05070F">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..700&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="modulepreload" href="../js/engine/model.js?v=111b13da">
+<link rel="modulepreload" href="../js/engine/mol.js?v=111b13da">
+<link rel="modulepreload" href="../js/engine/shaders.js?v=111b13da">
+<link rel="stylesheet" href="../css/engine.css?v=111b13da">
+</head>
+<body>
+<canvas id="view" role="img" aria-label="Picture of the car, its engine or the gas in one cylinder, at the chosen zoom and moment" aria-describedby="capTitle capBody"></canvas>
+<div class="labels" id="labels" aria-hidden="true"><svg id="leaders"></svg></div>
+
+<a class="back" href="../" aria-label="Back to all experiences">
+  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M14.5 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+</a>
+<div class="scalebar" aria-hidden="true"><i id="scaleBar"></i><b id="scaleText"></b></div>
+
+<div class="oops" id="oops" role="alert" hidden>
+  <p id="oopsText">The picture could not be drawn. Loading the page again usually fixes it.</p>
+  <button type="button" id="reload">Load again</button>
+</div>
+
+<main class="panel" id="panel">
+  <header class="title">
+    <h1>Engine</h1>
+    <span>from the car on the road down to the burning fuel</span>
+  </header>
+
+  <div class="zoom">
+    <div class="lab"><label for="zoom">Zoom</label><b id="zoomV" aria-hidden="true"></b></div>
+    <input id="zoom" type="range" min="0" max="4" step="0.002" value="0">
+    <div class="ticks zt" id="zticks" aria-hidden="true"></div>
+    <nav class="stops" id="stops" aria-label="Zoom to a scale"></nav>
+  </div>
+
+  <div class="transport">
+    <button type="button" class="play" id="play" aria-label="Play" aria-pressed="false">
+      <svg class="i-play" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M7 4.5v15l12-7.5z" fill="currentColor"/></svg>
+      <svg class="i-pause" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6 4.5h4v15H6zM14 4.5h4v15h-4z" fill="currentColor"/></svg>
+    </button>
+    <div class="prog">
+      <div class="lab"><label for="cycle">One cycle, two turns</label><b id="slowV" aria-hidden="true"></b></div>
+      <input id="cycle" class="big" type="range" min="0" max="720" step="0.5" value="0">
+      <div class="strokes" id="strokes" aria-hidden="true"></div>
+    </div>
+  </div>
+
+  <div class="cap" id="cap" aria-live="polite">
+    <div class="eyebrow"><span id="capScale"></span> · <span id="capPhase"></span></div>
+    <h2 id="capTitle"></h2>
+    <p id="capBody"></p>
+  </div>
+
+  <div class="key" id="key"></div>
+  <p class="eq" id="eq" hidden></p>
+  <p class="fine" id="eqNow" hidden></p>
+
+  <dl class="nums">
+    <div><dt id="n1k"></dt><dd id="n1v"></dd></div>
+    <div><dt id="n2k"></dt><dd id="n2v"></dd></div>
+    <div><dt id="n3k"></dt><dd id="n3v"></dd></div>
+  </dl>
+
+  <figure class="chart">
+    <canvas id="chart" width="672" height="208" role="img" aria-labelledby="chartCap"></canvas>
+    <figcaption id="chartCap"></figcaption>
+  </figure>
+
+  <p class="fine" id="note"></p>
+</main>
+
+<script type="module" src="../js/engine/main.js?v=111b13da"></script>
+</body>
+</html>

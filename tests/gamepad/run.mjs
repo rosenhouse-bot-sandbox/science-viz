@@ -59,6 +59,10 @@ const PAGES = {
     path: 'maple/#z=1&s=0.3', keys: ALL.filter((k) => k !== 'rs'), ready: () => !!window.__maple, before: () => window.__maple.res(0.25),
     zoom: () => window.__maple.st.z, settle: () => window.__maple.settle(), idle: () => !window.__maple.busy, stage: () => (window.__maple.busy ? null : Math.round(window.__maple.st.z * 1000) / 1000),
   },
+  engine: {
+    path: 'engine/?res=0.2#z=1&a=95', keys: ALL.filter((k) => k !== 'rs'), ready: () => !!window.__engine,
+    zoom: () => window.__engine.st.z, settle: () => window.__engine.settle(), idle: () => !window.__engine.busy, stage: () => (window.__engine.busy ? null : Math.round(window.__engine.st.z * 1000) / 1000),
+  },
 };
 
 let fails = 0;
