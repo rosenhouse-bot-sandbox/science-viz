@@ -244,8 +244,8 @@ vec4 gasAt(vec3 p){
     float Rf = 0.066 * pow(max(phi - 335., 0.) / 55., 1.5);
     bool lit = phi > 335. && rf < Rf;
     vec3 cs = vec3(0.); float as = 0.;
-    if (lit) { float hot = 1. - smoothstep(372., 640., phi); hot *= hot; float a = 38. * hot * (0.55 + 0.9 * noise(p * 110.)); cs += mix(BURN, vec3(1.5, 0.7, 0.2), hot * .6) * (0.55 + 0.5 * hot) * a; as += a; }
-    if (phi > 335. && phi < 392.) { float e = (rf - Rf) / 0.0010, f = exp(-e * e) * 1500.; cs += FRONT * 2.4 * f; as += f; }
+    if (lit) { float hot = 1. - smoothstep(372., 640., phi); hot *= hot; float a = (30. + 260. * step(XC + 0.001, uGasCut)) * hot * (0.55 + 0.9 * noise(p * 110.)); cs += mix(BURN, vec3(1.25, 0.5, 0.1), hot * .6) * (0.5 + 0.35 * hot) * a; as += a; }
+    if (phi > 335. && phi < 392.) { float e = (rf - Rf) / 0.0007, f = exp(-e * e) * 2600.; cs += FRONT * 2.6 * f; as += f; }
     if (phi > 335. && phi < 339.) { float f = exp(-dot(g, g) / (0.0014 * 0.0014)) * 9000.; cs += vec3(2.4, 2.2, 3.0) * f; as += f; }     // the spark, across the plug's gap
     if (uGas > 1.5) {
       vec3 u = vec3(xl, (p.y - top) * sq, p.z);

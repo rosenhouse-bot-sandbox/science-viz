@@ -1,9 +1,9 @@
 // Engine: the controller. Two numbers drive the page: the zoom (0 = car ... 4 = molecules) and the crank
 // angle of the cylinder we follow (0 to 720 degrees, one cycle). Time runs slower the further in the zoom is.
 // The picture is redrawn only when something changes.
-import * as M from './model.js?v=87d625ab';
-import { makeGroup, place, centre, MAX_ATOMS } from './mol.js?v=87d625ab';
-import { WORLD_FS, FULL_VS, BLIT_FS, BALL_VS, BALL_FS } from './shaders.js?v=87d625ab';
+import * as M from './model.js?v=270edfdc';
+import { makeGroup, place, centre, MAX_ATOMS } from './mol.js?v=270edfdc';
+import { WORLD_FS, FULL_VS, BLIT_FS, BALL_VS, BALL_FS } from './shaders.js?v=270edfdc';
 import { gamepad } from '../gamepad/gamepad.js';
 
 const { clamp, smooth, mix, wrap } = M;
@@ -18,12 +18,12 @@ const unit = (a) => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] 
 const lerp3 = (a, b, t) => [mix(a[0], b[0], t), mix(a[1], b[1], t), mix(a[2], b[2], t)];
 
 // ---- the five scales: what must fit in the free part of the screen (metres), where the camera looks and from where
-const FLAME_DIR = [0.82, 0.22, 0.52];
+const FLAME_DIR = [0.90, 0.10, 0.40];
 const STOPS = [
   { id: 'car', name: 'Car', w: 5.7, h: 2.1, at: [0.08, 0.68, 0], dir: [-0.10, 0.13, 1] },
   { id: 'engine', name: 'Engine', w: 0.74, h: 0.84, at: e2w([-0.01, 0.20, 0]), dir: [0.34, 0.30, 1] },
   { id: 'cylinder', name: 'Cylinder', w: 0.27, h: 0.30, at: e2w([M.X4 - 0.012, 0.243, 0.012]), dir: [0.80, 0.34, 0.52] },
-  { id: 'flame', name: 'Flame', w: 0.105, h: 0.085, at: e2w([M.X4 - 0.012, M.DECK + 0.004, 0.0]), dir: FLAME_DIR },
+  { id: 'flame', name: 'Flame', w: 0.10, h: 0.07, at: e2w([M.GAS_CUT, M.DECK + 0.006, 0.0]), dir: FLAME_DIR },
   { id: 'molecules', name: 'Molecules', w: 8.6e-9, h: 5.6e-9, at: e2w(M.SPOT), dir: FLAME_DIR },
 ];
 const LAST = STOPS.length - 1;
