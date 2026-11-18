@@ -733,12 +733,13 @@ flame. Two controls drive it, as on the maple page.
 
 - **Zoom** is continuous, with five named stops: Car (the view is about 5 m wide), Engine (0.7 m),
   Cylinder (0.3 m), Flame (0.13 m) and Molecules (8 nm). The page is one 3D model. Between stops the
-  camera moves or a cut piece moves; nothing fades and no picture is swapped for another. Three cuts
-  open the model as the zoom goes in, each a straight plane whose face is drawn pale and hatched, and
-  each cut piece stays in view while it moves: the hood and near fender slide forward off the car; the
-  near half of the engine block and its cover lift off the pistons; the end slice of the engine slides
-  sideways off cylinder 4, through the middle of its nearer pair of valves. Moving parts (pistons, rods,
-  crankshaft, camshafts, valves, spark plug, injector) are never cut.
+  camera moves, and no picture is swapped for another. Three cuts open the model as the zoom goes in,
+  each a straight plane whose face is drawn pale and hatched. A cut piece does not move: it fades away
+  where it is, so that the only things that move on the page are the things that move in an engine. The
+  pieces are the hood and near fender (with the near front wheel); the near half of the engine block
+  and its cover; and the end slice of the engine at cylinder 4, cut through the middle of its nearer
+  pair of valves. Moving parts (pistons, rods, crankshaft, camshafts, valves, spark plug, injector) are
+  never cut.
 - **One cycle** is the crank angle of cylinder 4, from 0° to 720° (two turns of the crankshaft, four
   strokes), with a Play button. Time is slower the further in the zoom is: real speed at Car, then
   slowed 60, 600, 6,000 and 60,000 times. At Flame, Play loops over the burn (325° to 402°); at

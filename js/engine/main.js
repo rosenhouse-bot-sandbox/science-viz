@@ -1,9 +1,9 @@
 // Engine: the controller. Two numbers drive the page: the zoom (0 = car ... 4 = molecules) and the crank
 // angle of the cylinder we follow (0 to 720 degrees, one cycle). Time runs slower the further in the zoom is.
 // The picture is redrawn only when something changes.
-import * as M from './model.js?v=b5e0067c';
-import { makeGroup, place, centre, tiles, copies, LAYERS, MAX_COPIES, MAX_ATOMS } from './mol.js?v=b5e0067c';
-import { WORLD_FS, FULL_VS, BLIT_FS, BALL_VS, BALL_FS } from './shaders.js?v=b5e0067c';
+import * as M from './model.js?v=095c6225';
+import { makeGroup, place, centre, tiles, copies, LAYERS, MAX_COPIES, MAX_ATOMS } from './mol.js?v=095c6225';
+import { WORLD_FS, FULL_VS, BLIT_FS, BALL_VS, BALL_FS } from './shaders.js?v=095c6225';
 import { gamepad } from '../gamepad/gamepad.js';
 
 const { clamp, smooth, mix, wrap } = M;
@@ -89,7 +89,8 @@ function project(p) {
   const k = view.hw / view.h;      // past the nearest view the picture is only magnified
   return [((dot(v, view.rt) / (d * TAN) * (H / W)) * k + view.cx + 1) / 2 * W, (1 - (dot(v, view.up) / (d * TAN) * k + view.cy)) / 2 * H];
 }
-const cuts = (z) => ({ car: 1.7 * smooth(0.15, 0.7, z), lift: 0.5 * smooth(0.7, 0.98, z), end: 0.46 * smooth(1.2, 1.75, z) });
+// How far each cut piece has faded away, 0 to 1: the hood and near fender, the near half of the block, the end slice.
+const cuts = (z) => ({ car: smooth(0.15, 0.7, z), lift: smooth(0.7, 0.98, z), end: smooth(1.2, 1.75, z) });
 
 function sizeTarget() {
   const dpr = Math.min(devicePixelRatio || 1, 2), s = fixedScale || (sharp ? 1 : scale);
@@ -144,7 +145,7 @@ function draw() {
   gl.uniform2f(u.uRes, texW, texH); gl.uniform2f(u.uCenter, view.cx, view.cy);
   gl.uniform3fv(u.uCam, view.cam); gl.uniform3fv(u.uRt, view.rt); gl.uniform3fv(u.uUp, view.up); gl.uniform3fv(u.uFw, view.fw); gl.uniform3fv(u.uSun, SUN);
   gl.uniform1f(u.uTan, TAN); gl.uniform1f(u.uPhi, wrap(st.phi + 360));
-  gl.uniform1f(u.uCarSlide, c.car); gl.uniform1f(u.uLift, c.lift); gl.uniform1f(u.uEnd, c.end);
+  gl.uniform1f(u.uCutCar, c.car); gl.uniform1f(u.uCutLift, c.lift); gl.uniform1f(u.uCutEnd, c.end);
   gl.uniform1f(u.uGas, st.z < 0.3 ? 0 : st.z < 0.8 ? 1 : 2); gl.uniform1f(u.uGasStep, clamp(view.hw / 420, 0.00028, 0.003)); gl.uniform1f(u.uRoad, road % 900); gl.uniform1f(u.uGasCut, mix(M.XC, M.GAS_CUT, smooth(2.3, 2.85, st.z)));
   gl.uniform1f(u.uDots, 1 - smooth(28, 70, 0.85e-3 * view.k));      // the cylinder's dots, 0.85 mm in radius, give way to the smaller sizes
   gl.drawArrays(gl.TRIANGLES, 0, 3);
@@ -303,8 +304,8 @@ const CAP = {
 };
 const NOTE = {
   car: '',
-  engine: 'The near half of the block and its cover are lifted off to show the pistons. Not drawn: oil, coolant, the throttle, the gearbox and the exhaust system. The engine is drawn set lengthwise with its belt end toward the driver; in a car that end faces the front, or the side when the engine is set crosswise, as in most cars.',
-  cylinder: 'The end of the engine is cut off and moved aside. Dots stand for gas: far fewer and far larger than molecules, and in the picture\'s own colors, since air and gasoline vapor are colorless. The tan layer of dots on the piston is burned gas left over from the last cycle; really it mixes through the fresh air. One dot in 15 is drawn as fuel, its share of the mixture by mass; by count fuel is 1 molecule in 60.',
+  engine: 'The near half of the block and its cover are left out to show the pistons. Not drawn: oil, coolant, the throttle, the gearbox and the exhaust system. The engine is drawn set lengthwise with its belt end toward the driver; in a car that end faces the front, or the side when the engine is set crosswise, as in most cars.',
+  cylinder: 'The end of the engine is cut off and left out. Dots stand for gas: far fewer and far larger than molecules, and in the picture\'s own colors, since air and gasoline vapor are colorless. The tan layer of dots on the piston is burned gas left over from the last cycle; really it mixes through the fresh air. One dot in 15 is drawn as fuel, its share of the mixture by mass; by count fuel is 1 molecule in 60.',
   flame: 'Burned gas is drawn glowing orange so that it can be told apart. A real gasoline flame gives off only faint light, at short visible wavelengths, which we see as blue.',
   molecules: 'Atoms are drawn in the usual model colors, at their real spacing for this pressure and temperature, each atom a little smaller than its real size so that the molecules\' shapes can be seen. Real molecules fly in straight lines between collisions; here each drifts about one place so that it stays in view. Iso-octane stands for the many hydrocarbons in gasoline. The burn of this group is stretched out so that it can be followed: a real flame front passes a spot this small in a few millionths of a second, the fuel breaks up through many short-lived pieces that are not drawn, and about 1 molecule in 100 of the burned gas is carbon monoxide or nitric oxide. Also not drawn: argon, 1 molecule in 100 of air, and the burned gas left from the last cycle, about 1 molecule in 10 before the burn. The molecules\' own motion is slowed far more than the engine\'s, or it would be a blur.',
 };
