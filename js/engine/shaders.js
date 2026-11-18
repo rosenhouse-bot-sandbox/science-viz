@@ -5,8 +5,8 @@
 export const WORLD_FS = `#version 300 es
 precision highp float;
 uniform vec2 uRes, uCenter; uniform vec3 uCam, uRt, uUp, uFw, uSun; uniform float uTan;
-uniform float uPhi, uCutCar, uCutLift, uCutEnd, uGas, uGasStep, uRoad, uDots, uGasCut;
-out vec4 o;
+uniform float uPhi, uCutCar, uCutLift, uCutEnd, uGas, uGasStep, uRoad, uDots, uGasCut; uniform vec2 uTr;
+layout(location = 0) out vec4 o; layout(location = 1) out vec4 o2;      // the picture; and how far away each pixel's surface is, for the dots of gas drawn after
 const vec3 EO = vec3(1.30, 0.36, 0.0);
 const float DECK = 0.2207, CR = 0.045, ROD = 0.145, BORE = 0.042, XC = -0.1615, VX = 0.0175;
 const float H0 = 0.0985;                                          // height of the gas at the bottom of the stroke
@@ -212,7 +212,8 @@ vec3 sky(vec3 d){
   return c;
 }
 
-// ---- gas: glow and dots inside the cylinder and the ports (engine frame)
+// ---- gas: the flame's glow and the fuel spray inside the cylinder (engine frame). The dots that stand for the gas itself
+// are drawn afterwards, one by one, from the paths in flow.js.
 vec4 dots(vec3 u, float cell, float rad, float squash){
   vec3 c = floor(u / cell); vec4 best = vec4(0.);
   for (int k = -1; k <= 1; k++) { vec3 cc = c + vec3(0., float(k), 0.);
@@ -221,17 +222,12 @@ vec4 dots(vec3 u, float cell, float rad, float squash){
     if (I > best.x) best = vec4(I, hash(cc + 3.1), 0., 0.); }
   return best;
 }
-vec4 dotsP(vec3 u, float cell, float rad){      // the same, repeating every 14 cells along z, for gas flowing in a pipe
-  vec3 c = floor(u / cell), cc = vec3(c.xy, mod(c.z, 14.));
-  vec3 ctr = (c + .5 + .56 * (vec3(hash(cc), hash(cc + 7.3), hash(cc + 13.7)) - .5)) * cell;
-  return vec4(smoothstep(rad, rad * .35, length(u - ctr)), hash(cc + 3.1), 0., 0.);
-}
 vec4 gasAt(vec3 p){
   if (gEnd && p.x < uGasCut) return vec4(0.);
   float xl; float j = cylOf(p.x, xl); float phi = phiOf(j);
   float top = pinY(phi) + 0.030, rad = length(vec2(xl, p.z));
   float roof = DECK + 0.015 - 0.35 * abs(p.z);
-  vec3 AIR = vec3(0.36, 0.64, 1.0), FUEL = vec3(0.30, 0.95, 0.42), BURN = vec3(1.0, 0.42, 0.08), FRONT = vec3(0.86, 0.80, 1.0), EXH = vec3(0.56, 0.47, 0.40);
+  vec3 FUEL = vec3(0.30, 0.95, 0.42), BURN = vec3(1.0, 0.42, 0.08), FRONT = vec3(0.86, 0.80, 1.0);
   float others = j == 3. || !gEnd ? 1. : 0.;     // once the end of the engine is off, only the cylinder looked into shows its gas
   if (rad < BORE - 0.0006 && p.y > top + 0.0006 && p.y < roof - 0.0004) {
     // where the near half of the block is gone, the gas is left out too; once the end is off, the cylinder looked into shows all of its gas
@@ -247,32 +243,13 @@ vec4 gasAt(vec3 p){
     if (lit) { float a = (30. * clamp(sq, 1., 10.) + 200. * step(XC + 0.001, uGasCut)) * others * hot * (0.55 + 0.9 * noise(p * 110.)); cs += mix(BURN, vec3(1.25, 0.5, 0.1), hot * .6) * (0.5 + 0.35 * hot) * a; as += a; }
     if (phi > 335. && phi < 392.) { float e = (rf - Rf) / 0.0007, f = exp(-e * e) * 2600. * others; cs += FRONT * 2.6 * f; as += f; }
     if (phi > 335. && phi < 339.) { float f = exp(-dot(g, g) / (0.0014 * 0.0014)) * 9000.; cs += vec3(2.4, 2.2, 3.0) * f; as += f; }     // the spark, across the plug's gap
-    if (uGas > 1.5) {
-      float lay = (p.y - top) * sq;                       // height above the piston, as a share of the gas
-      float k3 = pow(sq, 1. / 3.);                         // squeezed gas: the same dots closer together in every direction
-      vec3 u = vec3(xl, p.y - top, p.z) * k3;
-      vec4 d = dots(u, 0.0056, 0.00085 * mix(1., k3, .35), 1.); d.x *= uDots * others;
-      vec3 f = vec3(xl, p.y, p.z);
-      bool fuelHere = phi > 70. && (phi > 150. || length(f - INJ0) < (phi - 70.) / 80. * 0.13);
-      vec3 col = lit ? mix(EXH, BURN, sqrt(hot)) : lay < 0.0165 ? EXH : (fuelHere && d.y < 0.0667 ? FUEL : AIR);
-      float a = (col == FUEL ? 5200. : col == AIR ? 1900. : 2200.) * d.x;
-      if (phi > 70. && phi < 125. && p.z > -0.03) {   // the spray: a cone of fuel from the injector's tip, whose last drops take a moment to turn to vapor
-        float left = 1. - smoothstep(95., 125., phi);
-        vec3 v = f - INJ0, dirS = normalize(vec3(0., -0.62, -0.79));
-        float tt = dot(v, dirS), rr = length(v - dirS * tt);
-        if (tt > 0.0005 && tt < 0.062 && rr < 0.0012 + tt * 0.15) { vec4 d2 = dots(f * 1.9, 0.0056, 0.0012, 1.); d2.x *= uDots * left; if (d2.x * 1.2 > d.x) { col = FUEL; a = 6500. * d2.x; } }
-      }
-      cs += col * a; as += a;
+    if (uGas > 1.5 && phi > 70. && phi < 125. && p.z > -0.03) {   // the spray: a cone of fuel from the injector's tip, whose last drops take a moment to turn to vapor
+      float left = 1. - smoothstep(95., 125., phi);
+      vec3 f = vec3(xl, p.y, p.z), v = f - INJ0, dirS = normalize(vec3(0., -0.62, -0.79));
+      float tt = dot(v, dirS), rr = length(v - dirS * tt);
+      if (tt > 0.0005 && tt < 0.062 && rr < 0.0012 + tt * 0.15) { vec4 d2 = dots(f * 1.9, 0.0056, 0.0012, 1.); float a = 6500. * d2.x * uDots * left; cs += FUEL * a; as += a; }
     }
     return as > 0. ? vec4(cs / as, as) : vec4(0.);
-  }
-  if (uGas > 1.5 && p.y > DECK) {   // the ports: air waiting in the intake, old exhaust in the exhaust; each moves while its valve is open
-    vec3 f = vec3(abs(xl) - VX, p.y, abs(p.z));
-    if ((f.z > 0.09 ? portDist(vec3(max(f.x, 0.), f.yz)) : portDist(f)) < 0.0102 && f.z > 0.022) {
-      float flow = p.z > 0. ? clamp(mod(phi + 10., 720.), 0., 230.) / 230. : -clamp(mod(phi - 490., 720.), 0., 240.) / 240.;
-      vec4 d = dotsP(vec3(xl, f.yz) + vec3(0., 0., 0.0784 * flow), 0.0056, 0.00085);
-      return p.z > 0. ? vec4(AIR, 1500. * d.x * uDots * others) : vec4(EXH, 1700. * d.x * uDots * others);
-    }
   }
   return vec4(0.);
 }
@@ -287,7 +264,7 @@ void main(){
   // A piece that is being cut away fades: the picture is drawn with it, then without it, and the two are mixed.
   float fade = max(uCutCar * (1. - uCutCar), max(uCutLift * (1. - uCutLift), uCutEnd * (1. - uCutEnd))) > 1e-4
     ? (uCutCar < .999 ? uCutCar : uCutLift < .999 ? uCutLift : uCutEnd) : 0.;
-  vec3 outc = vec3(0.);
+  vec3 outc = vec3(0.); vec2 far = vec2(1.);
   for (int pass = 0; pass < 2; pass++) {
   if (pass == 1 && fade <= 0.) break;
   float gone = pass == 0 ? .999 : .001;
@@ -297,6 +274,7 @@ void main(){
   // Land on the surface itself. Stopping within half a pixel of it left each pixel a different small distance short,
   // and the light and the cut faces, which are worked out from where the ray stopped, showed that as contour lines.
   if (hit) for (int i = 0; i < 4; i++) t += map(ro + rd * t).x;
+  { float dn = hit ? clamp((t - uTr.x) / (uTr.y - uTr.x), 0., 1.) : 1.; if (pass == 0) far = vec2(dn); else far.y = dn; }
   vec3 col = sky(rd);
   if (hit) {
     vec3 p = ro + rd * t, n = normal(p, max(px * t, 0.00008)), e = toE(p), ne = vec3(-n.x, n.y, -n.z);
@@ -382,6 +360,7 @@ void main(){
   outc = pass == 0 ? col : mix(outc, col, fade);
   }
   o = vec4(outc, 1.);
+  vec2 w = floor(far * 65535. + .5), hi = floor(w / 256.); o2 = vec4(hi.x, w.x - hi.x * 256., hi.y, w.y - hi.y * 256.) / 255.;
 }`;
 
 export const FULL_VS = `#version 300 es
@@ -418,4 +397,30 @@ void main(){
   float f = clamp((z - uDist) / uFog, -1., 1.); col *= 1. - .55 * max(f, 0.);
   o = vec4(pow(col / (1. + col * .2), vec3(1. / 2.2)), vc.a - 1.);      // an atom: its alpha is 1 more than how fully it is drawn
   gl_FragDepth = clamp(.5 + .45 * (z - uDist) / (uFog * 2.), 0.01, 0.99);
+}`;
+
+// The dots that stand for gas in the cylinder and the pipes: one flat, soft-edged disc each, at its place in the engine
+// (engine frame, m). A dot is hidden where the world picture has a surface nearer than it. While a cut piece is fading,
+// a dot has one strength for the picture with the piece and one for the picture without it, mixed as the pictures are.
+export const DOT_VS = `#version 300 es
+layout(location = 0) in vec4 aDot; layout(location = 1) in vec4 aCol; layout(location = 2) in float aLater;
+uniform vec2 uRes, uCenter; uniform vec3 uCam, uRt, uUp, uFw; uniform float uTan;
+out vec2 vq; out vec4 vc; out float vLater, vT;
+void main(){
+  vec2 q = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2) - 1.; vq = q;
+  vec3 p = vec3(1.30 - aDot.x, aDot.y + 0.36, -aDot.z), v = p - uCam; float d = dot(v, uFw);
+  float px = aDot.w / (d * uTan) * uRes.y * .5, big = max(1., 1.2 / px);      // never smaller than a pixel: fainter instead
+  vc = aCol; vLater = aLater; vT = length(v); float thin = 1. / (big * big); vc.a *= thin; vLater *= thin;
+  v += (uRt * q.x + uUp * q.y) * aDot.w * big; d = dot(v, uFw);
+  gl_Position = vec4(dot(v, uRt) / (uTan * uRes.x / uRes.y) + uCenter.x * d, dot(v, uUp) / uTan + uCenter.y * d, 0., d);
+}`;
+export const DOT_FS = `#version 300 es
+precision highp float; in vec2 vq; in vec4 vc; in float vLater, vT; uniform sampler2D uFar; uniform vec2 uRes, uTr; uniform float uFade; out vec4 o;
+void main(){
+  float r = length(vq); if (r > 1.) discard;
+  vec4 f = texture(uFar, gl_FragCoord.xy / uRes) * 255.;
+  float tn = (vT - uTr.x) / (uTr.y - uTr.x) - 0.0004;
+  float a = mix(vc.a * step(tn, (f.r * 256. + f.g) / 65535.), vLater * step(tn, (f.b * 256. + f.a) / 65535.), uFade);
+  vec3 c = vc.rgb; c = pow(c / (1. + c * .35), vec3(1. / 2.2));
+  o = vec4(c, a * smoothstep(1., .5, r));
 }`;

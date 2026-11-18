@@ -772,6 +772,16 @@ What is computed, not typed:
   pressure once the exhaust valve opens. The peak is about 21 atmospheres, 14° after the top. The air comes in at 385 K, warmed by the hot
   port and valve.
   Seventy-two percent of the fuel's heat is kept in the gas; the rest is taken as lost to the walls.
+- How the gas moves (`js/engine/flow.js`). Each dot of gas is followed the whole way: in along the
+  intake pipe, past the intake valves, through compression and the burn, out past the exhaust valves
+  and down the exhaust pipe. No dot is made or lost on the way, so the number of dots in the cylinder
+  at each crank angle is the mass of gas the model has there, to within a few percent: about a third
+  of the burned gas rushes out by its own pressure when the exhaust valve opens, before the piston
+  starts back up, and the rising piston pushes out most of the rest. While a valve is open the gas under
+  the cylinder head moves as a flow without swirl (a potential flow), worked out on a grid of
+  1.75 mm cells when the page loads; below the head it moves with the piston; with both valves shut it
+  is squeezed evenly. The dots' paths are worked out once, in a few seconds after the page opens,
+  and the picture at any angle is read from them, so it is the same however that angle was reached.
 - The flame front's distance from the plug, which sets where the glow is drawn and when the spot the
   Molecules stop looks at burns. That spot is 13 mm from the plug, so it burns about 6° before the
   piston reaches the top, while the cycle dial is still in Compression. The captions and the line
@@ -791,6 +801,9 @@ Where the picture simplifies, which the page also says:
 
 - Dots stand for gas. They are far fewer and far larger than molecules, and colored (air blue,
   fuel green, burned gas orange, cooled burned gas tan), though air and gasoline vapor are colorless.
+  The dots move as a smooth flow. The gas in a real cylinder is turbulent, and the air comes in as a
+  tumbling jet; pressure waves in the pipes are not modeled either. Where a dot passes behind a
+  valve's taper it is hidden by the valve.
   Between the Flame and Molecules stops the dots are drawn at six smaller sizes in turn, each a tenth of the last, so that
   something is in view at every zoom; past them, the space between molecules is drawn dark.
 - Burned gas is drawn glowing orange. A real gasoline flame gives off only faint light, at short
@@ -820,8 +833,8 @@ adjusts to keep the frame rate, and once at full resolution when it comes to res
 motion the engine does not start by itself and zooms are immediate. If the graphics context is lost
 the page loads itself again at the same zoom and angle.
 
-Code: `model.js` the engine's geometry, timing, pressure and gas; `mol.js` the molecules and where
-each atom goes; `shaders.js` the car, engine and gas; `main.js` the camera, cuts, labels, panel and
+Code: `model.js` the engine's geometry, timing, pressure and gas; `flow.js` how the gas moves: the path of
+each dot; `mol.js` the molecules and where each atom goes; `shaders.js` the car, engine and the flame's glow; `main.js` the camera, cuts, labels, panel and
 controls. `css/engine.css` is the stylesheet. `node tests/engine/model.mjs` checks the model without a
-browser; `node tests/engine/page.mjs` presses every control in a real one and steps both sliders end
+browser, and `node tests/engine/flow.mjs` the gas dots' paths; `node tests/engine/page.mjs` presses every control in a real one and steps both sliders end
 to end looking for jumps.
