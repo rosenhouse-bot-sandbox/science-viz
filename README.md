@@ -745,6 +745,15 @@ flame. Two controls drive it, as on the maple page.
   slowed 60, 600, 6,000 and 60,000 times. At Flame, Play loops over the burn (325° to 402°); at
   Molecules, over the few degrees in which the flame front passes the spot looked at. The zoom and the
   crank angle never move together: while the zoom moves, the engine waits.
+- **Ways to open, on trial.** At the Car the cycle runs 20 times a second, and the dial, the stroke names
+  and the pressure marker flicker. Four other ways to open can be tried by adding `#open=` to the
+  address, alone or joined with commas (`engine/#open=paused,ease`). `paused`: nothing runs until Play
+  is pressed. `slow`: the Car runs slowed 60 times, as the Engine stop does, until a Real speed button
+  is pressed. `smooth`: real speed, but while the cycle is too quick to follow the dial's hand is drawn
+  as a faint blur and no stroke or pressure is marked. `ease`: slowed 60 times at the Car until the
+  first zoom in, and after that time speeds up gradually on the way back out. With no flag the page
+  opens as before. With a flag, the address keeps only the flag, so that loading it again opens the
+  same way.
 - **Labels** with leader lines are on the picture at the Engine, Cylinder, Flame and Molecules stops
   (none at Car). They are DOM elements placed from 3D points of the model, each shown only near its
   stop, and each term has a line of explanation under it the first time it appears.

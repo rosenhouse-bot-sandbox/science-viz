@@ -130,6 +130,11 @@ input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;bac
 .strokes i{flex:none;width:14px;height:6px;border-radius:3px;background:var(--c);opacity:.6}
 .strokes span.on{color:var(--ink);font-weight:600}
 .strokes span.on i{opacity:1}
+.real{justify-self:start;margin-top:8px;min-height:32px;padding:4px 12px;border-radius:16px;border:1px solid var(--line);background:rgba(234,240,255,.09);color:var(--ink);font:inherit;font-size:0.8125rem;cursor:pointer}
+.real[hidden]{display:none}
+.real:hover{background:rgba(234,240,255,.18)}
+.real[aria-pressed="true"]{background:var(--ink);color:#05070F}
+.real:disabled{opacity:.4;cursor:default}
 /* numbers from the model */
 .nums{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:0;padding-top:10px;border-top:1px solid var(--line)}
 .nums div{padding:7px 8px;border-radius:10px;background:rgba(234,240,255,.06);border:1px solid var(--line);display:grid;gap:1px;align-content:start;min-height:3.9em}
