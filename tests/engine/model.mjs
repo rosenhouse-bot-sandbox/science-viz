@@ -96,7 +96,7 @@ ok(M.burnAt(M.SPOT_BURNS + M.BURN_SPAN[0] - 1e-6) === 0 && M.burnAt(M.SPOT_BURNS
   const total = before.C + before.H + before.O + before.N;
   let first = null;
   for (const a of [200, 330, M.SPOT_BURNS - 2, M.SPOT_BURNS, M.SPOT_BURNS + 1, M.SPOT_BURNS + 2, M.SPOT_BURNS + 4, 450]) {
-    const n = place(g, a, 3.7, out, 1), t = els(n);
+    const n = place(g, a, 3.7, out, { x0: -1, x1: 1, y0: -1, y1: 1, dist: 1e6 }), t = els(n);
     ok(n === total * 27, `${n} atoms are drawn at ${a.toFixed(1)}° (expected ${total} in each of 27 copies of the group)`);
     if (!first) first = t; else ok(JSON.stringify(Object.values(t).sort()) === JSON.stringify(Object.values(first).sort()), `the same atoms of each element are drawn at ${a.toFixed(1)}°`);
     for (let i = 0; i < n * 8; i++) ok(Number.isFinite(out[i]), 'atom positions are numbers');
