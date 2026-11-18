@@ -108,8 +108,8 @@ Before pushing:
   desktop and a phone size, checks the labels, steps both sliders end to end comparing each picture with
   the one before, and fails on a jump, a control that moved, labels that overlap, or a console error.
   Numbers on screen must stay computed from `js/engine/model.js`. The page is one 3D model, as the maple
-  is: a cut piece is the same solid moved aside, and nothing fades or is swapped. Moving parts are never
-  cut. After changing any file under `js/engine/` or `css/engine.css`, run `node tests/engine/stamp.mjs`.
+  is, and no picture is swapped for another. A cut piece fades away where it is and does not move (Gabe's
+  rule for this page: motion is kept for what really moves). Moving parts are never cut. After changing any file under `js/engine/` or `css/engine.css`, run `node tests/engine/stamp.mjs`.
   The picture is ray-marched in a fragment shader, which is slow in software; on a machine with a
   graphics card look at the page itself as well, and on a phone.
 - After changing `js/gamepad/`, `css/gamepad.css`, a page's `gamepad({ ... })` mapping, or which

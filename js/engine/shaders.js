@@ -1,10 +1,11 @@
 // Engine: the shaders. The car, the engine and the gas are one model made of distance functions (how far a
 // point is from the nearest surface), drawn by stepping each pixel's ray through it. Sizes are metres and match
-// model.js. The cuts are part of the model: a cut piece is the same solid, moved.
+// model.js. The cuts are part of the model. A cut piece does not move: it fades away where it is, by drawing the
+// picture with it and without it and mixing the two.
 export const WORLD_FS = `#version 300 es
 precision highp float;
 uniform vec2 uRes, uCenter; uniform vec3 uCam, uRt, uUp, uFw, uSun; uniform float uTan;
-uniform float uPhi, uCarSlide, uLift, uEnd, uGas, uGasStep, uRoad, uDots, uGasCut;
+uniform float uPhi, uCutCar, uCutLift, uCutEnd, uGas, uGasStep, uRoad, uDots, uGasCut;
 out vec4 o;
 const vec3 EO = vec3(1.30, 0.36, 0.0);
 const float DECK = 0.2207, CR = 0.045, ROD = 0.145, BORE = 0.042, XC = -0.1615, VX = 0.0175;
@@ -15,6 +16,8 @@ const float X4 = -0.144;
 const float IX = -0.012;      // the injector is drawn 12 mm to one side of the cylinder's middle, so that the cross cut bares it
 const vec3 INJ0 = vec3(IX, DECK + 0.0015, 0.0375), INJ1 = vec3(IX, DECK + 0.031, 0.102), INJ2 = vec3(IX, DECK + 0.032, 0.126);   // tip, bend, end
 const vec3 VS = vec3(0., DECK + 0.0083, 0.019);                // valve seat centre (folded: z is away from the middle)
+
+bool gCar = false, gLift = false, gEnd = false;      // which cut pieces are left out of the picture being drawn
 
 float hash(vec3 p){ p = fract(p * vec3(.1031, .1030, .0973)); p += dot(p, p.yxz + 33.33); return fract((p.x + p.y) * p.z); }
 float noise(vec3 p){ vec3 i = floor(p), f = fract(p); f = f*f*(3.-2.*f);
@@ -149,49 +152,40 @@ vec2 moving(vec3 p){
 }
 
 vec2 engine(vec3 p){
-  float bb = box(p, vec3(0.02, 0.105 + uLift * .5, uEnd * .5), vec3(0.30, 0.31 + uLift * .5, 0.215 + uEnd * .5), 0.);
+  float bb = box(p, vec3(0.02, 0.105, 0.), vec3(0.30, 0.31, 0.215), 0.);
   if (bb > 0.05) return vec2(bb, 0.);
   vec2 r = moving(p);
-  bool cutL = uLift > 1e-4, cutE = uEnd > 1e-4;
-  float rc = cutE ? -rearCut(p) : -1e3;
+  float rc = gEnd ? -rearCut(p) : -1e3;
   float b = blockD(p), c = coverD(p);
-  if (cutL) {      // the near half of the block and the cover is lifted clear
-    U(r, max(max(b, -p.z), rc), p.y < -0.075 ? 9. : 6.); U(r, max(max(c, -p.z), rc), 8.);
-    vec3 q = p - vec3(0., uLift, 0.);
-    U(r, max(blockD(q), q.z), q.y < -0.075 ? 9.25 : 6.25); U(r, max(coverD(q), q.z), 8.25);
-  } else { U(r, b, p.y < -0.075 ? 9. : 6.); U(r, c, 8.); }
+  if (gLift) { b = max(b, -p.z); c = max(c, -p.z); }      // without the near half of the block and the cover
+  U(r, max(b, rc), p.y < -0.075 ? 9. : 6.); U(r, max(c, rc), 8.);
   vec2 h = headD(p); U(r, max(h.x, rc), h.y);
-  if (cutE) {      // the end slice, slid aside
-    vec3 q = p - vec3(0., 0., uEnd); float rq = rearCut(q);
-    if (rq < 0.03) { vec2 hq = headD(q); U(r, max(hq.x, rq), hq.y + .5);
-      U(r, max(max(blockD(q), -q.z), rq), q.y < -0.075 ? 9.5 : 6.5); U(r, max(max(coverD(q), -q.z), rq), 8.5); }
-    else U(r, rq - 0.02, 0.);
-  }
   return r;
 }
 
 // ---- the car
-float bodyD(vec3 p){
+float shellD(vec3 p){      // the body's outside, before the wheel wells and the engine bay are hollowed out of it
   float lo = box(p, vec3(0., 0.52, 0.), vec3(2.14, 0.30, 0.86), 0.16);
   float hx = 1.22 - 0.95 * clamp(p.y - 0.80, 0., 0.6);
   float cab = box(vec3((p.x + 0.30) / hx, p.y, p.z), vec3(0., 1.06, 0.), vec3(1., 0.33, 0.74 - 0.22 * clamp(p.y - 0.8, 0., .6)), 0.12) * .7;
   float d = min(lo, cab) - 0.0;
-  float h = clamp(.5 + .5 * (cab - lo) / 0.1, 0., 1.); d = mix(cab, lo, h) - 0.1 * h * (1. - h);
+  float h = clamp(.5 + .5 * (cab - lo) / 0.1, 0., 1.); return mix(cab, lo, h) - 0.1 * h * (1. - h);
+}
+float bodyD(vec3 p){
+  float d = shellD(p);
   float well = max(length(vec2(abs(p.x) - 1.30, p.y - 0.33)) - 0.40, 0.50 - abs(p.z));
   float bay = box(p, vec3(1.42, 0.455, 0.), vec3(0.60, 0.335, 0.46), 0.02);      // narrower than the wheel wells, so an inner fender is left
   return max(d, -min(well, bay));
 }
-float carCut(vec3 p){ return max(0.75 - p.x, min(0.32 - p.z, 0.70 - p.y)); }   // negative inside the piece that slides
+float carCut(vec3 p){ return max(0.75 - p.x, min(0.32 - p.z, 0.70 - p.y)); }   // negative inside the piece that is taken away
 float wheelD(vec3 p, vec3 c){ vec3 q = p - c; return max(length(q.xy) - 0.33, abs(q.z) - 0.105) - 0.012; }
 vec2 car(vec3 p){
   vec2 r = vec2(1e3, 0.);
-  float bb = box(p, vec3(0.3 + uCarSlide * .5, 0.7, 0.), vec3(2.3 + uCarSlide * .5, 0.75, 1.0), 0.);
+  float bb = box(p, vec3(0.3, 0.7, 0.), vec3(2.3, 0.75, 1.0), 0.);
   if (bb > 0.3) return vec2(bb, 0.);
-  U(r, max(bodyD(p), -carCut(p)), 1.);
-  vec3 q = p - vec3(uCarSlide, 0., 0.);
-  U(r, max(bodyD(q), carCut(q)), 1.);
+  U(r, gCar ? max(bodyD(p), -carCut(p)) : bodyD(p), 1.);
   float w = min(wheelD(p, vec3(-1.3, 0.33, -0.76)), min(wheelD(p, vec3(-1.3, 0.33, 0.76)), wheelD(p, vec3(1.3, 0.33, -0.76))));
-  w = min(w, wheelD(q, vec3(1.3, 0.33, 0.76)));
+  if (!gCar) w = min(w, wheelD(p, vec3(1.3, 0.33, 0.76)));      // the near front wheel goes with the fender
   U(r, w, 3.);
   return r;
 }
@@ -204,7 +198,9 @@ vec2 map(vec3 p){
 vec3 normal(vec3 p, float e){ vec2 k = vec2(1., -1.);
   return normalize(k.xyy * map(p + k.xyy * e).x + k.yyx * map(p + k.yyx * e).x + k.yxy * map(p + k.yxy * e).x + k.xxx * map(p + k.xxx * e).x); }
 float shadow(vec3 p, vec3 d, float tmax, float k){ float s = 1., t = 0.002 * tmax + 0.0006;
-  for (int i = 0; i < 48; i++) { float h = map(p + d * t).x; s = min(s, k * h / t); t += clamp(h, 0.0008 * tmax, 0.08 * tmax); if (s < 0.02 || t > tmax) break; }
+  // Half steps, and none longer than a tenth of the way gone: whole steps passed an edge at a different point of their stride
+  // from one pixel to the next, and that showed as bands in the soft part of a shadow.
+  for (int i = 0; i < 110; i++) { float h = map(p + d * t).x; s = min(s, k * h / t); t += clamp(h * .5, 0.0008 * tmax, 0.1 * t + 0.002 * tmax); if (s < 0.02 || t > tmax) break; }
   return clamp(s, 0., 1.); }
 float ao(vec3 p, vec3 n, float sc){ float a = 0., w = 1.; for (int i = 1; i <= 4; i++) { float h = sc * float(i); a += w * (h - map(p + n * h).x); w *= .6; } return clamp(1. - 1.6 * a / sc, 0., 1.); }
 
@@ -231,16 +227,15 @@ vec4 dotsP(vec3 u, float cell, float rad){      // the same, repeating every 14 
   return vec4(smoothstep(rad, rad * .35, length(u - ctr)), hash(cc + 3.1), 0., 0.);
 }
 vec4 gasAt(vec3 p){
-  if (uEnd > 1e-4 && p.x < uGasCut) return vec4(0.);
+  if (gEnd && p.x < uGasCut) return vec4(0.);
   float xl; float j = cylOf(p.x, xl); float phi = phiOf(j);
   float top = pinY(phi) + 0.030, rad = length(vec2(xl, p.z));
   float roof = DECK + 0.015 - 0.35 * abs(p.z);
   vec3 AIR = vec3(0.36, 0.64, 1.0), FUEL = vec3(0.30, 0.95, 0.42), BURN = vec3(1.0, 0.42, 0.08), FRONT = vec3(0.86, 0.80, 1.0), EXH = vec3(0.56, 0.47, 0.40);
-  float others = j == 3. ? 1. : clamp(1. - uEnd / 0.24, 0., 1.);     // once the end of the engine is off, only the cylinder looked into shows its gas
+  float others = j == 3. || !gEnd ? 1. : 0.;     // once the end of the engine is off, only the cylinder looked into shows its gas
   if (rad < BORE - 0.0006 && p.y > top + 0.0006 && p.y < roof - 0.0004) {
-    // where the near half of the block is lifted off, the gas is left out too; once the end is off, the cylinder looked into shows all of its gas
-    float part = uLift > 1e-4 && p.y < DECK && p.z < 0. ? (j == 3. ? clamp(uEnd / 0.24, 0., 1.) : 0.) : 1.;
-    if (part <= 0.) return vec4(0.);
+    // where the near half of the block is gone, the gas is left out too; once the end is off, the cylinder looked into shows all of its gas
+    if (gLift && p.y < DECK && p.z < 0. && !(j == 3. && gEnd)) return vec4(0.);
     float h = DECK + 0.008 - top;
     bool closed = phi >= 180. && phi < 540.;
     float sq = closed ? H0 / h : 1.;
@@ -269,7 +264,7 @@ vec4 gasAt(vec3 p){
       }
       cs += col * a; as += a;
     }
-    return as > 0. ? vec4(cs / as, as * part) : vec4(0.);
+    return as > 0. ? vec4(cs / as, as) : vec4(0.);
   }
   if (uGas > 1.5 && p.y > DECK) {   // the ports: air waiting in the intake, old exhaust in the exhaust; each moves while its valve is open
     vec3 f = vec3(abs(xl) - VX, p.y, abs(p.z));
@@ -289,24 +284,34 @@ void main(){
   vec2 ndc = (gl_FragCoord.xy / uRes) * 2. - 1. - uCenter; ndc.x *= uRes.x / uRes.y;
   vec3 rd = normalize(uFw + ndc.x * uTan * uRt + ndc.y * uTan * uUp), ro = uCam;
   float px = 2. * uTan / uRes.y;
+  // A piece that is being cut away fades: the picture is drawn with it, then without it, and the two are mixed.
+  float fade = max(uCutCar * (1. - uCutCar), max(uCutLift * (1. - uCutLift), uCutEnd * (1. - uCutEnd))) > 1e-4
+    ? (uCutCar < .999 ? uCutCar : uCutLift < .999 ? uCutLift : uCutEnd) : 0.;
+  vec3 outc = vec3(0.);
+  for (int pass = 0; pass < 2; pass++) {
+  if (pass == 1 && fade <= 0.) break;
+  float gone = pass == 0 ? .999 : .001;
+  gCar = uCutCar > gone; gLift = uCutLift > gone; gEnd = uCutEnd > gone;
   float t = 0., m = 0.; bool hit = false; float tmax = 150.;
   for (int i = 0; i < 260; i++) { vec2 h = map(ro + rd * t); if (h.x < px * t * .5) { hit = true; m = h.y; break; } t += h.x * .82; if (t > tmax) break; }
+  // Land on the surface itself. Stopping within half a pixel of it left each pixel a different small distance short,
+  // and the light and the cut faces, which are worked out from where the ray stopped, showed that as contour lines.
+  if (hit) for (int i = 0; i < 4; i++) t += map(ro + rd * t).x;
   vec3 col = sky(rd);
   if (hit) {
     vec3 p = ro + rd * t, n = normal(p, max(px * t, 0.00008)), e = toE(p), ne = vec3(-n.x, n.y, -n.z);
-    float piece = fract(m); m = floor(m); gPx = px * t;
-    if (piece > .4) e -= vec3(0., 0., uEnd); else if (piece > .2) e -= vec3(0., uLift, 0.);
+    gPx = px * t;
     vec3 base = vec3(.5); float metal = 0., rough = .5; bool cutFace = false;
     if (m == 1.) { base = vec3(0.62, 0.03, 0.03); rough = .22;
-      vec3 q = p; if (carCut(p) > 0. || bodyD(p) > 0.004) q = p - vec3(uCarSlide, 0., 0.);
+      vec3 q = p;
       bool glass = q.y > 0.90 && q.y < 1.30 && abs(q.x + 0.42) > 0.045 && (abs(q.z) > 0.5 || abs(q.x + 0.3) > 0.72) && q.x > -1.42 && q.x < 0.95;
       if (glass) { base = vec3(0.04, 0.06, 0.09); rough = .08; metal = .6; }
       if (q.x > 2.03 && q.y > 0.52 && q.y < 0.66 && abs(q.z) > 0.42) { base = vec3(1.5, 1.45, 1.2); }
       if (q.x < -2.03 && q.y > 0.56 && q.y < 0.70 && abs(q.z) > 0.45) { base = vec3(0.9, 0.05, 0.03); }
-      if (uCarSlide > 1e-4 && abs(carCut(q)) < 0.004) { base = hatch(vec3(0.80, 0.77, 0.71), q, 31.); rough = .9; metal = 0.; }
-      else if (bodyD(q) < -0.006) { base = vec3(0.07, 0.075, 0.085); rough = .8; metal = 0.; }
+      if (gCar && abs(carCut(q)) < 0.004) { base = hatch(vec3(0.80, 0.77, 0.71), q, 31.); rough = .9; metal = 0.; }
+      else if (shellD(q) < -0.006) { base = vec3(0.07, 0.075, 0.085); rough = .8; metal = 0.; }
     }
-    else if (m == 3.) { float rr = min(length(vec2(abs(p.x) - 1.3, p.y - 0.33)), length(vec2(p.x - 1.3 - uCarSlide, p.y - 0.33)));
+    else if (m == 3.) { float rr = length(vec2(abs(p.x) - 1.3, p.y - 0.33));
       base = rr < 0.215 ? vec3(0.62, 0.64, 0.68) : vec3(0.035); metal = rr < 0.215 ? .8 : 0.; rough = rr < 0.215 ? .35 : .9; }
     else if (m == 5.) { float z = p.z, x = p.x + uRoad; base = vec3(0.30, 0.42, 0.22) * (0.85 + 0.3 * noise(vec3(x, 0., z) * 1.7));
       if (z < 2.25 && z > -5.6) { base = vec3(0.115, 0.118, 0.125) * (0.85 + 0.3 * noise(vec3(x, 0., z) * 40.));
@@ -336,8 +341,8 @@ void main(){
     else if (m == 25.) { base = vec3(0.66, 0.67, 0.70); metal = .9; rough = .25; }
     // a cut face is drawn flat and pale, with fine hatching, so it reads as cut metal
     if ((m >= 6. && m <= 9.) || m == 22. || m == 23.) {
-      bool onL = uLift > 1e-4 && (m == 6. || m == 8. || m == 9.) && abs(e.z) < 0.0006 && abs(ne.z) > .9;
-      bool onR = uEnd > 1e-4 && abs(rearCut(e)) < 0.0005 && (abs(ne.x) > .9 || abs(e.x - XC) > 0.001);
+      bool onL = gLift && (m == 6. || m == 8. || m == 9.) && abs(e.z) < 0.0006 + gPx && abs(ne.z) > .9;
+      bool onR = gEnd && abs(rearCut(e)) < 0.0005 + gPx && (abs(ne.x) > .9 || abs(e.x - XC) > 0.001 + gPx);
       cutFace = onL || onR;
     }
     if (cutFace) { base = hatch(m == 8. || m == 9. || m == 22. ? vec3(0.55, 0.56, 0.60) : m == 23. ? vec3(0.78, 0.66, 0.58) : vec3(0.80, 0.77, 0.71), e, 260.); metal = 0.; rough = .95; }
@@ -363,7 +368,7 @@ void main(){
   }
   // gas, marched in the engine's frame up to the surface
   if (uGas > .5) {
-    vec3 eo = toE(ro), ed = vec3(-rd.x, rd.y, -rd.z); vec3 bmin = vec3(uEnd > 1e-4 ? uGasCut : -0.19, 0.03, -0.20), bmax = vec3(0.19, 0.31, 0.20);
+    vec3 eo = toE(ro), ed = vec3(-rd.x, rd.y, -rd.z); vec3 bmin = vec3(gEnd ? uGasCut : -0.19, 0.03, -0.20), bmax = vec3(0.19, 0.31, 0.20);
     vec3 inv = 1. / ed, t0 = (bmin - eo) * inv, t1 = (bmax - eo) * inv, tn = min(t0, t1), tf = max(t0, t1);
     float a = max(max(tn.x, tn.y), max(tn.z, 0.)), b = min(min(tf.x, tf.y), min(tf.z, hit ? t : 1e3));
     if (b > a) {
@@ -374,7 +379,9 @@ void main(){
     }
   }
   col = col / (1. + col * .35); col = pow(col, vec3(1. / 2.2));
-  o = vec4(col, 1.);
+  outc = pass == 0 ? col : mix(outc, col, fade);
+  }
+  o = vec4(outc, 1.);
 }`;
 
 export const FULL_VS = `#version 300 es
