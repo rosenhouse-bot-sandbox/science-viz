@@ -104,6 +104,10 @@ Before pushing:
   valve timing, the burn, the pressure model or the molecules: it fails if a valve is open in the wrong
   stroke or reaches the piston, a camshaft is not at half speed, the burning order is wrong, the peak
   pressure leaves its range, an atom is lost in the reaction, or a size in the shaders is not the model's.
+  After changing how the gas moves (`js/engine/flow.js`), the valve timing or the pressure model, run
+  `node tests/engine/flow.mjs` (no browser needed): it works out the paths of the gas dots and fails if gas is
+  made or lost against the model, sits unevenly in the cylinder, is inside metal, passes a shut valve, or leaves
+  any way but down the exhaust pipe. A dot of gas is never faded in or out to hide a gap in the flow.
   Then `node tests/engine/page.mjs` (`--quick` for the desktop only): it presses every control at a
   desktop and a phone size, checks the labels, steps both sliders end to end comparing each picture with
   the one before, and fails on a jump, a control that moved, labels that overlap, or a console error.

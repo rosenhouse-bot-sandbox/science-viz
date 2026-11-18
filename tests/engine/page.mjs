@@ -54,6 +54,7 @@ for (const [name, width, height, motion] of quick ? SIZES.slice(0, 1) : SIZES) {
   page.on('pageerror', (e) => fail(`${name}: ${e.message}`));
   await page.goto(base + '?res=0.2');                             // a fifth of the pixels each way: drawn in software, the full picture takes seconds a frame
   await page.waitForFunction(() => window.__engine && document.getElementById('capTitle').textContent, null, { timeout: 120000 });
+  await page.waitForFunction(() => window.__engine.flow, null, { timeout: 300000 });      // the paths of the gas dots take a few seconds to work out; the pictures are compared with them in
   if (!(await page.$eval('#oops', (e) => e.hidden))) { fail(`${name}: the picture could not start`); await page.close(); continue; }
   const state = () => page.evaluate(() => ({ ...window.__engine.st, busy: window.__engine.busy }));
   const idle = async () => { await page.evaluate(() => window.__engine.settle()); await page.waitForFunction(() => !window.__engine.busy, null, { timeout: 240000 }); };
