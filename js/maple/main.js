@@ -1,9 +1,9 @@
 // Japanese maple: the controller. Two numbers drive the page: the zoom (0 = tree ... 4 = molecules)
 // and the season (0 = late March ... 1 = late December). The picture is redrawn only when one changes.
-import { dayOf, dateOf, dayLength, sunAt, takenIn, PHASES, phaseAt, LAT, clamp, smooth, mix, css, leafRGB } from './model.js?v=f5366b9e';
-import { makeWorld, TARGETS, CUT as LEAF_CUT } from './world.js?v=f5366b9e';
-import { quatOf, qmul, qrot, slerp, add, mul, unit, cross, lerp3 } from './gl.js?v=f5366b9e';
-import { drawSpectrum, drawStalk, drawChain } from './figs.js?v=f5366b9e';
+import { dayOf, dateOf, dayLength, sunAt, takenIn, PHASES, phaseAt, LAT, clamp, smooth, mix, css, leafRGB } from './model.js?v=383cadf7';
+import { makeWorld, TARGETS, CUT as LEAF_CUT } from './world.js?v=383cadf7';
+import { quatOf, qmul, qrot, slerp, add, mul, unit, cross, lerp3 } from './gl.js?v=383cadf7';
+import { drawSpectrum, drawStalk, drawChain } from './figs.js?v=383cadf7';
 import { gamepad } from '../gamepad/gamepad.js';
 
 const $ = (id) => document.getElementById(id);
@@ -269,6 +269,26 @@ for (const [id, step] of [['zoom', 0.05], ['season', 5]]) $(id).addEventListener
 });
 for (const b of document.querySelectorAll('[data-where]')) b.addEventListener('click', () => look(b.dataset.where));
 cv.addEventListener('wheel', (e) => { e.preventDefault(); if (hop) return; fly = null; zoomAt = performance.now(); zNew = true; st.z = zOf(clamp(uOf(st.z) - e.deltaY * (e.deltaMode ? 0.1 : 0.004), KN.U[0], KN.U[LAST])); touch(); }, { passive: false });   // one notch is the same change of scale everywhere
+// Two fingers on the picture: spreading them zooms in and pinching them zooms out, exactly as dragging the Zoom
+// slider does, and the slider follows. One full spread is about one scale. While the browser's own zoom is in, the
+// pinch is left to the browser, so that there is always a way back out.
+const PINCH = 4;                         // how far the size of the view goes for a spread of the fingers: one full spread is about one scale
+function pinchBy(g) { if (hop) return; fly = null; zoomAt = performance.now(); zNew = true; st.z = zOf(clamp(uOf(st.z) + g * PINCH, KN.U[0], KN.U[LAST])); touch(); }
+const fingers = new Map(); let span = 0;
+const pageZoomed = () => (window.visualViewport ? visualViewport.scale : 1) > 1.01;
+const leavePinch = () => cv.classList.toggle('pagezoom', pageZoomed());
+if (window.visualViewport) { visualViewport.addEventListener('resize', leavePinch); leavePinch(); }
+const spanOf = () => { const [a, b] = [...fingers.values()]; return Math.max(24, Math.hypot(a[0] - b[0], a[1] - b[1])); };
+cv.addEventListener('pointerdown', (e) => { if (e.pointerType !== 'touch') return; fingers.set(e.pointerId, [e.clientX, e.clientY]); span = fingers.size === 2 ? spanOf() : 0; });
+cv.addEventListener('pointermove', (e) => {
+  if (!fingers.has(e.pointerId)) return;
+  fingers.set(e.pointerId, [e.clientX, e.clientY]);
+  if (fingers.size !== 2 || pageZoomed()) { span = 0; return; }
+  const d = spanOf();
+  if (span) pinchBy(Math.log(d / span));
+  span = d;
+});
+for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) cv.addEventListener(type, (e) => { fingers.delete(e.pointerId); span = 0; });
 $('reload').addEventListener('click', () => location.reload());
 // A controller: the triggers zoom as the wheel does (the same change of scale each second everywhere), and the bumpers fly to the scale before or after.
 gamepad({

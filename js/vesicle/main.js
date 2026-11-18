@@ -298,7 +298,7 @@ $('spin').checked = st.spin; $('lab').checked = st.labels; $('labels').classList
 // Drag to orbit, pinch or wheel to zoom.
 const pointers = new Map(); let pinch = 0;
 const hideHint = () => $('hint').classList.add('gone');
-canvas.addEventListener('pointerdown', (e) => { canvas.setPointerCapture(e.pointerId); pointers.set(e.pointerId, [e.clientX, e.clientY]); pinch = 0; });
+canvas.addEventListener('pointerdown', (e) => { canvas.setPointerCapture(e.pointerId); pointers.set(e.pointerId, [e.clientX, e.clientY]); pinch = 0; if (pointers.size === 2) { const [a, b] = [...pointers.values()]; pinch = Math.hypot(a[0] - b[0], a[1] - b[1]); } });   // the pinch is measured from where the second finger lands
 canvas.addEventListener('pointermove', (e) => {
   const prev = pointers.get(e.pointerId); if (!prev) return;
   pointers.set(e.pointerId, [e.clientX, e.clientY]);

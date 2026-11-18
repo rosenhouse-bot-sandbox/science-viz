@@ -1,9 +1,9 @@
 // Engine: the controller. Two numbers drive the page: the zoom (0 = car ... 4 = molecules) and the crank
 // angle of the cylinder we follow (0 to 720 degrees, one cycle). Time runs slower the further in the zoom is.
 // The picture is redrawn only when something changes.
-import * as M from './model.js?v=3a3dddea';
-import { makeGroup, place, centre, tiles, copies, LAYERS, MAX_COPIES, MAX_ATOMS } from './mol.js?v=3a3dddea';
-import { WORLD_FS, FULL_VS, BLIT_FS, BALL_VS, BALL_FS } from './shaders.js?v=3a3dddea';
+import * as M from './model.js?v=b5e0067c';
+import { makeGroup, place, centre, tiles, copies, LAYERS, MAX_COPIES, MAX_ATOMS } from './mol.js?v=b5e0067c';
+import { WORLD_FS, FULL_VS, BLIT_FS, BALL_VS, BALL_FS } from './shaders.js?v=b5e0067c';
 import { gamepad } from '../gamepad/gamepad.js';
 
 const { clamp, smooth, mix, wrap } = M;
@@ -442,13 +442,43 @@ STOPS.forEach((s, i) => {
   const t = document.createElement('i'); t.style.left = (i / LAST * 100) + '%'; $('zticks').append(t);
 });
 M.STROKES.forEach((s) => { const t = document.createElement('span'); t.textContent = s; $('strokes').append(t); });
-$('zoom').addEventListener('input', (e) => setZoom(+e.target.value));
+// A press on the Zoom line away from its knob glides there, as a press on a scale's name does, and the knob glides with
+// the picture. A drag of the knob follows the finger directly; so does a drag that began on the line, once the glide has caught up with it.
+let glide = false;
+$('zoom').addEventListener('pointerdown', (e) => {
+  const r = e.currentTarget.getBoundingClientRect(), knob = 18, x = r.left + knob / 2 + st.z / LAST * (r.width - knob);
+  glide = !reduced && Math.abs(e.clientX - x) > knob / 2 + 8;
+});
+for (const type of ['pointerup', 'pointercancel']) addEventListener(type, () => { glide = false; });
+$('zoom').addEventListener('input', (e) => {
+  const v = +e.target.value;
+  if (glide && (fly || Math.abs(v - st.z) > 0.03)) { zoomTo(v); e.target.value = st.z; } else { glide = false; setZoom(v); }
+});
 $('cycle').addEventListener('input', (e) => { st.phi = +e.target.value; shown.pv = +e.target.value; st.play = false; phiSet = true; touch(); });
 $('play').addEventListener('click', togglePlay);
 // An arrow key moves a slider by a step that can be seen: a twentieth of a scale, or a few degrees (half a degree among the molecules).
 $('zoom').addEventListener('keydown', (e) => { const d = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 }[e.key]; if (!d) return; e.preventDefault(); setZoom(st.z + d * 0.05); });
 $('cycle').addEventListener('keydown', (e) => { const d = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 }[e.key]; if (!d) return; e.preventDefault(); st.phi = clamp(wrap(st.phi) + d * (st.z > 3.5 ? 0.5 : st.z > 2.5 ? 1 : 5), 0, 720); st.play = false; phiSet = true; touch(); });
 cv.addEventListener('wheel', (e) => { e.preventDefault(); setZoom(st.z - e.deltaY * (e.deltaMode ? 0.03 : 0.0012)); }, { passive: false });
+// Two fingers on the picture: spreading them zooms in and pinching them zooms out, exactly as dragging the Zoom
+// slider does, and the slider follows. One full spread is about one scale. While the browser's own zoom is in, the
+// pinch is left to the browser, so that there is always a way back out.
+const pinchBy = (g) => setZoom(st.z + g * 0.9);
+const fingers = new Map(); let span = 0;
+const pageZoomed = () => (window.visualViewport ? visualViewport.scale : 1) > 1.01;
+const leavePinch = () => cv.classList.toggle('pagezoom', pageZoomed());
+if (window.visualViewport) { visualViewport.addEventListener('resize', leavePinch); leavePinch(); }
+const spanOf = () => { const [a, b] = [...fingers.values()]; return Math.max(24, Math.hypot(a[0] - b[0], a[1] - b[1])); };
+cv.addEventListener('pointerdown', (e) => { if (e.pointerType !== 'touch') return; fingers.set(e.pointerId, [e.clientX, e.clientY]); span = fingers.size === 2 ? spanOf() : 0; });
+cv.addEventListener('pointermove', (e) => {
+  if (!fingers.has(e.pointerId)) return;
+  fingers.set(e.pointerId, [e.clientX, e.clientY]);
+  if (fingers.size !== 2 || pageZoomed()) { span = 0; return; }
+  const d = spanOf();
+  if (span) pinchBy(Math.log(d / span));
+  span = d;
+});
+for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) cv.addEventListener(type, (e) => { fingers.delete(e.pointerId); span = 0; });
 $('reload').addEventListener('click', () => location.reload());
 // A controller: the triggers zoom, and the bumpers fly to the scale before or after.
 gamepad({
