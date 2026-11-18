@@ -1,9 +1,9 @@
 // Engine: the controller. Two numbers drive the page: the zoom (0 = car ... 4 = molecules) and the crank
 // angle of the cylinder we follow (0 to 720 degrees, one cycle). Time runs slower the further in the zoom is.
 // The picture is redrawn only when something changes.
-import * as M from './model.js?v=b5e0067c';
-import { makeGroup, place, centre, tiles, copies, LAYERS, MAX_COPIES, MAX_ATOMS } from './mol.js?v=b5e0067c';
-import { WORLD_FS, FULL_VS, BLIT_FS, BALL_VS, BALL_FS } from './shaders.js?v=b5e0067c';
+import * as M from './model.js?v=00c4aaa1';
+import { makeGroup, place, centre, tiles, copies, LAYERS, MAX_COPIES, MAX_ATOMS } from './mol.js?v=00c4aaa1';
+import { WORLD_FS, FULL_VS, BLIT_FS, BALL_VS, BALL_FS } from './shaders.js?v=00c4aaa1';
 import { gamepad } from '../gamepad/gamepad.js';
 
 const { clamp, smooth, mix, wrap } = M;
@@ -274,16 +274,17 @@ function scaleBar() {
   $('scaleBar').style.width = (len * view.k).toFixed(1) + 'px'; set('scaleText', text);
   return text;
 }
+const SPOT_MM = Math.round(M.SPOT_DIST * 1000), BEFORE_TOP = Math.round(360 - M.SPOT_BURNS);
 const PEAK_ATM = M.PEAK.p / M.ATM, AFTER_TOP = Math.round(M.PEAK.phi - 360), BURN_MS = (M.FLAME_OUT - M.SPARK) / M.DEG_PER_S * 1000, FRONT_SPEED = 0.047 / (BURN_MS / 1000);
 const CAP = {
   car: () => ['Sixty miles an hour', `At ${M.MPH} mph in top gear this engine's main shaft, the crankshaft, turns ${num(M.RPM)} times a minute: ${M.RPM / 60} times a second. Slide Zoom to go under the hood. Time slows as you go in, so that each step can be seen.`],
   engine: () => ['Four pistons, one shaft', 'Each burn of fuel pushes one piston down its cylinder. A connecting rod turns that push into rotation of the crankshaft. One trip of a piston down or up is a stroke, and only every fourth stroke is a burn: the power stroke. The four cylinders burn in the order 1, 3, 4, 2, half a turn apart, so one of them is always on its power stroke. A cylinder glows from its spark until its burned gas has cooled. The belt turns the two camshafts once for every two turns of the crankshaft.'],
-  cylinder: (s) => [
+  cylinder: (s, p) => (p >= M.SPARK && p < 360 ? ['Compression ends: the spark lights the mixture', `The piston is still rising, with ${360 - M.SPARK}° of crankshaft or less to go to the top, and the spark has already lit the mixture next to the plug. The burn starts this early because it takes time to spread: that way the pressure peaks just after the top, ${AFTER_TOP}° into the power stroke, and not late. The band on the cycle slider marks the burn, from the spark until the flame front has crossed the cylinder.`] : [
     ['Intake: air and fuel come in', 'The piston goes down and the intake valve is open, so air flows in past it. The injector sprays gasoline straight into the cylinder, where it mixes with the air: about 15 parts of air to 1 of fuel, by mass.'],
     ['Compression: the mixture is squeezed', `The intake valve closes shortly after the piston starts back up; then both valves are shut. The piston squeezes the air and fuel into about a tenth of the volume. Squeezing heats the mixture and crowds its molecules together. A spark lights it when the crankshaft still has ${360 - M.SPARK}° to turn before the piston reaches the top.`],
     ['Power: the burned gas pushes the piston', `Burning makes the gas very hot, so its pressure rises to ${num(PEAK_ATM)} times that of the outside air just after the top. That pressure pushes the piston down, and the connecting rod turns the crankshaft. This is the only stroke in which the gas drives the piston. The exhaust valve starts to open ${540 - M.EVO}° before the bottom.`],
     ['Exhaust: the burned gas leaves', 'The exhaust valve is open. The piston comes up and pushes the burned gas out; then the cycle starts again. In the intake, compression and exhaust strokes it is the crankshaft that moves the piston, kept turning by the other cylinders and by a heavy flywheel on its end (not drawn).'],
-  ][s],
+  ][s]),
   flame: (s, p) => (p >= 400 && p < 540 ? ['The burned gas expands', 'All of the mixture has burned. The hot gas pushes the piston down, and cools as it spreads into the growing volume.']
     : p < M.SPARK || p >= 540
     ? ['Between burns', `The spark plug makes a spark across its gap ${360 - M.SPARK}° of crankshaft before the piston reaches the top. Press Play to watch the burn, or drag the cycle slider to the end of Compression.`]
@@ -292,12 +293,14 @@ const CAP = {
       : ['The front reaches the walls', `The flame front has crossed the cylinder; the last of the mixture, next to the walls, is still burning. The pressure peaks ${AFTER_TOP}° after the top, at ${num(PEAK_ATM)} times that of the outside air.`]),
   molecules: (s, p) => {
     const g = M.gasAt(p);
-    if (g.burn > 0 && g.burn < 1) return ['Burning', 'The flame front is passing this spot. The fuel\'s carbon and hydrogen atoms leave it and bond to oxygen atoms instead. Breaking the old bonds takes energy; the new bonds to oxygen release more. The difference ends up as faster motion of all the molecules: heat. Atoms are drawn going straight to their new partners; the real route runs through many short-lived fragments.'];
-    if (g.burn >= 1 && p >= 400 && p < 560) return ['Expanding and cooling', 'The burned gas pushes the piston down. As it spreads into the growing volume its molecules move apart and slow down: the gas cools and its pressure falls.'];
-    if (g.burn >= 1 && p < 560) return ['Carbon dioxide and water', 'Every carbon atom is now in a carbon dioxide molecule and every pair of hydrogen atoms in a water molecule. Nearly all the nitrogen is unchanged. The molecules now move nearly twice as fast and have spread apart, squeezing the mixture that has not burned yet. Once all of it has burned, the molecules throughout the cylinder strike the piston harder and more often than before: that is the pressure that pushes it down.'];
+    if (g.burn > 0 && g.burn < 1) return ['Burning', `The flame front set out from the spark plug, ${SPOT_MM} mm away, and is passing this spot about ${BEFORE_TOP}° before the piston reaches the top: the burn starts before compression ends. The fuel's carbon and hydrogen atoms leave it and bond to oxygen atoms instead. Breaking the old bonds takes energy; the new bonds to oxygen release more. The difference ends up as faster motion of all the molecules: heat. Atoms are drawn going straight to their new partners; the real route runs through many short-lived fragments.`];
+    if (g.burn >= 1 && p >= 400 && p < 540) return ['Expanding and cooling', 'The burned gas pushes the piston down. As it spreads into the growing volume its molecules move apart and slow down: the gas cools and its pressure falls.'];
+    if (g.burn >= 1 && p < 360) return ['Burned here, before the piston reaches the top', `The burn starts before compression ends. The spark comes ${360 - M.SPARK}° before the top, and this spot is only ${SPOT_MM} mm from the plug, so the flame front has already passed it. Most of the mixture, farther from the plug, has not burned yet. Here every carbon atom is now in a carbon dioxide molecule and every pair of hydrogen atoms in a water molecule. Nearly all the nitrogen is unchanged. The molecules move nearly twice as fast and have spread apart, squeezing the mixture that has not burned yet.`];
+    if (g.burn >= 1 && p < 540) return ['Carbon dioxide and water', 'Every carbon atom is now in a carbon dioxide molecule and every pair of hydrogen atoms in a water molecule. Nearly all the nitrogen is unchanged. The molecules now move nearly twice as fast and have spread apart, squeezing the mixture that has not burned yet. Once all of it has burned, the molecules throughout the cylinder strike the piston harder and more often than before: that is the pressure that pushes it down.'];
     if (g.burn >= 1 || p < 30) return ['Burned gas leaves, fresh air arrives', 'The burned gas has spread out and cooled, and is pushed out past the exhaust valve. Fresh air follows through the intake valve.'];
     if (!g.fuel || p < M.INJECT[1] + 25) return ['Air', `Air is mostly nitrogen molecules, each two nitrogen atoms, and one part in five oxygen molecules, each two oxygen atoms. At intake pressure they are about ${Math.cbrt(1 / g.perNm3).toFixed(1)} nm apart, so only a few are in view. Fuel reaches this spot a little after the injector starts to spray.`];
     if (p <= M.IVC) return ['Fuel and air, mixed', 'One fuel molecule for every 12 or 13 oxygen molecules and 47 nitrogen molecules: exactly enough oxygen to burn it. The gasoline has evaporated, so its molecules are spread singly among the air\'s.'];
+    if (p >= M.SPARK) return ['Fuel and air, with the flame on its way', `The spark has fired, ${SPOT_MM} mm from this spot, ${360 - M.SPARK}° before the piston reaches the top. The flame front has not got here yet, so these molecules are still fuel and air. The gas that has already burned near the plug is hot and spreading, and squeezes this mixture harder still.`];
     return ['Fuel and air, squeezed together', 'One fuel molecule for every 12 or 13 oxygen molecules and 47 nitrogen molecules: exactly enough oxygen to burn it. As the piston rises the same molecules are crowded into less room, and they move faster: the gas is hotter and its pressure higher.'];
   },
 };
@@ -342,7 +345,9 @@ function sync() {
   zi.setAttribute('aria-valuetext', `${stop.name}, scale bar ${bar}`);
   set('zoomV', stop.name);
   const pv = Math.round(p * 2) / 2;
-  if (shown.pv !== pv) { shown.pv = pv; ci.value = pv; ci.setAttribute('aria-valuetext', `${Math.round(p)} degrees, ${M.STROKES[stroke]}`); }
+  if (shown.pv !== pv) { shown.pv = pv; ci.value = pv; }
+  const pt = `${Math.round(p)} degrees, ${M.STROKES[stroke]}${p >= M.SPARK && p < M.FLAME_OUT ? ', burning' : ''}`;
+  if (shown.pt !== pt) { shown.pt = pt; ci.setAttribute('aria-valuetext', pt); }
   for (const b of $('stops').children) b.setAttribute('aria-current', String(+b.dataset.i === lvl));
   [...$('zticks').children].forEach((t, i) => t.classList.toggle('on', i === lvl));
   [...$('strokes').children].forEach((t, i) => t.classList.toggle('on', i === stroke));
@@ -356,7 +361,7 @@ function sync() {
     const apply = () => { $('capTitle').textContent = title; $('capBody').textContent = body; $('capScale').textContent = stop.name; $('note').textContent = NOTE[stop.id]; $('cap').classList.remove('swap'); };
     if (first || reduced) apply(); else { $('cap').classList.add('swap'); setTimeout(() => { if (shown.cap === capKey) apply(); }, 180); }
   }
-  set('capPhase', slowAt(st.z) < 1.5 ? 'real speed' : `${slowText(slowAt(st.z)).toLowerCase()} · ${M.STROKES[stroke].toLowerCase()} stroke`);
+  set('capPhase', slowAt(st.z) < 1.5 ? 'real speed' : `${slowText(slowAt(st.z)).toLowerCase()} · ${p >= M.SPARK && p < 360 ? 'compression, burn begun' : p >= 360 && p < M.FLAME_OUT ? 'power, still burning' : M.STROKES[stroke].toLowerCase() + ' stroke'}`);
   key(st.z > 3.9 ? 'atoms' : lvl >= 2 ? 'gas' : 'none');
 
   const g = M.gasAt(p), T = lvl === 4 ? g.T : (M.tempMean(p) || g.T), atm = M.pressure(p) / M.ATM;
@@ -441,6 +446,8 @@ STOPS.forEach((s, i) => {
   const b = document.createElement('button'); b.type = 'button'; b.textContent = s.name; b.dataset.i = i; b.style.left = (i / LAST * 100) + '%'; b.addEventListener('click', () => zoomTo(i)); $('stops').append(b);
   const t = document.createElement('i'); t.style.left = (i / LAST * 100) + '%'; $('zticks').append(t);
 });
+// the cycle slider's line: the four strokes, and over them the burn, from the spark to the front reaching the far corner
+{ const a = (M.SPARK / 7.2).toFixed(2), b = (M.FLAME_OUT / 7.2).toFixed(2); $('cycle').style.setProperty('--year', `linear-gradient(90deg,#8fc4ff 0 25%,#c9d3ea 25% ${a}%,#fff3b0 ${a}% ${b}%,#ff9a3c ${b}% 75%,#a59f98 75% 100%)`); }
 M.STROKES.forEach((s) => { const t = document.createElement('span'); t.textContent = s; $('strokes').append(t); });
 // A press on the Zoom line away from its knob glides there, as a press on a scale's name does, and the knob glides with
 // the picture. A drag of the knob follows the finger directly; so does a drag that began on the line, once the glide has caught up with it.

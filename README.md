@@ -770,7 +770,10 @@ What is computed, not typed:
   port and valve.
   Seventy-two percent of the fuel's heat is kept in the gas; the rest is taken as lost to the walls.
 - The flame front's distance from the plug, which sets where the glow is drawn and when the spot the
-  Molecules stop looks at burns.
+  Molecules stop looks at burns. That spot is 13 mm from the plug, so it burns about 6° before the
+  piston reaches the top, while the cycle slider is still in Compression. The captions and the line
+  above them say so, and a pale band on the cycle slider marks the burn, from the spark (25° before
+  the top) until the front has crossed the cylinder (19° after it).
 - At Molecules, a group of 121 molecules (2 fuel, 25 oxygen, 94 nitrogen) in a cube whose edge
   follows the pressure and temperature at that spot (about 23 nm during intake, 13 nm at the spark).
   Every atom is followed through the reaction into 16 carbon dioxide and 18 water molecules; the
