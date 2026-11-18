@@ -779,7 +779,7 @@ Where the picture simplifies, which the page also says:
 
 - Dots stand for gas. They are far fewer and far larger than molecules, and colored (air blue,
   fuel green, burned gas orange, cooled burned gas tan), though air and gasoline vapor are colorless.
-  Between the Flame and Molecules stops the dots are drawn at five smaller sizes in turn, each a tenth of the last, so that
+  Between the Flame and Molecules stops the dots are drawn at six smaller sizes in turn, each a tenth of the last, so that
   something is in view at every zoom; past them, the space between molecules is drawn dark.
 - Burned gas is drawn glowing orange. A real gasoline flame gives off only faint light, at short
   visible wavelengths, which we see as blue.

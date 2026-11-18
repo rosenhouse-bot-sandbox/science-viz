@@ -1,9 +1,9 @@
 // Engine: the controller. Two numbers drive the page: the zoom (0 = car ... 4 = molecules) and the crank
 // angle of the cylinder we follow (0 to 720 degrees, one cycle). Time runs slower the further in the zoom is.
 // The picture is redrawn only when something changes.
-import * as M from './model.js?v=c02dbdf6';
-import { makeGroup, place, centre, MAX_ATOMS } from './mol.js?v=c02dbdf6';
-import { WORLD_FS, FULL_VS, BLIT_FS, BALL_VS, BALL_FS } from './shaders.js?v=c02dbdf6';
+import * as M from './model.js?v=3a3dddea';
+import { makeGroup, place, centre, tiles, copies, LAYERS, MAX_COPIES, MAX_ATOMS } from './mol.js?v=3a3dddea';
+import { WORLD_FS, FULL_VS, BLIT_FS, BALL_VS, BALL_FS } from './shaders.js?v=3a3dddea';
 import { gamepad } from '../gamepad/gamepad.js';
 
 const { clamp, smooth, mix, wrap } = M;
@@ -105,15 +105,27 @@ const SUN = unit([0.42, 0.66, 0.62]);
 const hash = (a, b, c, d) => { let h = (a * 374761393 + b * 668265263 + c * 2147483647 + d * 1274126177) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 // The dots that stand for gas, at sizes between the ones drawn in the cylinder and the molecules: each size a hundredth,
 // then a tenth, of the last. They are always there; they are drawn once they are big enough to see.
-const DOT_R = [85e3, 8.5e3, 850, 85, 8.5];         // nm
+const DOT_R = [85e3, 8.5e3, 850, 85, 8.5, 0.85];         // nm
 // A size of dot is drawn while it is between a few pixels and a fair part of the screen across; the next size takes over from it.
 const dotShow = (rpx, rmin) => smooth(rmin, rmin * 2.2, rpx) * (1 - smooth(28, 70, rpx));
-function gasDots(n, halfW, halfH, pxPerNm) {
+// The part of the picture the gas must fill, in nm from the spot looked at: the free part of the screen and a little under the panel's edge.
+function gasBox(pxPerNm, hNm) {
+  const cx = free.x + free.w / 2, cy = free.y + free.h / 2, pad = 48;
+  return { x0: -Math.min(cx, free.w / 2 + pad) / pxPerNm, x1: Math.min(W - cx, free.w / 2 + pad) / pxPerNm, y0: -Math.min(H - cy, free.h / 2 + pad) / pxPerNm, y1: Math.min(cy, free.h / 2 + pad) / pxPerNm, dist: hNm / (2 * BALL_TAN) };
+}
+// How fully the molecules are drawn, 0 to 1. They come into view once their atoms are big enough to see, and never as
+// a patch: only when copies of the group can fill the whole view. The smallest dots give way to them at the same rate.
+const MOL_BUDGET = 200;
+function molShow(box, pxPerNm) {
+  const L = M.groupEdge(st.phi), f = 1 + 1.5 * L / box.dist, need = ((box.x1 - box.x0) * f / L + 1) * ((box.y1 - box.y0) * f / L + 1) * LAYERS;
+  return smooth(9, 20, pxPerNm) * (1 - smooth(0.55 * MOL_BUDGET, MOL_BUDGET, need));
+}
+function gasDots(n, box, pxPerNm, mols) {
   const g = M.gasAt(st.phi), stale = g.burn > 0.5 || wrap(st.phi) >= M.SPARK + 60 || wrap(st.phi) < 8;
   const rmin = Math.max(3, Math.sqrt(W * H * 3 / 8000) / 6.6), hotGas = g.burn > 0.5 && M.tempBurned(st.phi) > 1500;
   DOT_R.forEach((r, lv) => {
-    const show = dotShow(r * pxPerNm, rmin); if (show <= 0) return;
-    const cell = r * 6.6, x0 = Math.floor(-(halfW + r) / cell), x1 = Math.floor((halfW + r) / cell), y0 = Math.floor(-(halfH + r) / cell), y1 = Math.floor((halfH + r) / cell);
+    const rpx = r * pxPerNm, show = lv === DOT_R.length - 1 ? smooth(rmin, rmin * 2.2, rpx) * (1 - mols) : dotShow(rpx, rmin); if (show <= 0) return;
+    const cell = r * 6.6, x0 = Math.floor((box.x0 * 1.05 - r) / cell), x1 = Math.floor((box.x1 * 1.05 + r) / cell), y0 = Math.floor((box.y0 * 1.05 - r) / cell), y1 = Math.floor((box.y1 * 1.05 + r) / cell);
     if ((x1 - x0 + 1) * (y1 - y0 + 1) * 3 > 11000) return;
     for (let k = 0; k < 3; k++) for (let j = y0; j <= y1; j++) for (let i = x0; i <= x1; i++) {
       const o = n * 8, fuel = !stale && g.fuel && hash(i, j, k, lv + 40) < 1 / 15, c = stale ? (hotGas ? [1.0, 0.54, 0.16] : [0.56, 0.47, 0.40]) : fuel ? [0.30, 0.95, 0.42] : [0.36, 0.64, 1.0];
@@ -144,15 +156,15 @@ function draw() {
   gl.drawArrays(gl.TRIANGLES, 0, 3);
   // balls: the finer dots, then the molecules
   if (view.h < 0.02) {
-    const hNm = view.h * 1e9, pxPerNm = H / hNm, halfH = hNm / 2, halfW = halfH * W / H;
-    let n = 0;
-    if (hNm < 3000) n = place(group, st.phi, tau, ballData, halfW);
-    n = gasDots(n, halfW * 1.05, halfH * 1.05, pxPerNm);
+    const hNm = view.h * 1e9, pxPerNm = H / hNm, box = gasBox(pxPerNm, hNm);
+    let mols = molShow(box, pxPerNm); if (mols > 0 && copies(tiles(box, M.groupEdge(st.phi))) > MAX_COPIES) mols = 0;
+    let n = gasDots(0, box, pxPerNm, mols);      // the dots first: the molecules are drawn over them
+    if (mols > 0) n = place(group, st.phi, tau, ballData, box, mols, n);
     if (n) {
       gl.useProgram(balls.p); gl.bindVertexArray(ballVao); gl.bindBuffer(gl.ARRAY_BUFFER, ballBuf); gl.bufferSubData(gl.ARRAY_BUFFER, 0, ballData, 0, n * 8);
       const dist = hNm / (2 * BALL_TAN);
       gl.uniform2f(balls.u.uRes, cv.width, cv.height); gl.uniform2f(balls.u.uCenter, view.cx, view.cy); gl.uniform1f(balls.u.uTan, BALL_TAN); gl.uniform1f(balls.u.uDist, dist); gl.uniform1f(balls.u.uFog, Math.max(hNm * 1.1, 6));
-      gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS); gl.clearDepth(1); gl.clear(gl.DEPTH_BUFFER_BIT);
+      gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.clearDepth(1); gl.clear(gl.DEPTH_BUFFER_BIT);
       gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
       gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, n);
       gl.disable(gl.BLEND); gl.disable(gl.DEPTH_TEST); gl.bindVertexArray(null);

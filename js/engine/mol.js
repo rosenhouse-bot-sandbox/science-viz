@@ -1,7 +1,7 @@
 // Engine: the molecules. One small group of gas at the spot the Molecules scale looks at: two fuel molecules
 // with exactly the oxygen they need and the nitrogen that comes with it in air. Every atom is followed through
 // the burn, so that none appears or disappears: 2 C8H18 + 25 O2 -> 16 CO2 + 18 H2O.
-import { MIX, gasAt, groupEdge, INJECT, wrap, smooth, mix, clamp } from './model.js?v=c02dbdf6';
+import { MIX, gasAt, groupEdge, INJECT, wrap, smooth, mix, clamp } from './model.js?v=3a3dddea';
 
 export const ATOM = {      // radius in nm (about 0.85 of the van der Waals radius), and the usual model colors
   C: { r: 0.145, col: [0.17, 0.18, 0.20] }, H: { r: 0.095, col: [0.90, 0.90, 0.90] }, O: { r: 0.130, col: [0.86, 0.13, 0.10] }, N: { r: 0.133, col: [0.16, 0.32, 0.92] },
@@ -98,24 +98,42 @@ function local(m, phi, tau, L) {
 }
 // Where a molecule's middle is, in nm from the spot.
 export function centre(m, phi, tau, L) { const c = local(m, phi, tau, L); c[0] += flowOf(m, wrap(phi)) * L; return c; }
-// The group is repeated around itself so that the view is full: gas goes on in every direction. Copies are turned so the repeat is hard to see.
-const TURN = [(v) => v, (v) => [v[1], v[2], v[0]], (v) => [v[2], v[0], v[1]], (v) => [-v[0], v[2], v[1]]];
-// Fills out (x y z radius, r g b a per atom) and returns how many atoms were written.
-export function place(group, phi, tau, out, halfW) {
-  const p = wrap(phi), L = groupEdge(phi), x = gasAt(phi).burn, wide = halfW > 1.2 * L ? 2 : 1;
-  const memo = new Map();
+// The group is repeated around itself, as many times as it takes to fill the view: gas goes on in every direction.
+// Copies are turned, each its own way, so the repeat is hard to see.
+const turn = (v, t, o) => {
+  const s = t & 4 ? -1 : 1, k = t & 3;
+  if (k === 0) { o[0] = s * v[0]; o[1] = s * v[1]; o[2] = v[2]; } else if (k === 1) { o[0] = v[1]; o[1] = s * v[2]; o[2] = s * v[0]; }
+  else if (k === 2) { o[0] = s * v[2]; o[1] = v[0]; o[2] = s * v[1]; } else { o[0] = -v[0]; o[1] = s * v[2]; o[2] = s * v[1]; }
+};
+const turnOf = (ix, iy, iz) => { if (!(ix || iy || iz)) return 0; let h = (ix * 374761393 + iy * 668265263 + iz * 1274126177) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) % 8; };
+export const LAYERS = 3;      // copies along the line of sight
+// The copies that cover a view. box: how far the view reaches from the spot to the left, right, bottom and top (x0 x1 y0 y1,
+// in nm, at the spot's own distance) and how far the eye is from the spot (dist). The farthest copies must cover a little more.
+export function tiles(box, L) {
+  const f = 1 + 1.5 * L / box.dist, n = (v) => Math.max(1, Math.ceil((v * f + 0.5) / L - 0.5));
+  return { x0: -n(-box.x0), x1: n(box.x1), y0: -n(-box.y0), y1: n(box.y1), reach: Math.max(-box.x0, box.x1) * f };
+}
+export const copies = (t) => (t.x1 - t.x0 + 1) * (t.y1 - t.y0 + 1) * LAYERS;
+// How far, in widths of the cube, the gas that leaves must move so that no copy of it is left in a view that reaches this far.
+export const shiftFor = (reach, L) => Math.max(SHIFT, 2 * reach / L + 1.2) / SHIFT;
+// Fills out (x y z radius, r g b a per atom) from the place `start` on and returns how many atoms it now holds.
+// alpha is 1 (drawn fully) or less while the molecules come into view.
+export function place(group, phi, tau, out, box, alpha = 1, start = 0) {
+  const p = wrap(phi), L = groupEdge(phi), x = gasAt(phi).burn, t = tiles(box, L), far = shiftFor(t.reach, L), al = 1 + clamp(alpha, 0, 1);
+  const memo = new Map(), v = [0, 0, 0];
   const mid = (m) => { let c = memo.get(m); if (!c) { c = local(m, phi, tau, L); memo.set(m, c); } return c; };
-  let n = 0;
+  let n = start;
   for (const a of group.atoms) {
     const old = a.w && p > OUT(a.f) + 20, e = a.w && !old ? smooth(a.w[0], a.w[1], x) : 0, at = ATOM[a.el];
     const cR = mid(a.mR), oR = rot(a.mR, a.offR, tau);
     let q = [cR[0] + oR[0], cR[1] + oR[1], cR[2] + oR[2]], flow = flowOf(a.mR, p);
     if (e > 0) { const cP = mid(a.mP), oP = rot(a.mP, a.offP, tau); q = [0, 1, 2].map((i) => mix(q[i], cP[i] + oP[i], e)); flow = mix(flow, flowOf(a.mP, p), e); }
-    for (let ix = -wide; ix <= wide; ix++) for (let iy = -wide; iy <= wide; iy++) for (let iz = -1; iz <= 1; iz++) {
-      const v = ix || iy || iz ? TURN[((ix + 2) * 7 + (iy + 2) * 3 + (iz + 1) * 5) % 4](q) : q, o = n * 8;
-      out[o] = v[0] + (ix + flow) * L; out[o + 1] = v[1] + iy * L; out[o + 2] = v[2] + iz * L; out[o + 3] = at.r; out[o + 4] = at.col[0]; out[o + 5] = at.col[1]; out[o + 6] = at.col[2]; out[o + 7] = 1; n++;
+    flow *= far;
+    for (let ix = t.x0; ix <= t.x1; ix++) for (let iy = t.y0; iy <= t.y1; iy++) for (let iz = -1; iz <= 1; iz++) {
+      const o = n * 8; turn(q, turnOf(ix, iy, iz), v);
+      out[o] = v[0] + (ix + flow) * L; out[o + 1] = v[1] + iy * L; out[o + 2] = v[2] + iz * L; out[o + 3] = at.r; out[o + 4] = at.col[0]; out[o + 5] = at.col[1]; out[o + 6] = at.col[2]; out[o + 7] = al; n++;
     }
   }
   return n;
 }
-export const ATOMS = 2 * 26 + 25 * 2 + 94 * 2, MAX_ATOMS = 75 * ATOMS;
+export const ATOMS = 2 * 26 + 25 * 2 + 94 * 2, MAX_COPIES = 330, MAX_ATOMS = MAX_COPIES * ATOMS;

@@ -402,13 +402,13 @@ export const BALL_FS = `#version 300 es
 precision highp float; in vec2 vq; in vec4 vc; in vec3 vctr; in float vr; uniform float uDist, uFog; out vec4 o;
 void main(){
   float r2 = dot(vq, vq); if (r2 > 1.) discard;
-  if (vc.a < .99) { o = vec4(vc.rgb, vc.a * smoothstep(1., .35, sqrt(r2))); gl_FragDepth = 0.999; return; }   // a dot standing for gas: flat and soft
+  if (vc.a < .99) { o = vec4(vc.rgb, vc.a * smoothstep(1., .35, sqrt(r2))); gl_FragDepth = 1.; return; }   // a dot standing for gas: flat and soft, behind every atom, and never hiding another dot
   vec3 n = vec3(vq, -sqrt(1. - r2));
   float z = vctr.z + n.z * vr;
   vec3 L = normalize(vec3(-0.45, 0.65, -0.6));
   vec3 col = vc.rgb * (max(dot(n, L), 0.) * 1.35 + 0.42 * (0.6 + 0.4 * n.y)) + vec3(1.) * pow(max(dot(n, normalize(L + vec3(0., 0., -1.))), 0.), 60.) * .45;
   col += vc.rgb * pow(1. - max(-n.z, 0.), 3.) * .25;
   float f = clamp((z - uDist) / uFog, -1., 1.); col *= 1. - .55 * max(f, 0.);
-  o = vec4(pow(col / (1. + col * .2), vec3(1. / 2.2)), 1.);
+  o = vec4(pow(col / (1. + col * .2), vec3(1. / 2.2)), vc.a - 1.);      // an atom: its alpha is 1 more than how fully it is drawn
   gl_FragDepth = clamp(.5 + .45 * (z - uDist) / (uFog * 2.), 0.01, 0.99);
 }`;
