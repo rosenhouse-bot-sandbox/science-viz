@@ -1,10 +1,10 @@
 // Engine: the controller. Two numbers drive the page: the zoom (0 = car ... 4 = molecules) and the crank
 // angle of the cylinder we follow (0 to 720 degrees, one cycle). Time runs slower the further in the zoom is.
 // The picture is redrawn only when something changes.
-import * as M from './model.js?v=b9abb427';
-import { makeGroup, place, centre, tiles, copies, LAYERS, MAX_COPIES, MAX_ATOMS } from './mol.js?v=b9abb427';
-import { WORLD_FS, FULL_VS, BLIT_FS, BALL_VS, BALL_FS, DOT_VS, DOT_FS } from './shaders.js?v=b9abb427';
-import * as Flow from './flow.js?v=b9abb427';
+import * as M from './model.js?v=e513c19b';
+import { makeGroup, place, centre, tiles, copies, LAYERS, MAX_COPIES, MAX_ATOMS } from './mol.js?v=e513c19b';
+import { WORLD_FS, FULL_VS, BLIT_FS, BALL_VS, BALL_FS, DOT_VS, DOT_FS } from './shaders.js?v=e513c19b';
+import * as Flow from './flow.js?v=e513c19b';
 import { gamepad } from '../gamepad/gamepad.js';
 
 const { clamp, smooth, mix, wrap } = M;
@@ -182,8 +182,8 @@ function gasDotsWorld(c, gasCut, on) {
       let end = 1 - smooth(Flow.Z_END - 0.012, Flow.Z_END, Math.abs(z)); if (end <= 0) continue;      // the pipes are drawn to here
       const lastPt = flow.start[i + 1] - 1; if (flow.pos[lastPt * 3 + 2] * 1e-5 > -Flow.Z_END) end *= smooth(0, 40, flow.time[lastPt] - t);      // one of the few dots let go while still inside: it fades
       let burned = -1; for (let b = 0; b < 4; b++) { const bt = flow.burn[i * 4 + b]; if (bt <= t) burned = bt; }
-      let col, al;
-      if (burned >= 0) { const h = t - burned < 400 ? Math.sqrt(heat) : 0; col = [mix(DOT_COL.cool[0], DOT_COL.hot[0], h), mix(DOT_COL.cool[1], DOT_COL.hot[1], h), mix(DOT_COL.cool[2], DOT_COL.hot[2], h)]; al = 0.9; }
+      let col, al;      // heat goes by the dot's own time since its burn, so gas left over into the next cycle stays cool
+      if (burned >= 0) { const h = 1 - smooth(372, 640, t - 720 * Math.floor(burned / 720)); col = [mix(DOT_COL.cool[0], DOT_COL.hot[0], h), mix(DOT_COL.cool[1], DOT_COL.hot[1], h), mix(DOT_COL.cool[2], DOT_COL.hot[2], h)]; al = 0.9; }
       else if (flow.fuel[i] && flow.fuelAt[i] <= t) { col = DOT_COL.fuel; al = 1; } else { col = DOT_COL.air; al = 0.85; }
       if (glow > 0) {
         const dx = x - eye[0], dy = y - eye[1], dz = z - eye[2], len = Math.hypot(dx, dy, dz), ux = dx / len, uy = dy / len, uz = dz / len;
