@@ -1,7 +1,7 @@
 // Engine: the molecules. One small group of gas at the spot the Molecules scale looks at: two fuel molecules
 // with exactly the oxygen they need and the nitrogen that comes with it in air. Every atom is followed through
 // the burn, so that none appears or disappears: 2 C8H18 + 25 O2 -> 16 CO2 + 18 H2O.
-import { MIX, gasAt, groupEdge, INJECT, wrap, smooth, mix, clamp } from './model.js?v=8b38833b';
+import { MIX, gasAt, groupEdge, INJECT, wrap, smooth, mix, clamp } from './model.js?v=d3457e4b';
 
 export const ATOM = {      // radius in nm (about 0.85 of the van der Waals radius), and the usual model colors
   C: { r: 0.145, col: [0.17, 0.18, 0.20] }, H: { r: 0.095, col: [0.90, 0.90, 0.90] }, O: { r: 0.130, col: [0.86, 0.13, 0.10] }, N: { r: 0.133, col: [0.16, 0.32, 0.92] },
