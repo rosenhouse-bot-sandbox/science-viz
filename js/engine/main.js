@@ -1,9 +1,9 @@
 // Engine: the controller. Two numbers drive the page: the zoom (0 = car ... 4 = molecules) and the crank
 // angle of the cylinder we follow (0 to 720 degrees, one cycle). Time runs slower the further in the zoom is.
 // The picture is redrawn only when something changes.
-import * as M from './model.js?v=00c4aaa1';
-import { makeGroup, place, centre, tiles, copies, LAYERS, MAX_COPIES, MAX_ATOMS } from './mol.js?v=00c4aaa1';
-import { WORLD_FS, FULL_VS, BLIT_FS, BALL_VS, BALL_FS } from './shaders.js?v=00c4aaa1';
+import * as M from './model.js?v=d69ce63c';
+import { makeGroup, place, centre, tiles, copies, LAYERS, MAX_COPIES, MAX_ATOMS } from './mol.js?v=d69ce63c';
+import { WORLD_FS, FULL_VS, BLIT_FS, BALL_VS, BALL_FS } from './shaders.js?v=d69ce63c';
 import { gamepad } from '../gamepad/gamepad.js';
 
 const { clamp, smooth, mix, wrap } = M;
@@ -279,7 +279,7 @@ const PEAK_ATM = M.PEAK.p / M.ATM, AFTER_TOP = Math.round(M.PEAK.phi - 360), BUR
 const CAP = {
   car: () => ['Sixty miles an hour', `At ${M.MPH} mph in top gear this engine's main shaft, the crankshaft, turns ${num(M.RPM)} times a minute: ${M.RPM / 60} times a second. Slide Zoom to go under the hood. Time slows as you go in, so that each step can be seen.`],
   engine: () => ['Four pistons, one shaft', 'Each burn of fuel pushes one piston down its cylinder. A connecting rod turns that push into rotation of the crankshaft. One trip of a piston down or up is a stroke, and only every fourth stroke is a burn: the power stroke. The four cylinders burn in the order 1, 3, 4, 2, half a turn apart, so one of them is always on its power stroke. A cylinder glows from its spark until its burned gas has cooled. The belt turns the two camshafts once for every two turns of the crankshaft.'],
-  cylinder: (s, p) => (p >= M.SPARK && p < 360 ? ['Compression ends: the spark lights the mixture', `The piston is still rising, with ${360 - M.SPARK}° of crankshaft or less to go to the top, and the spark has already lit the mixture next to the plug. The burn starts this early because it takes time to spread: that way the pressure peaks just after the top, ${AFTER_TOP}° into the power stroke, and not late. The band on the cycle slider marks the burn, from the spark until the flame front has crossed the cylinder.`] : [
+  cylinder: (s, p) => (p >= M.SPARK && p < 360 ? ['Compression ends: the spark lights the mixture', `The piston is still rising, with ${360 - M.SPARK}° of crankshaft or less to go to the top, and the spark has already lit the mixture next to the plug. The burn starts this early because it takes time to spread: that way the pressure peaks just after the top, ${AFTER_TOP}° into the power stroke, and not late. The pale arc on the cycle dial marks the burn, from the spark until the flame front has crossed the cylinder.`] : [
     ['Intake: air and fuel come in', 'The piston goes down and the intake valve is open, so air flows in past it. The injector sprays gasoline straight into the cylinder, where it mixes with the air: about 15 parts of air to 1 of fuel, by mass.'],
     ['Compression: the mixture is squeezed', `The intake valve closes shortly after the piston starts back up; then both valves are shut. The piston squeezes the air and fuel into about a tenth of the volume. Squeezing heats the mixture and crowds its molecules together. A spark lights it when the crankshaft still has ${360 - M.SPARK}° to turn before the piston reaches the top.`],
     ['Power: the burned gas pushes the piston', `Burning makes the gas very hot, so its pressure rises to ${num(PEAK_ATM)} times that of the outside air just after the top. That pressure pushes the piston down, and the connecting rod turns the crankshaft. This is the only stroke in which the gas drives the piston. The exhaust valve starts to open ${540 - M.EVO}° before the bottom.`],
@@ -287,7 +287,7 @@ const CAP = {
   ][s]),
   flame: (s, p) => (p >= 400 && p < 540 ? ['The burned gas expands', 'All of the mixture has burned. The hot gas pushes the piston down, and cools as it spreads into the growing volume.']
     : p < M.SPARK || p >= 540
-    ? ['Between burns', `The spark plug makes a spark across its gap ${360 - M.SPARK}° of crankshaft before the piston reaches the top. Press Play to watch the burn, or drag the cycle slider to the end of Compression.`]
+    ? ['Between burns', `The spark plug makes a spark across its gap ${360 - M.SPARK}° of crankshaft before the piston reaches the top. Press Play to watch the burn, or turn the cycle dial to the end of Compression.`]
     : p < M.FLAME_OUT
       ? ['The burn spreads from the spark', `The spark lights the mixture next to the plug. The thin layer that is burning, the flame front, moves outward at about ${num(FRONT_SPEED)} m/s and crosses the cylinder in about ${Math.round(BURN_MS)} thousandths of a second. The spark comes before the top so that the pressure peaks just after it.`]
       : ['The front reaches the walls', `The flame front has crossed the cylinder; the last of the mixture, next to the walls, is still burning. The pressure peaks ${AFTER_TOP}° after the top, at ${num(PEAK_ATM)} times that of the outside air.`]),
@@ -350,7 +350,10 @@ function sync() {
   if (shown.pt !== pt) { shown.pt = pt; ci.setAttribute('aria-valuetext', pt); }
   for (const b of $('stops').children) b.setAttribute('aria-current', String(+b.dataset.i === lvl));
   [...$('zticks').children].forEach((t, i) => t.classList.toggle('on', i === lvl));
-  [...$('strokes').children].forEach((t, i) => t.classList.toggle('on', i === stroke));
+  const lit = p >= M.SPARK && p < M.FLAME_OUT;
+  [...$('strokes').children].forEach((t, i) => t.classList.toggle('on', i === stroke || (i === 4 && lit)));
+  const ha = (p / 2).toFixed(2); if (shown.hand !== ha) { shown.hand = ha; hand.setAttribute('transform', `rotate(${ha} 80 80)`); }
+  if (shown.arc !== stroke) { shown.arc = stroke; arcs.forEach((a, i) => a.setAttribute('opacity', i === stroke ? '1' : '0.6')); }
   set('slowV', slowText(slowAt(st.z)));
   const loop = loopAt(st.z), pl = st.play ? 'Pause' : lvl === 4 ? 'Play the burn of this group of molecules' : loop ? 'Play the burn' : 'Play';
   if (shown.play !== pl) { shown.play = pl; $('play').setAttribute('aria-pressed', String(st.play)); $('play').setAttribute('aria-label', pl); }
@@ -442,13 +445,32 @@ function togglePlay() {
 }
 
 // ---- controls ------------------------------------------------------------------------------------
+// The cycle dial. Its hand goes around once in a cycle: half the crankshaft's speed, as a camshaft turns. Four arcs for the
+// strokes, intake starting at the top, so the piston is at the top of its travel at 12 and at 6 o'clock; over them the burn,
+// from the spark until the front has reached the far corner, both from the model.
+const STROKE_COL = ['#8fc4ff', '#c9d3ea', '#ff9a3c', '#a59f98'], BURN_COL = '#fff3b0', RAD = Math.PI / 180;
+const dial = $('dial'), arcs = [];
+const svgEl = (name, attrs, into = dial) => { const e = document.createElementNS('http://www.w3.org/2000/svg', name); for (const k in attrs) e.setAttribute(k, attrs[k]); into.append(e); return e; };
+const onDial = (r, a) => `${(80 + r * Math.sin(a * RAD)).toFixed(2)} ${(80 - r * Math.cos(a * RAD)).toFixed(2)}`;
+const arcPath = (r, a, b) => `M${onDial(r, a)}A${r} ${r} 0 0 1 ${onDial(r, b)}`;
+for (let i = 0; i < 4; i++) arcs.push(svgEl('path', { d: arcPath(64, i * 90 + 1.6, i * 90 + 88.4), fill: 'none', stroke: STROKE_COL[i], 'stroke-width': 10 }));
+svgEl('path', { d: arcPath(64, M.SPARK / 2, M.FLAME_OUT / 2), fill: 'none', stroke: BURN_COL, 'stroke-width': 10 });
+svgEl('path', { d: `M${onDial(54, M.SPARK / 2)}L${onDial(74, M.SPARK / 2)}`, stroke: '#fff', 'stroke-width': 2.5, 'stroke-linecap': 'round' });
+const hand = svgEl('g', {});
+svgEl('path', { d: 'M80 46V16', stroke: '#EAF0FF', 'stroke-width': 3, 'stroke-linecap': 'round' }, hand);
+svgEl('circle', { cx: 80, cy: 16, r: 10, fill: '#EAF0FF', stroke: '#05070F', 'stroke-width': 3 }, hand);
 STOPS.forEach((s, i) => {
   const b = document.createElement('button'); b.type = 'button'; b.textContent = s.name; b.dataset.i = i; b.style.left = (i / LAST * 100) + '%'; b.addEventListener('click', () => zoomTo(i)); $('stops').append(b);
   const t = document.createElement('i'); t.style.left = (i / LAST * 100) + '%'; $('zticks').append(t);
 });
-// the cycle slider's line: the four strokes, and over them the burn, from the spark to the front reaching the far corner
-{ const a = (M.SPARK / 7.2).toFixed(2), b = (M.FLAME_OUT / 7.2).toFixed(2); $('cycle').style.setProperty('--year', `linear-gradient(90deg,#8fc4ff 0 25%,#c9d3ea 25% ${a}%,#fff3b0 ${a}% ${b}%,#ff9a3c ${b}% 75%,#a59f98 75% 100%)`); }
-M.STROKES.forEach((s) => { const t = document.createElement('span'); t.textContent = s; $('strokes').append(t); });
+[...M.STROKES, 'Burn, from the spark'].forEach((s, i) => { const t = document.createElement('span'), c = document.createElement('i'); c.style.setProperty('--c', i < 4 ? STROKE_COL[i] : BURN_COL); t.append(c, s); $('strokes').append(t); });
+// Turning the dial: the hand points at the finger. Past the top it goes on into the next cycle, or back into the last one.
+{ let held = false;
+  const turn = (e) => { const r = dial.getBoundingClientRect(), a = Math.atan2(e.clientX - r.left - r.width / 2, r.top + r.height / 2 - e.clientY) / RAD; st.phi = Math.round(wrap(a * 2) * 2) / 2 % 720; st.play = false; phiSet = true; touch(); };
+  dial.addEventListener('pointerdown', (e) => { if (e.button) return; e.preventDefault(); held = true; dial.setPointerCapture(e.pointerId); turn(e); });
+  dial.addEventListener('pointermove', (e) => { if (held) turn(e); });
+  for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) dial.addEventListener(type, () => { held = false; });
+}
 // A press on the Zoom line away from its knob glides there, as a press on a scale's name does, and the knob glides with
 // the picture. A drag of the knob follows the finger directly; so does a drag that began on the line, once the glide has caught up with it.
 let glide = false;
@@ -465,7 +487,7 @@ $('cycle').addEventListener('input', (e) => { st.phi = +e.target.value; shown.pv
 $('play').addEventListener('click', togglePlay);
 // An arrow key moves a slider by a step that can be seen: a twentieth of a scale, or a few degrees (half a degree among the molecules).
 $('zoom').addEventListener('keydown', (e) => { const d = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 }[e.key]; if (!d) return; e.preventDefault(); setZoom(st.z + d * 0.05); });
-$('cycle').addEventListener('keydown', (e) => { const d = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 }[e.key]; if (!d) return; e.preventDefault(); st.phi = clamp(wrap(st.phi) + d * (st.z > 3.5 ? 0.5 : st.z > 2.5 ? 1 : 5), 0, 720); st.play = false; phiSet = true; touch(); });
+$('cycle').addEventListener('keydown', (e) => { const d = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 }[e.key]; if (!d) return; e.preventDefault(); st.phi = wrap(st.phi + d * (st.z > 3.5 ? 0.5 : st.z > 2.5 ? 1 : 5)); st.play = false; phiSet = true; touch(); });
 cv.addEventListener('wheel', (e) => { e.preventDefault(); setZoom(st.z - e.deltaY * (e.deltaMode ? 0.03 : 0.0012)); }, { passive: false });
 // Two fingers on the picture: spreading them zooms in and pinching them zooms out, exactly as dragging the Zoom
 // slider does, and the slider follows. One full spread is about one scale. While the browser's own zoom is in, the
