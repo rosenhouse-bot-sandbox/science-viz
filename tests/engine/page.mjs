@@ -70,6 +70,27 @@ for (const [name, width, height, motion] of quick ? SIZES.slice(0, 1) : SIZES) {
   if (motion !== 'reduce') { if ((await state()).play) fail(`${name}: Play did not pause`); if (await page.getAttribute('#play', 'aria-label') !== 'Play') fail(`${name}: the Play button's name did not change back`); }
   else { if (!(await state()).play) fail(`${name}: Play did not start the engine when pressed`); await page.click('#play'); }
 
+  // a press on the Zoom line away from its knob glides there (with reduced motion it goes straight there), and the knob goes with the picture; a drag of the knob follows the pointer directly
+  {
+    const r = await page.$eval('#zoom', (el) => { const b = el.getBoundingClientRect(); return [b.x, b.y, b.width, b.height]; }), x = r[0] + r[2] * 0.6, y = r[1] + r[3] / 2, want = (r[2] * 0.6 - 9) / (r[2] - 18) * 4;
+    if (width < 600) await page.touchscreen.tap(x, y); else await page.mouse.click(x, y);
+    await frame(); const both = await page.evaluate(() => ({ ...window.__engine.st, busy: window.__engine.busy, drawn: window.__engine.drawn.z, knob: +document.getElementById('zoom').value })); s = both; const knob = both.knob;
+    if (motion === 'reduce') { if (Math.abs(s.z - want) > 0.1) fail(`${name}: with reduced motion a press on the Zoom line left the zoom at ${s.z}, not ${want.toFixed(2)}`); }
+    else {
+      if (s.z > want / 2 || !s.busy) fail(`${name}: a press on the Zoom line jumped the zoom to ${s.z} instead of gliding`);
+      if (Math.abs(knob - both.drawn) > 0.01) fail(`${name}: after a press on the Zoom line the knob is at ${knob} and the picture at ${both.drawn}`);
+      await page.waitForFunction(() => !window.__engine.busy, null, { timeout: 240000 }); s = await state();
+      if (Math.abs(s.z - want) > 0.1) fail(`${name}: the glide from a press on the Zoom line ended at ${s.z}, not ${want.toFixed(2)}`);
+    }
+    if (width >= 600) {
+      const kx = r[0] + 9 + s.z / 4 * (r[2] - 18);
+      await page.mouse.move(kx, y); await page.mouse.down(); await page.mouse.move(kx + 30, y); await frame();
+      const d = await state(); await page.mouse.up();
+      if (d.busy || Math.abs(d.z - s.z - 30 / (r[2] - 18) * 4) > 0.03) fail(`${name}: dragging the Zoom knob 30 px took the zoom from ${s.z} to ${d.z}${d.busy ? ', gliding' : ''}`);
+    }
+    await put('zoom', 0);
+  }
+
   // every scale button; with reduced motion the change is immediate
   const stops = await page.$$('#stops button');
   if (stops.length !== 5) fail(`${name}: expected five scales, found ${stops.length}`);

@@ -118,6 +118,11 @@ Before pushing:
   controller at 1280 × 800 and fails if the ring cannot reach a control, a stick, trigger or bumper
   does nothing, or the picture of the pad does not list exactly what the page maps. A new page
   needs a mapping, and an entry in `PAGES` there.
+- After changing how a page zooms, or what a finger on its picture does, run `node tests/pinch/run.mjs`
+  (or with page names: `maple`, `engine`, `vesicle`, `rainbows`). It puts two simulated fingers on the
+  picture at a phone size and fails if spreading them does not zoom in, the slider does not move with
+  them, the browser zooms the whole page, or the zoom and the time move in the same frame. A pinch
+  must go through the same state as the page's Zoom slider. It cannot stand in for a real phone.
 - A frozen screenshot does not show a jump. When a person reports one, first add the gesture to
   `tests/smooth/scenarios.mjs` and see the report show it, then fix it.
 - Load each affected page in a browser with the console open, at a desktop width and at a phone

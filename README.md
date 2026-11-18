@@ -572,7 +572,9 @@ day it falls, at every scale from the whole tree down to its pigment molecules. 
   size of the view is one smooth curve along the slider (no change of pace at a stop), a flight to
   a stop eases in and out and keeps its speed if another stop is pressed on the way, and things
   smaller than a pixel show only as their share of it, so nothing is switched on at a zoom level.
-  The mouse wheel zooms too (one notch is the same change of scale everywhere); an arrow key moves
+  The mouse wheel zooms too (one notch is the same change of scale everywhere), and so do two fingers
+  on the picture: spreading them zooms in, about one scale for a full spread, and the Zoom slider
+  moves with them. An arrow key moves
   the Zoom slider a twentieth of a scale and the Season slider five thousandths of the year.
 - **Season** runs from 25 March to 20 December, with a Play button. The date and the zoom never
   move together: while the zoom is moving the year waits, then goes on. Summer, when little changes,

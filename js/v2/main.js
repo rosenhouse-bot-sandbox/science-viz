@@ -342,7 +342,7 @@ function nudge(dy, dp, dz) {
   c.gd = c.type === 'look' ? clamp((c.gd + 0.8) * dz - 0.8, l.dist[0], l.dist[1]) : clamp(c.gd * dz, l.dist[0], l.dist[1]);
   if (!touched) { touched = true; $('hint').classList.add('gone'); }
 }
-canvas.addEventListener('pointerdown', e => { if (e.pointerType === 'mouse' && e.button !== 0) return; canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]); pinch = 0; });
+canvas.addEventListener('pointerdown', e => { if (e.pointerType === 'mouse' && e.button !== 0) return; canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]); pinch = 0; if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch = Math.hypot(a[0] - b[0], a[1] - b[1]); } });   // the pinch is measured from where the second finger lands
 canvas.addEventListener('pointermove', e => {
   const p = ptrs.get(e.pointerId); if (!p) return;
   const dx = e.clientX - p[0], dy = e.clientY - p[1]; p[0] = e.clientX; p[1] = e.clientY;
