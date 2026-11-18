@@ -1,9 +1,9 @@
 // Japanese maple: the controller. Two numbers drive the page: the zoom (0 = tree ... 4 = molecules)
 // and the season (0 = late March ... 1 = late December). The picture is redrawn only when one changes.
-import { dayOf, dateOf, dayLength, sunAt, takenIn, PHASES, phaseAt, LAT, clamp, smooth, mix, css, leafRGB } from './model.js?v=383cadf7';
-import { makeWorld, TARGETS, CUT as LEAF_CUT } from './world.js?v=383cadf7';
-import { quatOf, qmul, qrot, slerp, add, mul, unit, cross, lerp3 } from './gl.js?v=383cadf7';
-import { drawSpectrum, drawStalk, drawChain } from './figs.js?v=383cadf7';
+import { dayOf, dateOf, dayLength, sunAt, takenIn, PHASES, phaseAt, LAT, clamp, smooth, mix, css, leafRGB } from './model.js?v=c721e257';
+import { makeWorld, TARGETS, CUT as LEAF_CUT } from './world.js?v=c721e257';
+import { quatOf, qmul, qrot, slerp, add, mul, unit, cross, lerp3 } from './gl.js?v=c721e257';
+import { drawSpectrum, drawStalk, drawChain } from './figs.js?v=c721e257';
 import { gamepad } from '../gamepad/gamepad.js';
 
 const $ = (id) => document.getElementById(id);
@@ -26,7 +26,7 @@ const TB = world ? world.tree.bounds : { x0: -3, x1: 3, y1: 4, z0: -3, z1: 3 };
 STOPS[0].w = Math.max(TB.x1 - TB.x0, (TB.z1 - TB.z0) * 0.8) * 1.12; STOPS[0].h = (TB.y1 + 0.5) * 1.06;   // the Tree scale frames the tree as grown
 const TREE_AT = [(TB.x0 + TB.x1) / 2, TB.y1 * 0.47, (TB.z0 + TB.z1) / 2];
 const PHI = [78, 78, 11, 8, 48].map((d) => d * Math.PI / 180), PHI_VAC = 8 * Math.PI / 180;   // how far the camera is tipped up from the cut wall's level, at each scale
-const HOP_OUT = 3.17;                    // changing where the Molecules scale looks pulls back to this zoom on the way
+const HOP_RHO2 = 2.8;                    // changing where the Molecules scale looks pulls back only until the view is about half this many times as wide as the way to go
 
 const CAP = {
   tree: [
@@ -125,7 +125,23 @@ function knots() { const U = STOPS.map((_, i) => Math.log(fitK(i))), n = U.lengt
 function uOf(z) { const i = Math.min(LAST - 1, Math.floor(z)), g = z - i, g2 = g * g, g3 = g2 * g, { U, m } = KN; return (2 * g3 - 3 * g2 + 1) * U[i] + (g3 - 2 * g2 + g) * m[i] + (3 * g2 - 2 * g3) * U[i + 1] + (g3 - g2) * m[i + 1]; }
 function zOf(u) { let a = 0, b = LAST; for (let n = 0; n < 40; n++) { const c = (a + b) / 2; if (uOf(c) < u) a = c; else b = c; } return (a + b) / 2; }
 // the zoom actually shown: the slider's, pulled back during a hop between the two places in the cell
-const zShown = () => hop ? mix(st.z, Math.min(st.z, HOP_OUT), smooth(Math.min(hop.t, 1 - hop.t) / 0.36)) : st.z;   // eased at both ends, held in the middle while the view moves across
+const zShown = () => hop && hop.out ? zOf(clamp(uOf(st.z) - hop.out, KN.U[0], KN.U[LAST])) : st.z;
+// A hop between the two places in the cell: one move that pulls back and crosses together, as far back as the crossing needs and no
+// farther (van Wijk and Nuij's smooth zoom and pan). u is how far across, wd how wide the view, both in metres.
+const HOP_AWAY = Math.abs(TARGETS.vacuole[1] - TARGETS.membrane[1]) * 1e-6;   // metres between the two places in a full-grown leaf
+function hopTo(to) {
+  const side = Math.min(free.w, free.h), w0 = side / Math.exp(uOf(zShown())), w1 = side / Math.exp(uOf(st.z)), u1 = HOP_AWAY * cellScale * Math.abs(to - w), rho = Math.sqrt(HOP_RHO2);
+  if (!(u1 > 0)) { hop = null; w = to; return; }
+  const r0 = -Math.asinh((w1 * w1 - w0 * w0 + HOP_RHO2 * HOP_RHO2 * u1 * u1) / (2 * w0 * HOP_RHO2 * u1)), r1 = -Math.asinh((w1 * w1 - w0 * w0 - HOP_RHO2 * HOP_RHO2 * u1 * u1) / (2 * w1 * HOP_RHO2 * u1));
+  hop = { from: w, to, t: 0, w0, w1, u1, rho, r0, S: (r1 - r0) / rho, out: Math.log(w0 / w1), dur: 0.6 + (r1 - r0) / 6.5 };
+}
+function hopStep(dt) {
+  hop.t = Math.min(1, hop.t + dt / hop.dur);
+  if (hop.t >= 1) { w = hop.to; hop = null; return; }
+  const x = hop.rho * hop.S * smooth(hop.t) + hop.r0, c0 = Math.cosh(hop.r0);
+  w = mix(hop.from, hop.to, clamp(hop.w0 / HOP_RHO2 * (c0 * Math.tanh(x) - Math.sinh(hop.r0)) / hop.u1));
+  hop.out = Math.log(hop.w0 * c0 / Math.cosh(x) / hop.w1);
+}
 
 function aim(z) {
   const i = Math.min(LAST - 1, Math.floor(z)), g = z - i;
@@ -227,7 +243,7 @@ function frame(now) {
     if (Math.abs(out - goal) < 0.004 && Math.abs(fly.v) < 0.05) { st.z = fly.to; fly = null; } else st.z = zOf(out);
     dirty = true;
   }
-  if (hop && !dating) { hop.t = Math.min(1, hop.t + dt / hop.dur); w = mix(hop.from, hop.to, smooth((hop.t - 0.36) / 0.28)); if (hop.t >= 1) hop = null; dirty = true; }
+  if (hop && !dating) { hopStep(dt); dirty = true; }
   const zs = zShown(), lit = lightOn && !still && zs > LIGHT_FROM;      // light arriving moves by itself; with reduced motion it is off until the visitor switches it on
   if (lit) { try { world.update(dayOf(st.s)); const p = world.focus().p; if (zs > 3.5) world.stepLight(dt, st.where, p); world.stepSun(dt, p); } catch (e) { oops(e); } dirty = true; }
   if (dirty) {
@@ -252,7 +268,7 @@ function zoomTo(z) {
 function look(where) {
   if (where === st.where) return;
   st.where = where; const to = where === 'vacuole' ? 1 : 0;
-  if (reduced || st.z <= 3.01) { hop = null; w = to; zoomAt = performance.now(); zNew = true; } else hop = { from: w, to, t: 0, dur: st.z > HOP_OUT ? 3.4 : 1.4 };
+  if (reduced || st.z <= 3.01) { hop = null; w = to; zoomAt = performance.now(); zNew = true; } else hopTo(to);
   touch();
 }
 
