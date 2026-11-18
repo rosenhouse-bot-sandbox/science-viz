@@ -776,7 +776,7 @@ What is computed, not typed:
   the top) until the front has crossed the cylinder (19° after it).
 - The cycle is a dial, because it repeats. Its hand goes around once for the four strokes: two turns
   of the crankshaft, one of a camshaft. Intake starts at 12 o'clock, so the piston is at the top of its
-  travel at 12 and at 6. Play sits in the middle. A real range input lies over the dial, unseen, for
+  travel at 12 and at 6. A real range input lies in the dial, unseen, for
   the keyboard, a screen reader and a controller; a mouse or a finger turns the hand.
 - At Molecules, a group of 121 molecules (2 fuel, 25 oxygen, 94 nitrogen) in a cube whose edge
   follows the pressure and temperature at that spot (about 23 nm during intake, 13 nm at the spark).

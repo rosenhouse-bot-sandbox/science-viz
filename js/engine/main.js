@@ -1,9 +1,9 @@
 // Engine: the controller. Two numbers drive the page: the zoom (0 = car ... 4 = molecules) and the crank
 // angle of the cylinder we follow (0 to 720 degrees, one cycle). Time runs slower the further in the zoom is.
 // The picture is redrawn only when something changes.
-import * as M from './model.js?v=d69ce63c';
-import { makeGroup, place, centre, tiles, copies, LAYERS, MAX_COPIES, MAX_ATOMS } from './mol.js?v=d69ce63c';
-import { WORLD_FS, FULL_VS, BLIT_FS, BALL_VS, BALL_FS } from './shaders.js?v=d69ce63c';
+import * as M from './model.js?v=f0ebdc0f';
+import { makeGroup, place, centre, tiles, copies, LAYERS, MAX_COPIES, MAX_ATOMS } from './mol.js?v=f0ebdc0f';
+import { WORLD_FS, FULL_VS, BLIT_FS, BALL_VS, BALL_FS } from './shaders.js?v=f0ebdc0f';
 import { gamepad } from '../gamepad/gamepad.js';
 
 const { clamp, smooth, mix, wrap } = M;
@@ -449,7 +449,7 @@ function togglePlay() {
 // strokes, intake starting at the top, so the piston is at the top of its travel at 12 and at 6 o'clock; over them the burn,
 // from the spark until the front has reached the far corner, both from the model.
 const STROKE_COL = ['#8fc4ff', '#c9d3ea', '#ff9a3c', '#a59f98'], BURN_COL = '#fff3b0', RAD = Math.PI / 180;
-const dial = $('dial'), arcs = [];
+const dial = $('dial'), dialBox = $('dialBox'), arcs = [];
 const svgEl = (name, attrs, into = dial) => { const e = document.createElementNS('http://www.w3.org/2000/svg', name); for (const k in attrs) e.setAttribute(k, attrs[k]); into.append(e); return e; };
 const onDial = (r, a) => `${(80 + r * Math.sin(a * RAD)).toFixed(2)} ${(80 - r * Math.cos(a * RAD)).toFixed(2)}`;
 const arcPath = (r, a, b) => `M${onDial(r, a)}A${r} ${r} 0 0 1 ${onDial(r, b)}`;
@@ -457,7 +457,8 @@ for (let i = 0; i < 4; i++) arcs.push(svgEl('path', { d: arcPath(64, i * 90 + 1.
 svgEl('path', { d: arcPath(64, M.SPARK / 2, M.FLAME_OUT / 2), fill: 'none', stroke: BURN_COL, 'stroke-width': 10 });
 svgEl('path', { d: `M${onDial(54, M.SPARK / 2)}L${onDial(74, M.SPARK / 2)}`, stroke: '#fff', 'stroke-width': 2.5, 'stroke-linecap': 'round' });
 const hand = svgEl('g', {});
-svgEl('path', { d: 'M80 46V16', stroke: '#EAF0FF', 'stroke-width': 3, 'stroke-linecap': 'round' }, hand);
+svgEl('path', { d: 'M80 80V16', stroke: '#EAF0FF', 'stroke-width': 3, 'stroke-linecap': 'round' }, hand);
+svgEl('circle', { cx: 80, cy: 80, r: 5, fill: '#EAF0FF' }, hand);
 svgEl('circle', { cx: 80, cy: 16, r: 10, fill: '#EAF0FF', stroke: '#05070F', 'stroke-width': 3 }, hand);
 STOPS.forEach((s, i) => {
   const b = document.createElement('button'); b.type = 'button'; b.textContent = s.name; b.dataset.i = i; b.style.left = (i / LAST * 100) + '%'; b.addEventListener('click', () => zoomTo(i)); $('stops').append(b);
@@ -466,10 +467,10 @@ STOPS.forEach((s, i) => {
 [...M.STROKES, 'Burn, from the spark'].forEach((s, i) => { const t = document.createElement('span'), c = document.createElement('i'); c.style.setProperty('--c', i < 4 ? STROKE_COL[i] : BURN_COL); t.append(c, s); $('strokes').append(t); });
 // Turning the dial: the hand points at the finger. Past the top it goes on into the next cycle, or back into the last one.
 { let held = false;
-  const turn = (e) => { const r = dial.getBoundingClientRect(), a = Math.atan2(e.clientX - r.left - r.width / 2, r.top + r.height / 2 - e.clientY) / RAD; st.phi = Math.round(wrap(a * 2) * 2) / 2 % 720; st.play = false; phiSet = true; touch(); };
-  dial.addEventListener('pointerdown', (e) => { if (e.button) return; e.preventDefault(); held = true; dial.setPointerCapture(e.pointerId); turn(e); });
-  dial.addEventListener('pointermove', (e) => { if (held) turn(e); });
-  for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) dial.addEventListener(type, () => { held = false; });
+  const turn = (e) => { const r = dialBox.getBoundingClientRect(), a = Math.atan2(e.clientX - r.left - r.width / 2, r.top + r.height / 2 - e.clientY) / RAD; st.phi = Math.round(wrap(a * 2) * 2) / 2 % 720; st.play = false; phiSet = true; touch(); };
+  dialBox.addEventListener('pointerdown', (e) => { if (e.button) return; e.preventDefault(); held = true; dialBox.setPointerCapture(e.pointerId); turn(e); });
+  dialBox.addEventListener('pointermove', (e) => { if (held) turn(e); });
+  for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) dialBox.addEventListener(type, () => { held = false; });
 }
 // A press on the Zoom line away from its knob glides there, as a press on a scale's name does, and the knob glides with
 // the picture. A drag of the knob follows the finger directly; so does a drag that began on the line, once the glide has caught up with it.

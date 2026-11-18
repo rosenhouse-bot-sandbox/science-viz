@@ -44,14 +44,14 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family
 .stops button:hover{color:var(--ink)}
 .stops button[aria-current="true"]{color:var(--ink);font-weight:600}
 
-.transport{display:grid;grid-template-columns:124px 1fr;gap:14px;align-items:center}
+.transport{display:grid;grid-template-columns:136px 1fr;gap:14px;align-items:center}
 /* the cycle as a dial: the hand goes around once for the four strokes, which is two turns of the crankshaft and one of a
-   camshaft. The real slider lies over it, unseen, for the keyboard, a screen reader and a controller; a pointer turns the dial. */
-.dial{position:relative;width:124px;height:124px}
-.dial svg#dial{position:absolute;inset:0;width:100%;height:100%;border-radius:50%;cursor:pointer;touch-action:none;-webkit-user-select:none;user-select:none}
+   camshaft. The real slider lies in it, unseen, for the keyboard, a screen reader and a controller; a pointer on the dial turns the hand. */
+.dial{position:relative;width:136px;height:136px;border-radius:50%;cursor:pointer;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.dial svg{position:absolute;inset:0;width:100%;height:100%;border-radius:50%;pointer-events:none}
 .dial input[type=range]{position:absolute;inset:0;width:100%;height:100%;opacity:0;pointer-events:none}
 .dial input:focus-visible ~ svg{outline:2px solid var(--focus);outline-offset:1px}
-.dial .play{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:1}
+.prog .head{display:grid;grid-template-columns:46px 1fr;gap:10px;align-items:center}
 .play{width:46px;height:46px;border-radius:50%;border:1px solid var(--line);background:rgba(234,240,255,.09);color:var(--ink);display:grid;place-items:center;cursor:pointer;padding:0}
 .play:hover{background:rgba(234,240,255,.18)}
 .play .i-pause{display:none}.play[aria-pressed="true"] .i-play{display:none}.play[aria-pressed="true"] .i-pause{display:block}
@@ -125,7 +125,7 @@ input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;bac
 .prog .lab{display:grid;justify-content:start;gap:1px}
 .prog .lab label{white-space:nowrap}
 .prog .lab b{text-align:left}
-.strokes{display:grid;gap:2px;font-size:0.8125rem;color:var(--ink3);margin-top:5px}
+.strokes{display:grid;gap:1px;font-size:0.8125rem;color:var(--ink3);margin-top:8px}
 .strokes span{display:flex;align-items:center;gap:8px}
 .strokes i{flex:none;width:14px;height:6px;border-radius:3px;background:var(--c);opacity:.6}
 .strokes span.on{color:var(--ink);font-weight:600}
