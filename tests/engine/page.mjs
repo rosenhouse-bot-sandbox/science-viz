@@ -154,7 +154,13 @@ for (const [name, width, height, motion] of quick ? SIZES.slice(0, 1) : SIZES) {
   // time is slower further in
   { const slow = []; for (const z of [0, 1, 2, 3, 4]) { await put('zoom', z); slow.push(await page.textContent('#slowV')); }
     const n = slow.map((t) => (t === 'Real speed' ? 1 : +t.replace(/[^0-9]/g, '')));
-    for (let i = 1; i < 5; i++) if (!(n[i] > n[i - 1])) fail(`${name}: time is not slower at scale ${i} than at scale ${i - 1} (${slow.join(', ')})`); }
+    for (let i = 1; i < 5; i++) if (!(i === 1 ? n[i] >= n[i - 1] : n[i] > n[i - 1])) fail(`${name}: time is not slower at scale ${i} than at scale ${i - 1} (${slow.join(', ')})`);
+    // the Car opens slowed; Real speed is a button there, and has nothing to do further in
+    await put('zoom', 0); await page.click('#real'); await frame();
+    if (await page.textContent('#slowV') !== 'Real speed' || await page.getAttribute('#real', 'aria-pressed') !== 'true') fail(`${name}: the Real speed button did not give real speed at the Car`);
+    await put('zoom', 2); if (!(await page.isDisabled('#real'))) fail(`${name}: the Real speed button is not switched off at the Cylinder`);
+    await put('zoom', 0); await page.click('#real'); await frame();
+    if (n[0] === 1 || await page.textContent('#slowV') !== slow[0]) fail(`${name}: the Car does not go back to its slowed speed (${slow[0]})`); }
 
   // the zoom and the crank angle never move in the same frame
   if (name === 'desktop') {

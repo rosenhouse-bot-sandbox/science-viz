@@ -9,7 +9,7 @@
 // or let spread evenly. The dots are then moved along that flow, one degree of crankshaft at a time, and the
 // path of each is kept, so the picture at any angle is the same however it was reached.
 // Not modeled: turbulence, the tumble and swirl of a real intake, and pressure waves in the pipes.
-import * as M from './model.js?v=752f5c78';
+import * as M from './model.js?v=b9abb427';
 
 const { clamp, mix, DECK, BORE, ROOF, ROOF_SLOPE, EVO, IVC, SPARK } = M;
 const AX = M.VALVE_AXIS, VS = M.VALVE_SEAT, VX = 0.0175;            // the valves sit 17.5 mm either side of the cylinder's middle
