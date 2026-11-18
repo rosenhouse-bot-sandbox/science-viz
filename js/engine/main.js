@@ -1,9 +1,9 @@
 // Engine: the controller. Two numbers drive the page: the zoom (0 = car ... 4 = molecules) and the crank
 // angle of the cylinder we follow (0 to 720 degrees, one cycle). Time runs slower the further in the zoom is.
 // The picture is redrawn only when something changes.
-import * as M from './model.js?v=8b38833b';
-import { makeGroup, place, centre, tiles, copies, LAYERS, MAX_COPIES, MAX_ATOMS } from './mol.js?v=8b38833b';
-import { WORLD_FS, FULL_VS, BLIT_FS, BALL_VS, BALL_FS } from './shaders.js?v=8b38833b';
+import * as M from './model.js?v=d3457e4b';
+import { makeGroup, place, centre, tiles, copies, LAYERS, MAX_COPIES, MAX_ATOMS } from './mol.js?v=d3457e4b';
+import { WORLD_FS, FULL_VS, BLIT_FS, BALL_VS, BALL_FS } from './shaders.js?v=d3457e4b';
 import { gamepad } from '../gamepad/gamepad.js';
 
 const { clamp, smooth, mix, wrap } = M;
@@ -33,24 +33,11 @@ const SLOW = [[0, 1], [0.04, 1], [0.15, 60], [1, 60], [2, 600], [3, 6000], [3.5,
 const slowAt = (z) => { for (let i = 1; i < SLOW.length; i++) if (z <= SLOW[i][0]) { const [a, sa] = SLOW[i - 1], [b, sb] = SLOW[i]; return Math.exp(mix(Math.log(sa), Math.log(sb), (z - a) / (b - a))); } return SLOW[SLOW.length - 1][1]; };
 const BURN_LOOP = [325, 402], SPOT_LOOP = [M.SPOT_BURNS - 4, M.SPOT_BURNS + 8];
 const loopAt = (z) => (z > 3.5 ? SPOT_LOOP : z > 2.5 ? BURN_LOOP : null);
-// Ways for the page to open, to try side by side: #open=paused, slow, smooth or ease, or several with commas between.
-//   paused  nothing runs until Play is pressed; the cycle waits at the start of intake
-//   slow    the Car runs as slowly as the Engine does, until Real speed is pressed
-//   smooth  when the cycle is too quick to follow, the dial shows a blur and no stroke or pressure is marked
-//   ease    the Car runs slowly until the first zoom in; after that, time speeds up gradually on the way back out
-const OPEN = new Set((new URLSearchParams(location.hash.slice(1)).get('open') || '').split(',').filter((k) => ['paused', 'slow', 'smooth', 'ease'].includes(k)));
-const openKey = [...OPEN].sort().join(',');
-const EASE_SLOW = 60, EASE_IN = 0.6;    // the Engine's slowing, and the zoom by which the eased speed has reached it
-let realSpeed = false, beenIn = false;
-const slowNow = (z) => {
-  const s = slowAt(z);
-  if (OPEN.has('slow') && !realSpeed) return Math.max(s, EASE_SLOW);
-  if (!OPEN.has('ease')) return s;
-  if (!beenIn) return Math.max(s, EASE_SLOW);
-  return z < EASE_IN ? Math.exp(Math.log(EASE_SLOW) * smooth(0.04, EASE_IN, z)) : s;
-};
-// How far the cycle is too quick to follow: 0 below about two cycles a second, 1 above about ten.
-const blurNow = () => (OPEN.has('smooth') && st.play ? 1 - smooth(Math.log(2), Math.log(10), Math.log(slowNow(st.z))) : 0);
+// At the Car the page opens slowed as much as the Engine stop is, so that the cycle can be followed. Real speed is a
+// button: at 20 cycles a second the dial and the stroke names only flicker.
+const CAR_SLOW = 60;
+let realSpeed = false;
+const slowNow = (z) => (realSpeed ? slowAt(z) : Math.max(slowAt(z), CAR_SLOW));
 const HOLD = 450;                       // ms after the zoom last moved before time runs again
 
 const st = { z: 0, phi: 95, play: false };
@@ -296,7 +283,7 @@ function scaleBar() {
 const SPOT_MM = Math.round(M.SPOT_DIST * 1000), BEFORE_TOP = Math.round(360 - M.SPOT_BURNS);
 const PEAK_ATM = M.PEAK.p / M.ATM, AFTER_TOP = Math.round(M.PEAK.phi - 360), BURN_MS = (M.FLAME_OUT - M.SPARK) / M.DEG_PER_S * 1000, FRONT_SPEED = 0.047 / (BURN_MS / 1000);
 const CAP = {
-  car: () => ['Sixty miles an hour', `At ${M.MPH} mph in top gear this engine's main shaft, the crankshaft, turns ${num(M.RPM)} times a minute: ${M.RPM / 60} times a second. Slide Zoom to go under the hood. Time slows as you go in, so that each step can be seen.`],
+  car: () => ['Sixty miles an hour', `At ${M.MPH} mph in top gear this engine's main shaft, the crankshaft, turns ${num(M.RPM)} times a minute: ${M.RPM / 60} times a second. That is too fast to follow, so the page opens ${CAR_SLOW} times slower; Real speed shows it as it is. Slide Zoom to go under the hood. Time slows further as you go in.`],
   engine: () => ['Four pistons, one shaft', 'Each burn of fuel pushes one piston down its cylinder. A connecting rod turns that push into rotation of the crankshaft. One trip of a piston down or up is a stroke, and only every fourth stroke is a burn: the power stroke. The four cylinders burn in the order 1, 3, 4, 2, half a turn apart, so one of them is always on its power stroke. A cylinder glows from its spark until its burned gas has cooled. The belt turns the two camshafts once for every two turns of the crankshaft.'],
   cylinder: (s, p) => (p >= M.SPARK && p < 360 ? ['Compression ends: the spark lights the mixture', `The piston is still rising, with ${360 - M.SPARK}° of crankshaft or less to go to the top, and the spark has already lit the mixture next to the plug. The burn starts this early because it takes time to spread: that way the pressure peaks just after the top, ${AFTER_TOP}° into the power stroke, and not late. The pale arc on the cycle dial marks the burn, from the spark until the flame front has crossed the cylinder.`] : [
     ['Intake: air and fuel come in', 'The piston goes down and the intake valve is open, so air flows in past it. The injector sprays gasoline straight into the cylinder, where it mixes with the air: about 15 parts of air to 1 of fuel, by mass.'],
@@ -338,7 +325,7 @@ function key(which) {
 }
 // The pressure in the cylinder we follow through one cycle, with the present moment marked.
 const ctx = $('chart').getContext('2d');
-function chart(mark = true) {
+function chart() {
   const w = 672, h = 208, L = 44, R = 10, T = 12, B = 30, top = Math.ceil(PEAK_ATM / 5) * 5;
   const X = (phi) => L + (w - L - R) * phi / 720, Y = (atm) => h - B - (h - T - B) * atm / top;
   ctx.clearRect(0, 0, w, h);
@@ -351,7 +338,6 @@ function chart(mark = true) {
   ctx.strokeStyle = '#EAF0FF'; ctx.lineWidth = 3; ctx.lineJoin = 'round'; ctx.beginPath();
   for (let d = 0; d <= 720; d += 2) { const x = X(d), y = Y(M.pressure(d) / M.ATM); if (d) ctx.lineTo(x, y); else ctx.moveTo(x, y); }
   ctx.stroke();
-  if (!mark) return;
   const p = wrap(st.phi), x = X(p), y = Y(M.pressure(p) / M.ATM);
   ctx.strokeStyle = 'rgba(234,240,255,.5)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x, T); ctx.lineTo(x, h - B); ctx.stroke();
   ctx.fillStyle = '#ffb13b'; ctx.strokeStyle = '#05070F'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, 8, 0, 6.2832); ctx.fill(); ctx.stroke();
@@ -366,20 +352,17 @@ function sync() {
   set('zoomV', stop.name);
   const pv = Math.round(p * 2) / 2;
   if (shown.pv !== pv) { shown.pv = pv; ci.value = pv; }
-  const blur = blurNow(), fast = blur > 0.5;
-  const pt = fast ? 'running too fast to follow' : `${Math.round(p)} degrees, ${M.STROKES[stroke]}${p >= M.SPARK && p < M.FLAME_OUT ? ', burning' : ''}`;
+  const pt = `${Math.round(p)} degrees, ${M.STROKES[stroke]}${p >= M.SPARK && p < M.FLAME_OUT ? ', burning' : ''}`;
   if (shown.pt !== pt) { shown.pt = pt; ci.setAttribute('aria-valuetext', pt); }
   for (const b of $('stops').children) b.setAttribute('aria-current', String(+b.dataset.i === lvl));
   [...$('zticks').children].forEach((t, i) => t.classList.toggle('on', i === lvl));
   const lit = p >= M.SPARK && p < M.FLAME_OUT;
-  [...$('strokes').children].forEach((t, i) => t.classList.toggle('on', !fast && (i === stroke || (i === 4 && lit))));
+  [...$('strokes').children].forEach((t, i) => t.classList.toggle('on', i === stroke || (i === 4 && lit)));
   const ha = (p / 2).toFixed(2); if (shown.hand !== ha) { shown.hand = ha; hand.setAttribute('transform', `rotate(${ha} 80 80)`); }
-  const lit4 = fast ? -1 : stroke;
-  if (shown.arc !== lit4) { shown.arc = lit4; arcs.forEach((a, i) => a.setAttribute('opacity', fast ? '0.8' : i === stroke ? '1' : '0.6')); }
-  const bk = blur.toFixed(2); if (shown.blur !== bk) { shown.blur = bk; hand.setAttribute('opacity', (1 - blur).toFixed(2)); sweep.setAttribute('opacity', (0.13 * blur).toFixed(3)); }
+  if (shown.arc !== stroke) { shown.arc = stroke; arcs.forEach((a, i) => a.setAttribute('opacity', i === stroke ? '1' : '0.6')); }
   const sNow = slowNow(st.z);
   set('slowV', slowText(sNow));
-  if (OPEN.has('slow')) { const rb = $('real'), off = slowAt(st.z) >= EASE_SLOW; if (rb.disabled !== off) rb.disabled = off; }
+  { const rb = $('real'), off = slowAt(st.z) >= CAR_SLOW; if (rb.disabled !== off) rb.disabled = off; }
   const loop = loopAt(st.z), pl = st.play ? 'Pause' : lvl === 4 ? 'Play the burn of this group of molecules' : loop ? 'Play the burn' : 'Play';
   if (shown.play !== pl) { shown.play = pl; $('play').setAttribute('aria-pressed', String(st.play)); $('play').setAttribute('aria-label', pl); }
 
@@ -389,7 +372,7 @@ function sync() {
     const apply = () => { $('capTitle').textContent = title; $('capBody').textContent = body; $('capScale').textContent = stop.name; $('note').textContent = NOTE[stop.id]; $('cap').classList.remove('swap'); };
     if (first || reduced) apply(); else { $('cap').classList.add('swap'); setTimeout(() => { if (shown.cap === capKey) apply(); }, 180); }
   }
-  set('capPhase', sNow < 1.5 ? 'real speed' : fast ? slowText(sNow).toLowerCase() : `${slowText(sNow).toLowerCase()} · ${p >= M.SPARK && p < 360 ? 'compression, burn begun' : p >= 360 && p < M.FLAME_OUT ? 'power, still burning' : M.STROKES[stroke].toLowerCase() + ' stroke'}`);
+  set('capPhase', sNow < 1.5 ? 'real speed' : `${slowText(sNow).toLowerCase()} · ${p >= M.SPARK && p < 360 ? 'compression, burn begun' : p >= 360 && p < M.FLAME_OUT ? 'power, still burning' : M.STROKES[stroke].toLowerCase() + ' stroke'}`);
   key(st.z > 3.9 ? 'atoms' : lvl >= 2 ? 'gas' : 'none');
 
   const g = M.gasAt(p), T = lvl === 4 ? g.T : (M.tempMean(p) || g.T), atm = M.pressure(p) / M.ATM;
@@ -400,14 +383,14 @@ function sync() {
     const K = Math.round(T / 10) * 10; set('n3k', `${lvl === 4 ? 'gas at this spot' : 'its gas, on average'}: ${num(Math.round((K * 9 / 5 - 459.67) / 10) * 10)} °F`); set('n3v', `${num(K)} K`);
   }
   set('chartCap', `Pressure in cylinder 4 through one cycle, in atmospheres (outside air is 1). Peak: ${num(PEAK_ATM)}, ${AFTER_TOP}° after the top.`);
-  const ck = fast ? -1 : Math.round(p); if (shown.chart !== ck) { shown.chart = ck; chart(!fast); }
+  const ck = Math.round(p); if (shown.chart !== ck) { shown.chart = ck; chart(); }
   const n = Math.round(M.groupCount(p)), edge = M.groupEdge(p);
   set('eq', lvl === 4 ? '2 C₈H₁₈ + 25 O₂ → 16 CO₂ + 18 H₂O' : ''); $('eq').hidden = lvl !== 4;
   set('eqNow', lvl === 4 ? `This group: ${n} molecules in a cube ${edge.toFixed(0)} nm wide, with ${M.MIX.n2} nitrogen molecules that pass through unchanged.` : ''); $('eqNow').hidden = lvl !== 4;
   writeHash();
 }
 let hashAt = 0;
-function writeHash() { const now = performance.now(); if (now - hashAt < 400) { clearTimeout(writeHash.t); writeHash.t = setTimeout(writeHash, 420); return; } hashAt = now; const h = OPEN.size ? `#open=${openKey}` : `#z=${st.z.toFixed(3)}&a=${(Math.round(wrap(st.phi) * 2) / 2)}`; if (location.hash !== h) history.replaceState(null, '', h); }
+function writeHash() { const now = performance.now(); if (now - hashAt < 400) { clearTimeout(writeHash.t); writeHash.t = setTimeout(writeHash, 420); return; } hashAt = now; const h = `#z=${st.z.toFixed(3)}&a=${(Math.round(wrap(st.phi) * 2) / 2)}`; if (location.hash !== h) history.replaceState(null, '', h); }
 function readHash() {
   const q = new URLSearchParams(location.hash.slice(1)); let any = false;
   if (q.has('z') && isFinite(+q.get('z'))) { st.z = clamp(+q.get('z'), 0, LAST); any = true; }
@@ -436,7 +419,6 @@ function frame(now) {
     const goal = fly.to, d = goal - st.z, step = Math.sign(d) * Math.min(Math.abs(d), dt * Math.max(0.35, Math.abs(d) * 2.2));
     st.z += step; if (Math.abs(goal - st.z) < 1e-4) { st.z = goal; fly = null; zoomAt = now; } dirty = true;
   }
-  if (!beenIn && st.z >= EASE_IN) beenIn = true;
   if (st.play && !zooming) {
     const s = slowNow(st.z), loop = loopAt(st.z);
     st.phi += dt * M.DEG_PER_S / s; road += dt * M.SPEED / s; tau += dt * Math.sqrt(M.gasAt(st.phi).T / 700);
@@ -482,7 +464,6 @@ const arcPath = (r, a, b) => `M${onDial(r, a)}A${r} ${r} 0 0 1 ${onDial(r, b)}`;
 for (let i = 0; i < 4; i++) arcs.push(svgEl('path', { d: arcPath(64, i * 90 + 1.6, i * 90 + 88.4), fill: 'none', stroke: STROKE_COL[i], 'stroke-width': 10 }));
 svgEl('path', { d: arcPath(64, M.SPARK / 2, M.FLAME_OUT / 2), fill: 'none', stroke: BURN_COL, 'stroke-width': 10 });
 svgEl('path', { d: `M${onDial(54, M.SPARK / 2)}L${onDial(74, M.SPARK / 2)}`, stroke: '#fff', 'stroke-width': 2.5, 'stroke-linecap': 'round' });
-const sweep = svgEl('circle', { cx: 80, cy: 80, r: 58, fill: '#EAF0FF', opacity: 0 });      // the hand, when it turns too fast to be seen as a hand
 const hand = svgEl('g', {});
 svgEl('path', { d: 'M80 80V16', stroke: '#EAF0FF', 'stroke-width': 3, 'stroke-linecap': 'round' }, hand);
 svgEl('circle', { cx: 80, cy: 80, r: 5, fill: '#EAF0FF' }, hand);
@@ -513,7 +494,7 @@ $('zoom').addEventListener('input', (e) => {
 });
 $('cycle').addEventListener('input', (e) => { st.phi = +e.target.value; shown.pv = +e.target.value; st.play = false; phiSet = true; touch(); });
 $('play').addEventListener('click', togglePlay);
-if (OPEN.has('slow')) { const rb = $('real'); rb.hidden = false; rb.addEventListener('click', () => { realSpeed = !realSpeed; rb.setAttribute('aria-pressed', String(realSpeed)); touch(); }); }
+{ const rb = $('real'); rb.addEventListener('click', () => { realSpeed = !realSpeed; rb.setAttribute('aria-pressed', String(realSpeed)); touch(); }); }
 // An arrow key moves a slider by a step that can be seen: a twentieth of a scale, or a few degrees (half a degree among the molecules).
 $('zoom').addEventListener('keydown', (e) => { const d = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 }[e.key]; if (!d) return; e.preventDefault(); setZoom(st.z + d * 0.05); });
 $('cycle').addEventListener('keydown', (e) => { const d = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 }[e.key]; if (!d) return; e.preventDefault(); st.phi = wrap(st.phi + d * (st.z > 3.5 ? 0.5 : st.z > 2.5 ? 1 : 5)); st.play = false; phiSet = true; touch(); });
@@ -548,18 +529,15 @@ cv.addEventListener('webglcontextlost', (e) => { e.preventDefault(); broken = tr
 cv.addEventListener('webglcontextrestored', () => location.reload());
 addEventListener('resize', measure);
 addEventListener('hashchange', () => {
-  const q = new URLSearchParams(location.hash.slice(1));
-  if (q.has('open') && [...new Set(q.get('open').split(','))].sort().join(',') !== openKey) { location.reload(); return; }
   if (readHash()) { st.play = false; fly = null; touch(); }
 });
 document.fonts?.ready.then(measure);
 
 const fromLink = readHash();
-if (OPEN.has('paused') && !fromLink) st.phi = 0;
 { const k = +new URLSearchParams(location.search).get('res'); if (k > 0) fixedScale = k; }
 measure();
 // for the tests: a coarser picture, a flight ended at once, a redraw that waits for the graphics card
 window.__engine = { st, view, drawn, redraw() { if (broken) return; draw(); labels(); sync(); gl.finish(); }, free: () => free, stops: STOPS, model: M, get busy() { return !!(fly || st.play); }, res(k) { fixedScale = k; touch(); },
   settle() { if (fly) { st.z = fly.to; fly = null; } zoomAt = -1e9; touch(); }, set(z, phi) { if (broken) return; st.z = z; if (phi !== undefined) st.phi = phi; fly = null; st.play = false; aim(st.z); draw(); labels(); sync(); gl.finish(); },
   tick(s) { tau += s; }, get scale() { return fixedScale || (sharp ? 1 : scale); } };
-if (!reduced && !fromLink && !OPEN.has('paused')) setTimeout(() => { if (!st.play && !fly && zoomAt < 0) { st.play = true; touch(); } }, 1200);
+if (!reduced && !fromLink) setTimeout(() => { if (!st.play && !fly && zoomAt < 0) { st.play = true; touch(); } }, 1200);
