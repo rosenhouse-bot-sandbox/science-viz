@@ -36,6 +36,9 @@ A rebuild at `v2/`, in three dimensions at every scale, from the whole Earth dow
   you nothing, falls straight down, and is drawn as a streak with its head down; a drop near enough
   to have a size on screen is drawn round, because drops are spheres. The streak is a drawing of
   motion, not the drop's shape. The panel carries a key.
+- Time is slowed so the fall can be followed: the rain about 15 times, and the four marked drops
+  about 116 times, so that one can be watched crossing the bow (a real drop would cross it in a few
+  hundredths of a second). The readout gives both, computed from the speeds in `rain.js`.
 - The near drops are coloured by what each sends to the standing figure, not to the camera, while
   the bow on the far rain is painted for the camera. From behind the figure the two nearly coincide;
   from the side they part, which is the point: a bow belongs to one pair of eyes.

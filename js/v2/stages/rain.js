@@ -13,6 +13,10 @@ import { drawFar } from './drop.js';
 const BOX0 = [-8, 0, -13], BOXS = [16, 9, 10.5], NDROPS = 30000;
 const B1 = O.bowAngle(O.nWater(550)), B2 = O.bowAngle(O.nWater(550), 2);
 const DROP = 0.01, FALL = 1.1 / 16;      // a marked drop's drawn radius, and how fast it falls, in metres (per second)
+// The rain falls at RAIN_V to RAIN_V + RAIN_DV m/s; a real drop a few millimeters across at about REAL_FALL.
+// The marked drops are slowed further so one can be watched crossing the bow; the readout says both.
+const RAIN_V = 0.45, RAIN_DV = 0.2, REAL_FALL = 8;
+const RAIN_SLOW = Math.round(REAL_FALL / (RAIN_V + RAIN_DV / 2)), MARK_SLOW = Math.round(REAL_FALL / FALL);
 const HEROES = [[-2.6, -7.5, 0.0], [0.4, -6.2, 0.37], [2.9, -8.4, 0.71], [-0.9, -9.6, 0.55]];
 let drops = null, vao = null;
 // How the scene is dressed depends only on where the camera is. `here` is 0 from far above (arriving
@@ -86,7 +90,8 @@ export default {
     const blank = Array.from({ length: HEROES.length - lastHeroes.length }, (_, i) => `<dt>Marked drop ${lastHeroes.length + i + 1}</dt><dd>not crossing the bow</dd>`).join('');
     return `<dl><dt>Top of the main bow</dt><dd>${top > 0 ? top.toFixed(1) + '° up' : 'below the horizon'}</dd>
 <dt>Top of the outer bow</dt><dd>${top2 > 0 ? top2.toFixed(1) + '° up' : 'below the horizon'}</dd>
-${rows}${blank}<dt>Drops shown falling</dt><dd>about 15× slower than real</dd></dl>${S.mode === 'wave' ? crestNote(CREST) : ''}`;
+${rows}${blank}<dt>Rain shown falling</dt><dd>about ${RAIN_SLOW}× slower than real</dd>
+<dt>Marked drops falling</dt><dd>about ${MARK_SLOW}× slower than real</dd></dl>${S.mode === 'wave' ? crestNote(CREST) : ''}`;
   },
   liveReadout: true,
   init(R) {
@@ -97,7 +102,7 @@ uniform mat4 uVP; uniform vec2 uRes, uLutRange; uniform float uPx, uP11, uTime, 
 uniform vec3 uSun, uEyeP, uSunCol, uBox0, uBoxS; uniform sampler2D uLUT;
 out vec3 vC; out vec2 vUV; out float vTail;
 void main(){
-  vec3 p = D.xyz; p.y = uBox0.y + mod(D.y - uTime*(0.45+0.2*D.w), uBoxS.y);
+  vec3 p = D.xyz; p.y = uBox0.y + mod(D.y - uTime*(${RAIN_V.toFixed(2)}+${RAIN_DV.toFixed(2)}*D.w), uBoxS.y);
   float th = degrees(acos(clamp(dot(normalize(p-uEyeP), uSun), -1.0, 1.0)));
   vec3 bow = texture(uLUT, vec2((th-uLutRange.x)/(uLutRange.y-uLutRange.x), 0.5)).rgb;
   vec3 e = (p-uBox0)/uBoxS; float edge = smoothstep(0.0,0.08,e.x)*smoothstep(1.0,0.92,e.x)*smoothstep(0.0,0.1,e.z)*smoothstep(1.0,0.9,e.z)*smoothstep(1.0,0.9,e.y);
