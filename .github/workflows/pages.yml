@@ -18,6 +18,10 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Write the landing page's dates from git history
+        run: node .github/dates.mjs
       - uses: actions/configure-pages@v5
         with:
           enablement: true

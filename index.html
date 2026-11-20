@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self'; connect-src 'self'; base-uri 'none'; object-src 'none'; form-action 'none'">
 <title>Science visualizations</title>
 <meta name="description" content="Interactive explorations: how rainbows form, how a synapse releases its signal, a game of building things that bend light, two ways to draw a graph, a maple leaf's year, and a car engine down to its burning fuel.">
 <meta name="color-scheme" content="dark">
@@ -10,38 +11,29 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..700&family=Source+Sans+3:wght@400;600&display=swap">
-<style>
-:root{color-scheme:dark;--bg:#05070F;--ink:#EAF0FF;--ink2:#AAB6D6;--line:rgba(234,240,255,.14);--focus:#9FB4FF;
-  --display:'Bricolage Grotesque','Helvetica Neue',Arial,sans-serif;--body:'Source Sans 3','Segoe UI',Roboto,sans-serif;
-  --spectrum:linear-gradient(90deg,#7b2cff,#3b5bff,#00b0d8,#3ccf5a,#f2d41d,#ff7a1a,#e8202b)}
-*{box-sizing:border-box}
-html,body{margin:0;min-height:100%;background:var(--bg);color:var(--ink);font-family:var(--body);line-height:1.45}
-body{min-height:100vh;min-height:100dvh;display:grid;place-items:center;padding:32px 16px}
-main{width:100%;max-width:420px;text-align:center;display:grid;gap:28px}
-h1{font-family:var(--display);font-weight:600;font-size:clamp(2.125rem,1.5rem + 3vw,3rem);letter-spacing:-.02em;line-height:1.05;margin:0}
-.bar{height:6px;border-radius:3px;background:var(--spectrum);margin:14px auto 0;width:96px}
-p{margin:0;color:var(--ink2)}
-nav{display:grid;gap:12px}
-.btn{display:block;padding:16px 20px;border-radius:14px;border:1px solid var(--line);background:rgba(234,240,255,.08);color:var(--ink);text-decoration:none;font-family:var(--display);font-weight:600;font-size:1.25rem;letter-spacing:-.01em}
-.btn:hover{background:rgba(234,240,255,.16)}
-:focus-visible{outline:2px solid var(--focus);outline-offset:3px}
-</style>
+<link rel="stylesheet" href="css/home.css">
 </head>
 <body>
 <main>
   <header>
-    <h1>Science visualizations</h1>
-    <div class="bar" aria-hidden="true"></div>
+    <div>
+      <h1>Science visualizations</h1>
+      <div class="bar" aria-hidden="true"></div>
+    </div>
+    <p class="by">by Gabe Rosenhouse and Claude · <a href="https://github.com/rosenhouse-bot-sandbox/science-viz">Source on GitHub</a></p>
   </header>
   <nav aria-label="Experiences">
-    <a class="btn" href="v2/">Rainbows</a>
-    <a class="btn" href="vesicle/">Vesicle fusion</a>
-    <a class="btn" href="optics/">Optics workshop</a>
-    <a class="btn" href="dag/">Graph layout</a>
-    <a class="btn" href="maple/">Japanese maple</a>
-    <a class="btn" href="engine/">Engine</a>
+    <ul>
+      <li><a href="engine/"><img src="img/thumbs/engine.webp" alt="" width="336" height="210"><span class="txt"><span class="name">Engine</span><span class="meta" data-page="engine" hidden><span>Started <time></time></span> <span>Updated <time></time></span></span></span></a></li>
+      <li><a href="dag/"><img src="img/thumbs/dag.webp" alt="" width="336" height="210"><span class="txt"><span class="name">Graph layout</span><span class="meta" data-page="dag" hidden><span>Started <time></time></span> <span>Updated <time></time></span></span></span></a></li>
+      <li><a href="maple/"><img src="img/thumbs/maple.webp" alt="" width="336" height="210"><span class="txt"><span class="name">Japanese maple</span><span class="meta" data-page="maple" hidden><span>Started <time></time></span> <span>Updated <time></time></span></span></span></a></li>
+      <li><a href="optics/"><img src="img/thumbs/optics.webp" alt="" width="336" height="210"><span class="txt"><span class="name">Optics workshop</span><span class="meta" data-page="optics" hidden><span>Started <time></time></span> <span>Updated <time></time></span></span></span></a></li>
+      <li><a href="v2/"><img src="img/thumbs/v2.webp" alt="" width="336" height="210"><span class="txt"><span class="name">Rainbows</span><span class="meta" data-page="v2" hidden><span>Started <time></time></span> <span>Updated <time></time></span></span></span></a></li>
+      <li><a href="vesicle/"><img src="img/thumbs/vesicle.webp" alt="" width="336" height="210"><span class="txt"><span class="name">Vesicle fusion</span><span class="meta" data-page="vesicle" hidden><span>Started <time></time></span> <span>Updated <time></time></span></span></span></a></li>
+    </ul>
   </nav>
 </main>
+<script type="module" src="js/home.js"></script>
 <script type="module" src="js/gamepad/home.js"></script>
 </body>
 </html>
