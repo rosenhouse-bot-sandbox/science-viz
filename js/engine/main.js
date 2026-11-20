@@ -1,10 +1,10 @@
 // Engine: the controller. Two numbers drive the page: the zoom (0 = car ... 4 = molecules) and the crank
 // angle of the cylinder we follow (0 to 720 degrees, one cycle). Time runs slower the further in the zoom is.
 // The picture is redrawn only when something changes.
-import * as M from './model.js?v=5c0071d5';
-import { makeGroup, place, centre, tiles, copies, LAYERS, MAX_COPIES, MAX_ATOMS } from './mol.js?v=5c0071d5';
-import { WORLD_FS, FULL_VS, BLIT_FS, BALL_VS, BALL_FS, DOT_VS, DOT_FS } from './shaders.js?v=5c0071d5';
-import * as Flow from './flow.js?v=5c0071d5';
+import * as M from './model.js?v=2b7405db';
+import { makeGroup, place, centre, tiles, copies, LAYERS, MAX_COPIES, MAX_ATOMS } from './mol.js?v=2b7405db';
+import { WORLD_FS, FULL_VS, BLIT_FS, BALL_VS, BALL_FS, DOT_VS, DOT_FS } from './shaders.js?v=2b7405db';
+import * as Flow from './flow.js?v=2b7405db';
 import { gamepad } from '../gamepad/gamepad.js';
 
 const { clamp, smooth, mix, wrap } = M;
@@ -51,7 +51,7 @@ const view = { cam: [0, 0, 0], fw: [0, 0, 1], rt: [1, 0, 0], up: [0, 1, 0], h: 1
 // ---- drawing ---------------------------------------------------------------------------------------
 let world = null, blit = null, balls = null, dotsP = null, fbo = null, tex = null, farTex = null, texW = 0, texH = 0, ballBuf = null, ballVao = null, dotBuf = null, dotVao = null;
 const MAX_DOTS = 24000, dotData = new Float32Array(MAX_DOTS * 9);
-const ballData = new Float32Array((MAX_ATOMS + 14000) * 8), group = makeGroup();
+const DOT_CAP = 60000, ballData = new Float32Array((MAX_ATOMS + DOT_CAP) * 8), group = makeGroup();
 function program(vs, fs) {
   const p = gl.createProgram();
   for (const [t, src] of [[gl.VERTEX_SHADER, vs], [gl.FRAGMENT_SHADER, fs]]) {
@@ -136,17 +136,27 @@ function molShow(box, pxPerNm) {
   const L = M.groupEdge(st.phi), f = 1 + 1.5 * L / box.dist, need = ((box.x1 - box.x0) * f / L + 1) * ((box.y1 - box.y0) * f / L + 1) * LAYERS;
   return smooth(9, 20, pxPerNm) * (1 - smooth(0.55 * MOL_BUDGET, MOL_BUDGET, need));
 }
+// The dots are scattered at random (each cell of a lattice holds 0 to 3 of them, 1 on average, anywhere in it), wander
+// about on the molecules' own clock, and are squeezed together as the gas is: their spacing goes with the cube root
+// of the gas's density, so that a view holds as many more of them as the gas has more molecules there.
+const RHO_REF = M.gasAt(180).perNm3, POIS = [Math.exp(-1), 2 * Math.exp(-1), 2.5 * Math.exp(-1)];      // chance of 0, at most 1, at most 2 dots in a cell
 function gasDots(n, box, pxPerNm, mols) {
   const g = M.gasAt(st.phi), stale = g.burn > 0.5 || wrap(st.phi) >= M.SPARK + 60 || wrap(st.phi) < 8;
-  const rmin = Math.max(3, Math.sqrt(W * H * 3 / 8000) / 6.6), hotGas = g.burn > 0.5 && M.tempBurned(st.phi) > 1500;
+  const rmin = Math.max(3, Math.sqrt(W * H * 3 / 8000) / 6.6), hotGas = g.burn > 0.5 && M.tempBurned(st.phi) > 1500, sq = Math.cbrt(RHO_REF / g.perNm3);
   DOT_R.forEach((r, lv) => {
     const rpx = r * pxPerNm, show = lv === DOT_R.length - 1 ? smooth(rmin, rmin * 2.2, rpx) * (1 - mols) : dotShow(rpx, rmin); if (show <= 0) return;
-    const cell = r * 6.6, x0 = Math.floor((box.x0 * 1.05 - r) / cell), x1 = Math.floor((box.x1 * 1.05 + r) / cell), y0 = Math.floor((box.y0 * 1.05 - r) / cell), y1 = Math.floor((box.y1 * 1.05 + r) / cell);
-    if ((x1 - x0 + 1) * (y1 - y0 + 1) * 3 > 11000) return;
-    for (let k = 0; k < 3; k++) for (let j = y0; j <= y1; j++) for (let i = x0; i <= x1; i++) {
-      const o = n * 8, fuel = !stale && g.fuel && hash(i, j, k, lv + 40) < 1 / 15, c = stale ? (hotGas ? [1.0, 0.54, 0.16] : [0.56, 0.47, 0.40]) : fuel ? [0.30, 0.95, 0.42] : [0.36, 0.64, 1.0];
-      ballData[o] = (i + 0.5 + 0.56 * (hash(i, j, k, lv) - 0.5)) * cell; ballData[o + 1] = (j + 0.5 + 0.56 * (hash(i, j, k, lv + 10) - 0.5)) * cell; ballData[o + 2] = (k + 0.5 + 0.56 * (hash(i, j, k, lv + 20) - 0.5)) * cell;
-      ballData[o + 3] = r; ballData[o + 4] = c[0]; ballData[o + 5] = c[1]; ballData[o + 6] = c[2]; ballData[o + 7] = (stale ? 0.5 : fuel ? 0.9 : 0.6) * show; n++;
+    const cell = r * 6.6 * sq, x0 = Math.floor((box.x0 * 1.05 - 2 * r) / cell) - 1, x1 = Math.floor((box.x1 * 1.05 + 2 * r) / cell) + 1, y0 = Math.floor((box.y0 * 1.05 - 2 * r) / cell) - 1, y1 = Math.floor((box.y1 * 1.05 + 2 * r) / cell) + 1;
+    const kn = Math.max(1, Math.round(3 / sq));      // as deep a slab of gas, whatever its density
+    if ((x1 - x0 + 1) * (y1 - y0 + 1) * kn > DOT_CAP / 1.2) return;
+    for (let k = 0; k < kn; k++) for (let j = y0; j <= y1; j++) for (let i = x0; i <= x1; i++) {
+      const u = hash(i, j, k, lv + 50), many = u < POIS[0] ? 0 : u < POIS[1] ? 1 : u < POIS[2] ? 2 : 3;
+      for (let m = 0; m < many && n < DOT_CAP; m++) {
+        const sd = lv + 60 * (m + 1), o = n * 8, fuel = !stale && g.fuel && hash(i, j, k, sd + 40) < 1 / 15, c = stale ? (hotGas ? [1.0, 0.54, 0.16] : [0.56, 0.47, 0.40]) : fuel ? [0.30, 0.95, 0.42] : [0.36, 0.64, 1.0];
+        const ph = 6.283 * hash(i, j, k, sd + 30), w = 0.6 + 0.8 * hash(i, j, k, sd + 31), A = 0.45 * cell;      // its wander
+        ballData[o] = (i + hash(i, j, k, sd)) * cell + A * Math.sin(w * tau + ph); ballData[o + 1] = (j + hash(i, j, k, sd + 10)) * cell + A * Math.sin(1.3 * w * tau + 2 * ph);
+        ballData[o + 2] = (k + hash(i, j, k, sd + 20)) * cell + A * Math.sin(0.8 * w * tau + 3 * ph);
+        ballData[o + 3] = r; ballData[o + 4] = c[0]; ballData[o + 5] = c[1]; ballData[o + 6] = c[2]; ballData[o + 7] = (stale ? 0.5 : fuel ? 0.9 : 0.6) * show; n++;
+      }
     }
   });
   return n;

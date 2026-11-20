@@ -819,7 +819,10 @@ Where the picture simplifies, which the page also says:
   tumbling jet; pressure waves in the pipes are not modeled either. Where a dot passes behind a
   valve's taper it is hidden by the valve.
   Between the Flame and Molecules stops the dots are drawn at six smaller sizes in turn, each a tenth of the last, so that
-  something is in view at every zoom; past them, the space between molecules is drawn dark.
+  something is in view at every zoom; past them, the space between molecules is drawn dark. These dots are scattered
+  at random (each cell of a lattice holds none to three, one on average), wander on the molecules' clock while the
+  page plays, and are squeezed together with the gas: their spacing goes with the cube root of its density, so a
+  view holds about six times as many at the top of compression as during intake, as it holds molecules.
 - Burned gas is drawn glowing orange. A real gasoline flame gives off only faint light, at short
   visible wavelengths, which we see as blue.
 - Iso-octane stands for the hundreds of hydrocarbons in gasoline. The burn is drawn as one step; the
