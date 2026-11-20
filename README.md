@@ -24,7 +24,8 @@ A rebuild at `v2/`, in three dimensions at every scale, from the whole Earth dow
 - The continents and clouds on the globe, and the cloud tops you pass on the way down to the field,
   are generated noise and not a map of the real Earth. The ring and dot at "You are here" are a marker
   and nothing more; they fade as the camera dives towards them. The cloud also parts around your spot
-  as the camera comes down on it, which is staging and not weather.
+  as the camera comes down on it, which is staging and not weather. The cloud pattern does not
+  move: weather crosses a few kilometres in the time the picture plays, too little to see from orbit.
 - The Rain scale used to be two, Sky and Rain. It is now one scene with one camera, which starts
   behind your shoulder with the bow across the sky and moves in among the drops. How far in the
   camera is sets the dressing: the sky is turned down (to about a third of its brightness, close in)
@@ -79,7 +80,9 @@ The physics, all in `js/v2/optics.js`:
   `js/v2/stages/surface.js`): the half nearer the camera is taken away, so the surface is seen
   edge-on as a bright line with the water's blue cut face on one side and air on the other, and the
   beams bend at that line. It is a drawing aid and the panel says so: the light is a round beam on
-  both sides of the cut. From far off the cutting plane is out beyond the drop and closes in as the
+  both sides of the cut. With Waves the crests are drawn in a thin slice through the middle of the
+  beam, lying in the cut face: seen through the whole round beam at a slant, the crests in the water
+  averaged away. From far off the cutting plane is out beyond the drop and closes in as the
   camera does (`cutAt`), and the Drop scale's sphere is cut by the same plane on the flight in.
 - The Molecules panel carries two moving pictures drawn from the model, on the scene's clock, so
   Pause stops them. One shows a molecule's electrons (a disc) moved by the field of 700 nm and of 400 nm light; how
@@ -104,7 +107,9 @@ The physics, all in `js/v2/optics.js`:
   molecules and moving electrons. Energy held in matter does not travel, which gives the energy
   velocity; nearer the ultraviolet resonance more is held, so violet is slower than red.
 
-Simplifications: drops are spheres, air's index is taken as 1, and brightness is compressed so that
+Simplifications: with Waves at Orbit, Rain and Drop, the crests are drawn far further apart than real
+ones (6,690 km, 2.4 m and 0.4 mm against 550 nm), which the readout says; only the Surface and
+Molecules scales draw them at their true spacing. Drops are spheres, air's index is taken as 1, and brightness is compressed so that
 the 5% of light in the bow can be seen beside the 89% that escapes. A toggle spreads the colours 5×
 for visibility; it is off by default.
 

@@ -5,7 +5,8 @@
 // Sunlight is gold, slanted and carries arrowheads; rain is cool, vertical and tear-shaped.
 import { V, DEG, rng, clamp, sstep, lerp } from '../gl.js';
 import * as O from '../optics.js';
-import { SUN, sunRay, bowTexture, drawFigure, wavefrontSheets, colourName } from './common.js';
+import { SUN, sunRay, bowTexture, drawFigure, wavefrontSheets, colourName, crestNote } from './common.js';
+const CREST = 2.4;      // drawn spacing of the sunlight's crests, in metres
 import { EYE, sunDir, sunColour, drawEnv, initEnv } from './sky.js';
 import { drawFar } from './drop.js';
 
@@ -85,7 +86,7 @@ export default {
     const blank = Array.from({ length: HEROES.length - lastHeroes.length }, (_, i) => `<dt>Marked drop ${lastHeroes.length + i + 1}</dt><dd>not crossing the bow</dd>`).join('');
     return `<dl><dt>Top of the main bow</dt><dd>${top > 0 ? top.toFixed(1) + '° up' : 'below the horizon'}</dd>
 <dt>Top of the outer bow</dt><dd>${top2 > 0 ? top2.toFixed(1) + '° up' : 'below the horizon'}</dd>
-${rows}${blank}<dt>Drops shown falling</dt><dd>about 15× slower than real</dd></dl>`;
+${rows}${blank}<dt>Drops shown falling</dt><dd>about 15× slower than real</dd></dl>${S.mode === 'wave' ? crestNote(CREST) : ''}`;
   },
   liveReadout: true,
   init(R) {
@@ -150,7 +151,7 @@ void main(){ float y = vUV.y*0.5+0.5, w = mix(1.0, 0.3, y), x = vUV.x/w, h = (vU
     // sunlight, over your shoulder and down into the rain
     const aS = (f === 'eye' ? 0.1 : f === 'sun' ? 1 : 0.55) * here;
     if (S.mode === 'wave') {
-      wavefrontSheets(R, V.mad([0, 4.2, -5], s, -10), s, 5.0, 2.4, 8, (T * 0.4) % 1, SUN, 0.24 * aS, p => p[1] > 0, 4);
+      wavefrontSheets(R, V.mad([0, 4.2, -5], s, -10), s, 5.0, CREST, 8, (T * 0.4) % 1, SUN, 0.24 * aS, p => p[1] > 0, 4);
     } else {
       const r = [1, 0, 0], up = V.cross(r, s);
       for (let i = -3; i <= 3; i++) for (let j = 0; j < 4; j++) {

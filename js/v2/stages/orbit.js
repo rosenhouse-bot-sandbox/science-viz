@@ -1,7 +1,8 @@
 // Stage 1: the Earth in sunlight. Units are Earth radii; sunlight travels along +x.
 import { V, DEG, sstep } from '../gl.js';
 import * as O from '../optics.js';
-import { WARM, wavefrontSheets, coneDir } from './common.js';
+import { WARM, wavefrontSheets, coneDir, crestNote } from './common.js';
+const EARTH_R = 6.371e6, CREST = 1.05;      // the Earth's radius in metres; drawn crest spacing, in Earth radii
 
 let prog = null;
 // Where you stand: latitude 24.8° N, at the longitude where the Sun is S.sun degrees above the horizon.
@@ -37,7 +38,7 @@ export default {
 <dt>Distance to the Sun</dt><dd>149.6 million km</dd>
 <dt>Light's travel time</dt><dd>8 min 19 s</dd>
 <dt>Rays parallel to within</dt><dd>0.53°</dd></dl>
-<p>Not to scale: the rainbow is drawn far too big.</p>`;
+<p>Not to scale: the rainbow is drawn far too big.</p>${S.mode === 'wave' ? crestNote(CREST * EARTH_R) : ''}`;
   },
   labels(S) {
     const p = place(S);
@@ -63,14 +64,14 @@ void main(){ vec3 ro = uEye, rd = rayDir(); vec3 toSun = vec3(-1.0,0.0,0.0);
     float alt = max(length(ro)-1.0, 0.0), fd = 0.0, cd = 0.0, sc = 14.0;
     for(int i=0;i<4;i++){
       float w = smoothstep(10.0/sc, 2.5/sc, alt);
-      if(w > 0.0){ fd += w*(fbm(m*sc+11.0)-0.5); cd += w*(fbm(m*sc*1.3+vec3(5.0,uTime*0.004,9.0))-0.5); }
+      if(w > 0.0){ fd += w*(fbm(m*sc+11.0)-0.5); cd += w*(fbm(m*sc*1.3+vec3(5.0,0.0,9.0))-0.5); }
       sc *= 5.0; }
     float f = fbm(m*1.9+vec3(3.1,0.0,1.7)) + 0.25*fbm(m*6.0) + 0.035*fd;
     float land = smoothstep(0.60, 0.66, f);
     vec3 landc = mix(vec3(0.05,0.17,0.04), vec3(0.34,0.27,0.13), smoothstep(0.35,0.7,fbm(m*4.0+7.0)+0.3*fd));
     landc = mix(landc, vec3(0.85,0.9,0.95), smoothstep(0.80,0.9,abs(n.y)+0.08*f));
     vec3 surf = mix(vec3(0.012,0.05,0.16), landc, land);
-    float cl = smoothstep(0.50,0.78, fbm(m*3.2+vec3(uTime*0.006,2.0,0.0)) + 0.35*fbm(m*9.0+vec3(0.0,uTime*0.01,5.0))-0.12 + 0.22*cd);
+    float cl = smoothstep(0.50,0.78, fbm(m*3.2+vec3(0.0,2.0,0.0)) + 0.35*fbm(m*9.0+vec3(0.0,0.0,5.0))-0.12 + 0.22*cd);
     // coming down on the place where you stand, the cloud parts ahead of you: the clearing is always
     // about as wide as the view, so it is never seen as a hole, and the land below is what the Sky scale shows
     cl *= 1.0 - smoothstep(0.25, 0.01, alt)*exp(-pow(distance(n, uPlace)/max(alt*2.0, 1e-6), 2.0));
@@ -97,7 +98,7 @@ void main(){ vec3 ro = uEye, rd = rayDir(); vec3 toSun = vec3(-1.0,0.0,0.0);
     R.fullscreen(prog, 'opaque');
     const dim = f === 'eye' ? 0.18 : 1;
     if (S.mode === 'wave') {
-      wavefrontSheets(R, [-6.6, 0, 0], [1, 0, 0], 1.9, 1.05, 13, (T * 0.4) % 1, WARM, 0.2 * dim, lit, 4);
+      wavefrontSheets(R, [-6.6, 0, 0], [1, 0, 0], 1.9, CREST, 13, (T * 0.4) % 1, WARM, 0.2 * dim, lit, 4);
       R.flushLines();
     } else {
       for (let i = -3; i <= 3; i++) for (let j = -3; j <= 3; j++) {
