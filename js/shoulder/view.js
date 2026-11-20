@@ -1,6 +1,6 @@
 // Shoulder: drawing. One WebGL2 program lights every surface; a cut plane can remove the near side of the
 // model (it fades where it is), and the cut faces of each solid are filled in with the stencil buffer.
-import { program, meshBuffers, normals, perspective, lookAt, mul4, rigid, project } from './gl.js';
+import { program, meshBuffers, normals, perspective, lookAt, mul4, rigid, project } from './gl.js?v=c01bf6b1';
 
 const VS = `#version 300 es
 layout(location=0) in vec3 aPos; layout(location=1) in vec3 aNor; layout(location=2) in vec3 aTT;
@@ -17,7 +17,8 @@ void main(){
   if (uSide == 2 && side <= 0.0) discard;                 // the near side only
   if (uHole.y > uHole.x && vTT.x > uHole.x && vTT.x < uHole.y && vTT.y > uHole.z && vTT.y < uHole.w) discard;   // a torn hole
   vec3 n = normalize(vNor); vec3 v = normalize(uEye - vPos);
-  bool back = dot(n, v) < 0.0; if (back) n = -n;
+  bool back = dot(n, v) < 0.0; if (back && uSide == 2) discard;   // the fading near side: its outer skin only, not the inside
+  if (back) n = -n;
   vec3 col = mix(uCol, uCol2, smoothstep(uBlend.x, uBlend.y, vTT.x));
   col = mix(col, uWarm, uWarmAmt * vTT.z);                 // vTT.z: how near the acromion this corner is (impingement)
   vec3 L1 = normalize(vec3(-0.4, 0.8, 0.6)), L2 = normalize(vec3(0.7, 0.2, -0.5));

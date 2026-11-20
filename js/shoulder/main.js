@@ -1,11 +1,12 @@
 // Shoulder: the controller. The state is the zoom (0 Shoulder, 1 Joint, 2 Tendon), a condition or an exercise,
 // and the arm's lift and turn. Everything drawn and every number shown comes from model.js.
-import { unpack, makeModel, MUSCLES, clamp, smooth, apply, turn as turnDir } from './model.js?v=0';
-import { V } from './geom.js?v=0';
-import { makeView, COL } from './view.js?v=0';
-import { SRC, DOES, CONDITIONS, EXERCISES, MODEL_NOTE, MODEL_SRC } from './facts.js?v=0';
+import { unpack, makeModel, MUSCLES, clamp, smooth, apply, turn as turnDir } from './model.js?v=c01bf6b1';
+import { V } from './geom.js?v=c01bf6b1';
+import { makeView, COL } from './view.js?v=c01bf6b1';
+import { SRC, DOES, CONDITIONS, EXERCISES, MODEL_NOTE, MODEL_SRC } from './facts.js?v=c01bf6b1';
 import { gamepad } from '../gamepad/gamepad.js';
 
+const STAMP = 'c01bf6b1';                                        // written by tests/shoulder/stamp.mjs: the data files' version
 const $ = (id) => document.getElementById(id);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const cv = $('view'), gl = cv.getContext('webgl2', { antialias: true, alpha: false, stencil: true, powerPreference: 'high-performance' });
@@ -310,15 +311,19 @@ function controls() {
   }
   // drag on the picture turns the view; the wheel and two fingers zoom, as the Zoom slider does
   const fingers = new Map(); let span = 0, drag = null;
+  // while the browser's own zoom is in (a double tap on a phone), two fingers are the browser's, to get back out
+  const pageZoomed = () => (window.visualViewport ? visualViewport.scale : 1) > 1.01;
+  const leavePinch = () => cv.classList.toggle('pagezoom', pageZoomed());
+  if (window.visualViewport) { visualViewport.addEventListener('resize', leavePinch); leavePinch(); }
   cv.addEventListener('pointerdown', (e) => { fingers.set(e.pointerId, [e.clientX, e.clientY]); if (fingers.size === 1) drag = [e.clientX, e.clientY]; else { drag = null; span = spanOf(); } cv.setPointerCapture?.(e.pointerId); });
   const spanOf = () => { const [a, b] = [...fingers.values()]; return Math.max(24, Math.hypot(a[0] - b[0], a[1] - b[1])); };
   cv.addEventListener('pointermove', (e) => {
     if (!fingers.has(e.pointerId)) return;
     fingers.set(e.pointerId, [e.clientX, e.clientY]);
-    if (fingers.size === 2) { const d = spanOf(); if (span) { fly = null; st.z = clamp(st.z + Math.log(d / span) * 2, 0, LAST); touch(); } span = d; return; }
+    if (fingers.size === 2) { if (pageZoomed()) { span = 0; return; } const d = spanOf(); if (span) { fly = null; st.z = clamp(st.z + Math.log(d / span) * 2, 0, LAST); touch(); } span = d; return; }
     if (drag) { st.yaw = clamp(st.yaw - (e.clientX - drag[0]) * 0.006, -1.4, 1.4); st.pitch = clamp(st.pitch + (e.clientY - drag[1]) * 0.006, -0.9, 0.9); drag = [e.clientX, e.clientY]; touch(); }
   });
-  for (const type of ['pointerup', 'pointercancel']) cv.addEventListener(type, (e) => { fingers.delete(e.pointerId); span = 0; drag = null; });
+  for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) cv.addEventListener(type, (e) => { fingers.delete(e.pointerId); span = 0; drag = null; });
   cv.addEventListener('wheel', (e) => { e.preventDefault(); fly = null; st.z = clamp(st.z - e.deltaY * (e.deltaMode ? 0.05 : 0.002), 0, LAST); touch(); }, { passive: false });
   $('reload').addEventListener('click', () => location.reload());
   cv.addEventListener('webglcontextlost', (e) => { e.preventDefault(); broken = true; $('oops').hidden = false; });
@@ -336,7 +341,7 @@ function controls() {
 // ---- start ----
 async function start() {
   if (!gl) throw new Error('This browser does not offer WebGL 2.');
-  const get = (f) => fetch('../shoulder/data/' + f).then((r) => { if (!r.ok) throw new Error(f + ': ' + r.status); return f.endsWith('.bin') ? r.arrayBuffer() : r.json(); });
+  const get = (f) => fetch('../shoulder/data/' + f + '?v=' + STAMP).then((r) => { if (!r.ok) throw new Error(f + ': ' + r.status); return f.endsWith('.bin') ? r.arrayBuffer() : r.json(); });
   const [bj, bb, mj, pj] = await Promise.all([get('bones.json'), get('bones.bin'), get('muscles.json'), get('pose.json')]);
   await new Promise((r) => setTimeout(r, 0));
   model = makeModel(unpack(bj, bb), mj, pj);
