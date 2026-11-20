@@ -9,7 +9,7 @@
 import { createRequire } from 'node:module';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-const { chromium } = createRequire(import.meta.url)('playwright');
+let chromium; for (const from of [import.meta.url, '/opt/node-tools/']) { try { chromium = createRequire(from)('playwright').chromium; break; } catch { /* try the next place */ } }
 
 const BASE = process.env.BASE || 'http://localhost:8000/';
 const OUT = fileURLToPath(new URL('../../img/thumbs/', import.meta.url));
@@ -21,6 +21,7 @@ const SHOTS = {
   optics: { url: 'optics/', clip: [640, 235, 610], wait: 6000 },
   v2: { url: 'v2/', clip: [420, 130, 860], wait: 10000 },
   vesicle: { url: 'vesicle/#mode=vivo&p=0', clip: [400, 120, 880], wait: 30000 },
+  shoulder: { url: 'shoulder/#z=1.00&c=healthy&lift=30&turn=0', clip: [440, 90, 840], wait: 15000 },
 };
 
 const only = process.argv.slice(2);

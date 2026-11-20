@@ -13,7 +13,7 @@ experience is and where its code lives.
 - Run it with `python3 -m http.server 8000` from the repository root. ES modules do not load from
   `file://`.
 - Each experience is self-contained: `v2/` (Rainbows), `vesicle/`, `optics/` (Optics workshop),
-  `dag/` (Graph layout), `maple/` (Japanese maple) and `engine/` (Engine) have their own page, stylesheet (`css/`) and modules (`js/`). Do not change one while working on
+  `dag/` (Graph layout), `maple/` (Japanese maple), `engine/` (Engine) and `shoulder/` (Shoulder) have their own page, stylesheet (`css/`) and modules (`js/`). Do not change one while working on
   another.
   The one thing they share is controller support, `js/gamepad/gamepad.js` and `css/gamepad.css`: each
   page gives it a short mapping onto its own camera, zoom and scale functions.
@@ -124,9 +124,18 @@ Before pushing:
   rule for this page: motion is kept for what really moves). Moving parts are never cut. After changing any file under `js/engine/` or `css/engine.css`, run `node tests/engine/stamp.mjs`.
   The picture is ray-marched in a fragment shader, which is slow in software; on a machine with a
   graphics card look at the page itself as well, and on a phone.
+- For Shoulder, run `node tests/shoulder/model.mjs` (no browser needed) after changing the pose, the muscles
+  or how they bend: it samples hundreds of arm positions and fails if a bone enters another, a muscle point is
+  pushed into a bone, a muscle folds, the bursa leaves the tendon's outer side, or a muscle lengthens or
+  shortens against the textbook direction. After changing the muscle data, run `node tests/shoulder/review.mjs`
+  (about 2 minutes): it compares every built muscle with its scan. Then `node tests/shoulder/page.mjs`
+  (`--quick` for the desktop only). Gabe's rule for this page: wrong information is far worse than missing
+  information. Every sentence on screen is in `js/shoulder/facts.js` with its source; numbers come from the
+  model; anything drawn larger than life says so under the picture. After changing any file under
+  `js/shoulder/`, `css/shoulder.css` or `shoulder/data/`, run `node tests/shoulder/stamp.mjs`.
 - After changing `js/gamepad/`, `css/gamepad.css`, a page's `gamepad({ ... })` mapping, or which
   controls a page has, run `node tests/gamepad/run.mjs` (or with page names: `home`, `rainbows`,
-  `vesicle`, `optics`, `graph`, `maple`, `engine`, `deck`). It drives each page with a simulated Xbox
+  `vesicle`, `optics`, `graph`, `maple`, `engine`, `shoulder`, `deck`). It drives each page with a simulated Xbox
   controller at 1280 × 800 and fails if the ring cannot reach a control, a stick, trigger or bumper
   does nothing, or the picture of the pad does not list exactly what the page maps. A new page
   needs a mapping, and an entry in `PAGES` there.

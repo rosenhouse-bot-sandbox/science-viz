@@ -7,7 +7,7 @@
 //  - one finger alone does not zoom.
 // Fails on any of those not holding, or on a console error.
 //
-//   node tests/pinch/run.mjs [maple engine vesicle rainbows]   # needs Node 22 and Playwright, installed outside the repository
+//   node tests/pinch/run.mjs [maple engine shoulder vesicle rainbows]   # needs Node 22 and Playwright, installed outside the repository
 //   node tests/pinch/run.mjs --shots                           # also writes pictures to tests/pinch/out/
 import { createRequire } from 'node:module';
 import http from 'node:http';
@@ -38,6 +38,7 @@ const PAGES = {
     timed: true, same: (v, s) => Math.abs(v - s.z) < 0.004 },
   engine: { url: 'engine/?res=0.2', slider: 'zoom', dir: 1, start: 1, ready: () => !!window.__engine && !!document.getElementById('capTitle').textContent,
     timed: true, same: (v, s) => Math.abs(v - s.z) < 0.004 },   // starts from the Engine scale: at Car the crank turns a whole cycle in one slow frame of this test, and looks still
+  shoulder: { url: 'shoulder/?res=0.25', slider: 'zoom', dir: 1, ready: () => !!window.__shoulder && !!window.__shoulder.frame, same: (v, s) => Math.abs(v - s.z) < 0.004 },
   vesicle: { url: 'vesicle/', slider: 'zoom', dir: -1, ready: () => !!document.getElementById('zoomV').textContent },
   rainbows: { url: 'v2/?debug=1', slider: null, dir: -1, wide: 60, ready: () => !!window.__rainbows && !window.__rainbows.busy },       // no Zoom slider here: a pinch moves the camera within the scale
 };
@@ -59,7 +60,7 @@ for (const name of names) {
   const frame = () => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
   // In the page: the zoom the page holds, the slider's own value, and how far the browser has zoomed the whole page.
   const look = () => page.evaluate((slider) => {
-    const m = window.__maple || window.__engine, r = window.__rainbows;
+    const m = window.__maple || window.__engine || window.__shoulder, r = window.__rainbows;
     return { own: m ? { z: m.st.z } : r ? { z: r.cams[r.S.stage].gd } : null, v: slider ? +document.getElementById(slider).value : null, page: window.visualViewport.scale };
   }, P.slider);
   const where = (s) => (P.slider ? s.v : s.own.z);

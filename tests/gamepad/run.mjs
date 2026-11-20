@@ -63,6 +63,11 @@ const PAGES = {
     path: 'engine/?res=0.2#z=1&a=95', keys: ALL.filter((k) => k !== 'rs'), ready: () => !!window.__engine,
     zoom: () => window.__engine.st.z, settle: () => window.__engine.settle(), idle: () => !window.__engine.busy, stage: () => (window.__engine.busy ? null : Math.round(window.__engine.st.z * 1000) / 1000),
   },
+  shoulder: {
+    path: 'shoulder/?res=0.25#z=1&c=healthy&lift=0&turn=0', keys: ALL, ready: () => !!(window.__shoulder && window.__shoulder.frame),
+    look: () => window.__shoulder.st.yaw, zoom: () => window.__shoulder.st.z, settle: () => window.__shoulder.settle(), idle: () => !window.__shoulder.busy,
+    stage: () => (window.__shoulder.busy ? null : Math.round(window.__shoulder.st.z * 1000) / 1000),
+  },
 };
 
 let fails = 0;

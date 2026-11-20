@@ -321,8 +321,8 @@ Nothing is added to a page until a controller connects.
 | Left stick, D-pad | Move a gold ring between the page's controls. On a slider, left and right change it: one notch, then faster the longer it is held. With nowhere to go, the panel scrolls. |
 | A | Press the ringed control |
 | B | Close what is open (the picture of the pad, a dialog, a picked node), else back to the landing page |
-| Right stick | Rainbows and Vesicle fusion: turn the camera. Graph layout: pick out a node. |
-| Triggers | Zoom, as hard as they are pressed (Rainbows, Vesicle fusion, Japanese maple, Engine) |
+| Right stick | Rainbows, Vesicle fusion and Shoulder: turn the camera. Graph layout: pick out a node. |
+| Triggers | Zoom, as hard as they are pressed (Rainbows, Vesicle fusion, Japanese maple, Engine, Shoulder) |
 | Bumpers | The scale, stage, challenge or step before and after |
 | View | Show or hide a picture of the pad that says what each part does on this page |
 | Menu | Back to the Deck, on a visit that started there |
@@ -376,6 +376,7 @@ every push to `main`. In the repository settings, set Pages → Source to
   `main.js` controls).
 - `maple/index.html`, `css/maple.css`, `js/maple/*.js`: Japanese maple (see its section below).
 - `engine/index.html`, `css/engine.css`, `js/engine/*.js`: Engine (see its section below).
+- `shoulder/index.html`, `css/shoulder.css`, `js/shoulder/*.js`, `shoulder/data/`: Shoulder (see its section below).
 - `js/gamepad/`, `css/gamepad.css`: controller support, shared by every page (see Controller above).
 - `drafts/`: review boards from each design round.
 - `tests/vesicle/placement.mjs`: steps Vesicle fusion through every frame without a GPU and fails if a
@@ -877,3 +878,53 @@ each dot; `mol.js` the molecules and where each atom goes; `shaders.js` the car,
 controls. `css/engine.css` is the stylesheet. `node tests/engine/model.mjs` checks the model without a
 browser, and `node tests/engine/flow.mjs` the gas dots' paths; `node tests/engine/page.mjs` presses every control in a real one and steps both sliders end
 to end looking for jumps.
+
+## Shoulder
+
+A page at `shoulder/`: the right shoulder's rotator cuff, in 3D, to learn what the cuff is, what goes
+wrong with it, and what the common physical therapy exercises do to it.
+
+- **Bones are scans** (BodyParts3D, CC BY 4.0, credited on the page and in `shoulder/data/README.md`):
+  shoulder blade, collarbone, arm bone, forearm, ribs 1 to 7, breastbone. **Muscles are built** as stacks
+  of slices fitted to the scans of the same body's supraspinatus, infraspinatus, teres minor,
+  subscapularis and three parts of the deltoid, so that the page can bend, thicken and tear them.
+  `node tests/shoulder/review.mjs` compares every built muscle with its scan, both ways over the whole
+  surface, and fails if 5% of either lies more than 3 mm from the other, any point more than 6 mm, or the
+  volume is off by more than 10% (all seven pass with 95% within 0.7 mm). The scans themselves overlap
+  the bones a good deal; that is left as it is.
+- **Zoom** is continuous with three stops: Shoulder (30 cm across, deltoid on), Joint (17 cm, seen from
+  behind and above, the deltoid faded away where it is) and Tendon (5 cm, a cut front to back through the
+  supraspinatus tendon where it passes under the acromion; the half nearer the eye fades). Each cuff
+  muscle has its own color, which is only the picture's; tendon is drawn white.
+- **Conditions**: healthy, tendinopathy (the tendon drawn half as thick again near its end), partial tear
+  (half the thickness gone from the underside), full tear (a hole through, and the ball up to 3 mm higher, never nearer the acromion than 2 mm),
+  bursitis (the bursa 3 mm thick instead of 0.8 mm) and impingement (the tendon is lit in red where the
+  acromion presses on it: where the model has to push it out of the bone's way). The sizes are drawn,
+  not measured, and the page says so under each.
+- **Lift the arm** (0 to 150°, in the plane of the shoulder blade) and **Turn the arm** (60° in or out).
+  The shoulder blade turns a third of the lift (Inman's 2 to 1 rhythm), and a little about the vertical
+  where that is needed to keep it off the ribs (worked out ahead, `shoulder/data/pose.json`). In this
+  scan the acromion sits low, so the ball slides down in its socket just enough to keep 2 mm between the
+  bones (up to about 5 mm); real shoulders slide less, and the page says so.
+- **Exercises**, from the AAOS conditioning program: pendulum, sleeper stretch, turning out and in with a
+  band, and turning out with the arm up. Each plays once round in 6 seconds, with Play and a slider; the
+  muscles the program says each one works are lit. The body is not drawn leaning or lying down: the arm
+  is posed as it is relative to the body, and the page says so.
+- **Each muscle** (in the panel) gives each muscle's length against its length at rest, from the model.
+  The numbers under the picture (the narrowest gap between arm bone and acromion, and the ball's slide)
+  are from the model too. Every sentence on the page has a source, listed under it (`js/shoulder/facts.js`).
+- How a muscle bends is a rule, not a simulation: each slice keeps its shape and takes a share of the arm
+  bone's turn about the ball's middle (from none at the origin to all of it at the insertion), then is
+  pushed out of any bone it was not already in at rest. At the far ends of the turns (90° out with the
+  arm up) the deltoid bunches more untidily than a real one.
+- Labels are DOM elements. Each is shown only where its part is really seen: the page draws a small
+  picture of which part is at each pixel, and the label's dot goes to the nearest place its part shows.
+
+Code: `model.js` the bones, pose, gap and muscles; `view.js` the WebGL2 drawing (a cut plane with its faces
+filled in using the stencil buffer); `facts.js` every statement and its source; `main.js` the camera,
+labels, panel and controls; `geom.js`, `solid.js`, `gl.js` helpers. `css/shoulder.css` is the stylesheet.
+`tests/shoulder/`: `build-data.mjs` and `build-pose.mjs` make the data; `review.mjs` checks the muscles
+against the scans; `model.mjs` checks the model at hundreds of random arm positions (bones apart, no new
+points inside bone, no folds, and which muscles lengthen and shorten as the textbooks say); `page.mjs`
+presses every control and sweeps every slider looking for jumps. After changing any file under
+`js/shoulder/`, `css/shoulder.css` or `shoulder/data/`, run `node tests/shoulder/stamp.mjs`.
