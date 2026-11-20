@@ -103,7 +103,7 @@ export const LEVELS = [
     title: 'Light the match',
     task: 'Slide the lens and change its curve until the sunlight meets on the match head.',
     brief: 'Sunlight arrives from the left as parallel rays. Drag the white knob to slide the lens along its rail.',
-    learned: 'A lens that bulges in the middle bends parallel rays to one meeting point, its focus. The distance from lens to focus is the focal length, and stronger curves make it shorter. Look at the outermost rays: they cross a little early. That is spherical aberration, and it comes back in the camera challenge. The Sun is traced here as a single far-off point; its real image here would be a disc more than half a millimetre across.',
+    learned: 'A lens that bulges in the middle bends parallel rays to one meeting point, its focus. The distance from lens to focus is the focal length, and stronger curves make it shorter. Look at the outermost rays: they cross a little early. That is spherical aberration, and it comes back in the camera challenge. The Sun is traced here as a single far-off point. Its real image would be a disc more than half a millimeter across.',
     key: [['k-ray', 'Sunlight, one wavelength (550 nm)'], ['k-glass', 'Crown glass lens'], ['k-target', 'Match head, 1.5 mm']],
     bounds: [-112, -25, 14, 25],
     params: [
@@ -133,7 +133,7 @@ export const LEVELS = [
     id: 'picture', nav: 'Picture', unit: 'mm', scale: 'Candle 20 mm tall',
     title: 'Make a picture',
     task: 'Put a sharp, bright picture of the candle on the screen.',
-    brief: 'Every point of the candle sends light out in all directions. Light from the tip of the flame is drawn in gold, light from the foot of the candle in pale blue. The panel shows what lands on the screen.',
+    brief: 'Every point of the candle sends light out in all directions. Light from the tip of the flame is drawn in gold, and light from the foot of the candle is drawn in pale blue. The panel shows what lands on the screen.',
     learned: 'A picture is sharp when the light from each point of the candle lands on its own point of the screen. A small hole does it by blocking nearly all of the light. A lens bends the whole fan of light from a point back to a point, but at one distance only. That is focusing.',
     key: [['k-ray', 'Light from the tip of the flame'], ['k-ray2', 'Light from the foot of the candle'], ['k-stop', 'Plate with a hole'], ['k-glass', 'Crown glass lens, 40 mm'], ['k-target', 'Screen'], ['k-inset', 'Panel: the picture on the screen, made from the traced light. Its brightness is compressed so that a dim picture still shows.']],
     bounds: [-108, -20, 88, 20], aside: true,
@@ -156,7 +156,7 @@ export const LEVELS = [
     title: 'Step back',
     task: 'Carry the candle far away, and keep its picture sharp.',
     brief: 'The same lens and screen. Slide the candle away and watch the light that gets through the hole.',
-    learned: 'From far away, the light a lens catches from one point is a bundle of parallel rays, and the picture of that point is a small spot, one focal length behind the lens. From here on, parallel rays are the light from one far-off point of a scene, and a small spot means a sharp picture.',
+    learned: 'Rays from a far-off point reach the lens parallel to each other. The lens focuses them to a small spot, one focal length behind it. That spot is the picture of the point, and the smaller it is, the sharper the picture.',
     key: [['k-ray', 'Light from the tip of the flame'], ['k-ray2', 'Light from the foot of the candle'], ['k-stop', 'Plate with a hole, 10 mm'], ['k-glass', 'Crown glass lens, 40 mm'], ['k-target', 'Screen'], ['k-inset', 'Panel: the picture on the screen, made from the traced light. A candle too far off to show its shape is drawn as a dot big enough to see.']],
     bounds: [-108, -20, 88, 20], aside: true,
     params: [
@@ -177,8 +177,8 @@ export const LEVELS = [
     id: 'specs', nav: 'Glasses', unit: 'mm', scale: 'Eye 23.5 mm long',
     title: 'Fit a pair of glasses',
     task: 'Choose the lens power that puts the focus back on the retina and clears the eye chart.',
-    brief: 'This eye is a little too long, so light from a distant point meets in front of the retina and lands as a blur: nearsightedness. The chart shows what the eye makes of an eye chart across the room.',
-    learned: 'A lens that is thinner in the middle spreads light, which pushes the focus further back. Opticians measure power in dioptres, one over the focal length in metres, negative for a spreading lens. Look at the lens: the stronger it is, the thicker its edge. A letter on the 20/20 line is only 26 µm tall on the retina, so a blur of 16 µm leaves it soft. This one-surface model eye cannot do better, because a sphere is not the ideal shape; a real cornea flattens toward its edge.',
+    brief: 'This eye is a little too long. Light from a distant point meets in front of the retina and lands as a blur. That is nearsightedness. The chart shows what this eye makes of an eye chart across the room.',
+    learned: 'A lens that is thinner in the middle spreads light, which pushes the focus further back. Opticians measure power in diopters, one over the focal length in meters, negative for a spreading lens. Look at the lens. The stronger it is, the thicker the edge. A letter on the 20/20 line is only 26 µm tall on the retina, so a blur of 16 µm leaves it soft. This one-surface model eye cannot do better, because a sphere is not the ideal shape. A real cornea flattens toward the edge.',
     key: [['k-ray', 'Light from a far-off point (550 nm)'], ['k-glass', 'Spectacle lens, 40 mm across, 12 mm from the eye'], ['k-target', 'Retina'], ['k-inset', 'Chart: an eye chart as this eye sees it. The bottom row is the 20/20 line.']],
     bounds: [-27, -21.5, 25, 21.5], aside: true,
     params: [
@@ -218,9 +218,9 @@ export const LEVELS = [
     id: 'camera', nav: 'Camera', unit: 'mm', scale: 'Lens 26 mm across',
     title: 'A sharp, bright camera lens',
     task: 'Find a lens shape that is sharp without closing the iris past f/4.',
-    brief: 'One 50 mm lens, a distant point of light, and a sensor that slides itself to the best focus. Wide open the picture is bright but soft. Closing the iris sharpens it and blocks more of the light. Drag a white knob to open or close the iris.',
-    learned: 'Rays through the edge of a spherical lens bend too much and cross early: spherical aberration. It grows steeply with the opening, so closing the iris cures it, at the cost of light. Shape matters as well. With the curved face toward the distant scene both faces share the bending, and the blur is about a quarter of what the same glass gives turned round. Real camera lenses stack several elements so the errors of one cancel those of the next. Only light along the axis is traced here; blur off the axis and other wavelengths are for later challenges.',
-    key: [['k-ray', 'Light from a far-off point (550 nm)'], ['k-glass', 'Crown glass lens, 50 mm'], ['k-stop', 'Iris'], ['k-target', 'Sensor'], ['k-inset', 'Inset: a night scene as this sensor records it, magnified: stars, two of them close together, and a lit window. The bar is as wide as the blur you are allowed.']],
+    brief: 'This is one 50 mm lens with a distant point of light, and a sensor that slides itself to the best focus. Wide open, the picture is bright but soft. Closing the iris sharpens it and blocks more of the light. Drag a white knob to open or close the iris.',
+    learned: 'Rays through the edge of a spherical lens bend too much and cross early. That is spherical aberration. It grows steeply with the opening, so closing the iris cures it, at the cost of light. Shape matters as well. With the curved face toward the distant scene both faces share the bending, and the blur is about a quarter of what the same glass gives turned around. Real camera lenses stack several elements so the errors of one cancel those of the next. Only light along the axis is traced here; blur off the axis and other wavelengths are for later challenges.',
+    key: [['k-ray', 'Light from a far-off point (550 nm)'], ['k-glass', 'Crown glass lens, 50 mm'], ['k-stop', 'Iris'], ['k-target', 'Sensor'], ['k-inset', 'Inset: a night scene as this sensor records it, magnified. It shows stars, two of them close together, and a lit window. The bar is as wide as the blur you are allowed.']],
     bounds: [-46, -20, 64, 20],
     params: [
       { id: 'q', label: 'Lens shape', min: -1, max: 1, step: 0.05, value: -1, show: (v, b) => 'front ' + mm(b.R1) + ', back ' + mm(b.R2) },
@@ -269,12 +269,12 @@ export const LEVELS = [
   },
   // ───────────────────────────────────────────────────────────── colour
   {
-    id: 'colour', nav: 'Colour', unit: 'mm', scale: 'Lens 16 mm across',
-    title: 'Chase the colour fringe',
+    id: 'colour', nav: 'Color', unit: 'mm', scale: 'Lens 16 mm across',
+    title: 'Chase the color fringe',
     task: 'Pick a glass and set the curve for a 100 mm lens that lands the wavelengths closest together.',
-    brief: 'White light is a mix of many wavelengths, and glass slows the short ones more than the long ones. So a lens brings short wavelengths, which we see as blue, to a focus nearer than long ones, which we see as red, and a white point lands with coloured fringes. The sensor slides itself to the best focus.',
+    brief: 'White light is a mix of many wavelengths, and glass slows the short ones more than the long ones. So a lens brings short wavelengths, which we see as blue, to a nearer focus than long ones, which we see as red. A white point lands with colored fringes. The sensor slides itself to the best focus.',
     learned: 'Every glass bends short wavelengths more than long ones. The Abbe number says how little the bending varies: fluorite, at 95, spreads the wavelengths least, which is why long camera lenses use it. Notice that a glass with a higher index needs gentler curves for the same focal length. No single glass brings every wavelength to one focus, though. With one simple lens this blur, chromatic aberration, is set by the width of the lens and the Abbe number, and nothing else you can change. The cure is the next challenge.',
-    key: [['k-ray', 'White light, traced at 486, 546 and 656 nm, each drawn in the colour we see it as. Sharpness counts all three.'], ['k-glass', 'Lens'], ['k-target', 'Sensor'], ['k-inset', 'Inset: a night scene as this sensor records it, magnified: white stars, two of them close together, and a white window. Any colour in it is the lens’s doing. The bar is as wide as the blur you are allowed.']],
+    key: [['k-ray', 'White light, traced at 486, 546 and 656 nm, each drawn in the color we see it as. Sharpness counts all three.'], ['k-glass', 'Lens'], ['k-target', 'Sensor'], ['k-inset', 'Inset: a night scene as this sensor records it, magnified. It shows white stars, two of them close together, and a white window. Any color in it is the lens’s doing. The bar is as wide as the blur you are allowed.']],
     bounds: [-30, -14, 122, 14],
     params: [
       { id: 'glass', label: 'Glass', options: ['Fluorite', 'Crown', 'Flint', 'Dense flint'], value: 3 },
@@ -305,9 +305,9 @@ export const LEVELS = [
     id: 'doublet', nav: 'Doublet', unit: 'mm', scale: 'Lens 12 mm across',
     title: 'An achromatic doublet',
     task: 'Design a 50 mm lens from two cemented glasses that brings all the wavelengths to one sharp point.',
-    brief: 'A crown glass lens in front, and a second lens cemented behind it. Set the curve of the front lens, choose the glass of the second, and shape its back face. Shaped right, the second lens brings the wavelengths that the first one separated back together.',
-    learned: 'A lens that spreads light separates the wavelengths the opposite way to one that gathers it. Flint glass separates them nearly twice as strongly as crown for the same bending, so a weak spreading lens of flint cancels all of the crown lens’s chromatic error and only a bit more than half of its power. Made of crown as well, it cannot: cancelling the chromatic error would cancel the focusing too. This is the achromatic doublet (the name means without colour), the front lens of telescopes and binoculars since the 1750s. It trims spherical aberration as well, which is why the spot shrank so far. Dense flint cancels the chromatic error too, but with these shapes it leaves more spherical aberration behind, so the choice of glass pair decides how sharp the lens can be.',
-    key: [['k-ray', 'White light, traced at 486, 546 and 656 nm, each drawn in the colour we see it as. Sharpness counts all three.'], ['k-glass', 'Crown lens in front, your lens cemented behind'], ['k-target', 'Sensor'], ['k-inset', 'Inset: a night scene as this sensor records it, magnified: white stars, two of them close together, and a white window. Any colour in it is the lens’s doing. The bar is as wide as the blur you are allowed.']],
+    brief: 'A crown glass lens sits in front, with a second lens cemented behind it. Set the curve of the front lens, choose the glass of the second, and shape its back face. Shaped right, the second lens brings the wavelengths that the first one separated back together.',
+    learned: 'A lens that spreads light separates the wavelengths the opposite way to one that gathers it. Flint glass separates them nearly twice as strongly as crown for the same bending, so a weak spreading lens of flint cancels all of the crown lens’s chromatic error and only a bit more than half of its power. Made of crown as well, it cannot: cancelling the chromatic error would cancel the focusing too. This is the achromatic doublet (the name means without color), the front lens of telescopes and binoculars since the 1750s. It trims spherical aberration as well, which is why the spot shrank so far. Dense flint cancels the chromatic error too, but with these shapes it leaves more spherical aberration behind, so the choice of glass pair decides how sharp the lens can be.',
+    key: [['k-ray', 'White light, traced at 486, 546 and 656 nm, each drawn in the color we see it as. Sharpness counts all three.'], ['k-glass', 'Crown lens in front, your lens cemented behind'], ['k-target', 'Sensor'], ['k-inset', 'Inset: a night scene as this sensor records it, magnified. It shows white stars, two of them close together, and a white window. Any color in it is the lens’s doing. The bar is as wide as the blur you are allowed.']],
     bounds: [-16, -11, 96, 11],
     params: [
       { id: 'c1', label: 'Curve of the front lens', min: 24, max: 60, step: 0.5, value: 30, show: (v) => 'radius ' + f1(1000 / v) + ' mm' },
@@ -342,13 +342,13 @@ export const LEVELS = [
     id: 'wide', nav: 'Wide', unit: 'mm', scale: 'Lens 32 mm across',
     title: 'A lens for landscapes',
     task: 'Bend the lens and slide the stop until the picture is sharp at its edge as well as its middle.',
-    brief: 'A stop is a plate with a hole in it, like the iris of the camera challenge: only the light that gets through the hole reaches the sensor. Light drawn in gold comes from straight ahead and makes the middle of the picture. Light drawn in pale blue is the same wavelength from 20° off to one side, and makes the edge. Sliding the stop lets the same amount of light in. What it changes is which part of the lens the light from the side goes through: watch where the pale blue rays cross the lens as you drag the white knob. The gold rays stay in the centre.',
-    learned: 'Off the axis a simple lens smears a point into a comet shape (coma), and focuses it on a curved surface where the sensor is flat. Each patch of the lens makes its own errors, because light meets the glass there at its own angle. The stop picks the patch: the further it sits from the lens, the further from the centre the light from the side crosses the glass, while light from straight ahead keeps to the centre. With the lens bent into a meniscus, hollow side to the scene, and the stop at the right distance, those errors nearly cancel. William Wollaston found this in 1812, and his landscape lens went into simple cameras for well over a century. Only an up-and-down slice of each beam is traced here, so the error of the sideways slice (astigmatism) is not counted.',
+    brief: 'A stop is a plate with a hole in it, like the iris in the camera challenge. Only light through the hole reaches the sensor. Gold light comes from straight ahead and makes the middle of the picture. Pale blue light, of the same wavelength, comes from 20° off to one side and makes the edge. Sliding the stop lets in the same amount of light, but it changes where the side light crosses the lens. Drag the white knob and watch the pale blue rays. The gold rays stay in the center.',
+    learned: 'Off the axis a simple lens smears a point into a comet shape (coma), and focuses it on a curved surface where the sensor is flat. Each patch of the lens makes its own errors, because light meets the glass there at its own angle. The stop picks the patch. The further the stop sits from the lens, the further from the center the light from the side crosses the glass, while light from straight ahead keeps to the center. With the lens bent into a meniscus, hollow side to the scene, and the stop at the right distance, those errors nearly cancel. William Wollaston found this in 1812, and his landscape lens went into simple cameras for well over a century. Only an up-and-down slice of each beam is traced here, so the error of the sideways slice (astigmatism) is not counted.',
     key: [['k-ray', 'Light from straight ahead (550 nm)'], ['k-ray2', 'Light from 20° off to one side (also 550 nm)'], ['k-glass', 'Crown glass lens, 60 mm'], ['k-stop', 'Stop: a plate with a 5.5 mm hole, which makes this an f/11 lens'], ['k-target', 'Sensor, at the best focus for the middle'], ['k-inset', 'Inset: stars as the sensor records them, magnified, in the middle of the picture (left half) and at its edge (right half). At the edge only the up-and-down smear is traced.']],
     bounds: [-46, -24, 68, 30],
     params: [
       { id: 'q', label: 'Lens faces', min: -2.5, max: 1, step: 0.05, value: 0, show: (v, b) => side(b.R1, -1) + ' / ' + side(b.R2, 1) + ' mm' },
-      { id: 'xi', label: 'Stop position', min: -30, max: -6, step: 0.25, value: -6, show: (v) => f1(-v) + ' mm from the lens centre' },   // slider and stop move the same way
+      { id: 'xi', label: 'Stop position', min: -30, max: -6, step: 0.25, value: -6, show: (v) => f1(-v) + ' mm from the lens center' },   // slider and stop move the same way
     ],
     build(p) {
       const n = BK7.n(GREEN), P = 1 / 60, H = 16, D = 5.45, FIELD = 20 * DEG;
@@ -373,7 +373,7 @@ export const LEVELS = [
       const mid = m.groups[0] ? m.groups[0].spread * 1000 : Infinity, edge = m.groups[1] ? m.groups[1].spread * 1000 : Infinity;
       return { solved: mid <= 40 && edge <= 60,
         meters: [sharp('Sharp in the middle', mid, 40), sharp('Sharp at the edge', edge, 60)],
-        rows: [['Light from the side crosses the lens', b.off !== undefined ? f1(Math.abs(b.off)) + ' mm off centre' : 'nowhere'], ['Focal length', f1(b.f) + ' mm'], ['Sensor sits', f1(b.xs - b.L.v2) + ' mm behind the lens']] };
+        rows: [['Light from the side crosses the lens', b.off !== undefined ? f1(Math.abs(b.off)) + ' mm off center' : 'nowhere'], ['Focal length', f1(b.f) + ' mm'], ['Sensor sits', f1(b.xs - b.L.v2) + ' mm behind the lens']] };
     },
   },
   // ───────────────────────────────────────────────────────────── tower
@@ -382,7 +382,7 @@ export const LEVELS = [
     title: 'Aim the heliostats',
     task: 'Tilt each mirror so that its sunlight lands on the boiler at the top of the tower.',
     brief: 'A solar power tower boils its working fluid with sunlight bounced off a field of flat mirrors. The Sun stands 40° above the horizon behind the field. Drag a white knob sideways to tilt its mirror.',
-    learned: 'A mirror sends light off at the same angle it arrived at, so each mirror must face exactly halfway between the Sun and the boiler. That is why every mirror in the field needs its own tilt, and why, as the Sun crosses the sky, each one turns at half the Sun’s rate. Real plants steer thousands of mirrors this way all day. The Sun is traced here as a point; its half-degree width smears each beam by about a metre over these distances.',
+    learned: 'A mirror sends light off at the same angle it arrived at, so each mirror must face exactly halfway between the Sun and the boiler. That is why every mirror in the field needs its own tilt, and why, as the Sun crosses the sky, each one turns at half the Sun’s rate. Real plants steer thousands of mirrors this way all day. The Sun is traced here as a point; its half-degree width smears each beam by about a meter over these distances.',
     key: [['k-ray', 'Sunlight headed for the mirrors (the rest is not drawn)'], ['k-mirror', 'Heliostat mirrors, 8 m'], ['k-target', 'Boiler']],
     bounds: [8, -11, 166, 112],
     params: [0, 1, 2].map((i) => ({ id: 't' + i, label: ['Near', 'Middle', 'Far'][2 - i] + ' mirror tilt', min: -25, max: 25, step: 0.25, value: [14, -14, 12][i],

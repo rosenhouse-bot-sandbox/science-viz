@@ -75,13 +75,13 @@ export default {
 
   caption(S) {
     if (S.sun > 42) return { title: 'Too high a Sun, no bow',
-      body: 'The bow is a circle 42° from the point directly opposite the Sun. With the Sun more than 42° up, that whole circle lies below the horizon, which is why rainbows are seen in the morning and late afternoon. Only drops close by and below your eye line can still be seen coloured, as in the spray of a garden sprinkler. Lower the Sun to bring the bow back.' };
+      body: 'The bow is a circle 42° from the point directly opposite the Sun. With the Sun more than 42° up, that whole circle lies below the horizon. That is why rainbows are seen in the morning and late afternoon. Only drops close by and below your eye line can still be seen colored, as in the spray of a garden sprinkler. Lower the Sun to bring the bow back.' };
     if (S.focus === 'eye') return { title: 'Only some drops send light to your eye',
-      body: 'Gold arrows are sunlight going into a few marked drops; the coloured arrows are the light those drops send to your eye. You see a drop as coloured only while it is 42° away from the line to your head\'s shadow, near or far. Falling through, it is seen as red, then orange, yellow, green, blue and violet, and then pale. Another drop takes its place at once, so the bow stays still while the drops fall through it.' };
+      body: 'Gold arrows are sunlight going into a few marked drops. The colored arrows are the light those drops send to your eye. You see a drop as colored only while it is 42° away from the line to your head\'s shadow, near or far. Falling through, it is seen as red, then orange, yellow, green, blue and violet, and then pale. Another drop takes its place at once, so the bow stays still while the drops fall through it.' };
     if (S.focus === 'sun') return { title: 'Every drop does the same thing',
-      body: 'The Sun is behind you, and its light, drawn in gold, passes over your shoulder into the rain. Each drop sends part of that light back toward the Sun on a hollow cone, with the light seen as red outermost. All the cones point the same way. You see a drop as coloured only if its cone passes through your eye.' };
+      body: 'The Sun is behind you. Its light, drawn in gold, passes over your shoulder into the rain. Each drop sends part of that light back toward the Sun on a hollow cone, with the light we see as red on the outside. All the cones point the same way. You see a drop as colored only if its cone passes through your eye.' };
     return { title: 'Sun behind, rain ahead',
-      body: 'The gold arrows are sunlight. The falling streaks are raindrops, each coloured by what it sends to the standing figure. Near drops and far rain are seen coloured along the same cone, 42° from the line through your head to its shadow: the bow is a set of directions, not a place. Move in to watch single drops fall through it.' };
+      body: 'The gold arrows are sunlight. The falling streaks are raindrops, each colored by what it sends to the standing figure. Near drops and far rain are seen colored along the same cone, 42° from the line through your head to its shadow. The bow is a set of directions, not a place. Move in to watch single drops fall through it.' };
   },
   readout(S) {
     const top = (B1 / DEG - S.sun), top2 = (B2 / DEG - S.sun);

@@ -247,12 +247,12 @@ export default {
 
   caption(S) {
     if (S.focus === 'eye') return { title: 'The few rays that reach you',
-      body: 'You see only the light that leaves in exactly your direction. Rays that enter near one particular height all leave at almost the same angle, so the light is brightest at that angle: that is the bow. The angle differs with wavelength, so sliding the drop through the bow changes which wavelength is brightest toward you. Inside the bow, wavelengths whose brightest angle is further out still send a little light, and the mix is seen as near white. Outside it almost no light comes your way.' };
+      body: 'You see only the light that leaves in exactly your direction. Rays that enter near one particular height all leave at almost the same angle, so the light is brightest at that angle. That angle is the bow. The angle differs with wavelength, so sliding the drop through the bow changes which wavelength is brightest toward you. Inside the bow, wavelengths whose brightest angle is further out still send a little light, and the mix looks nearly white. Outside the bow, almost no light comes your way.' };
     if (S.focus === 'sun') return { title: 'Where all the sunlight goes',
       body: 'Sunlight covers the whole face of the drop. About 6% reflects off the front and 89% goes out through the back. Only about 5% reflects once inside and comes back out, concentrated on a hollow cone that opens 42° out from the line back toward the Sun.' };
     return S.mode === 'wave'
       ? { title: 'One wave, folded by a sphere',
-        body: 'Each line is a crest. In water the crests travel at three-quarters of their speed in air, so they are closer together and the front bends. After one reflection the front folds over on itself; the fold is where light is concentrated, and it leaves the drop 42° from the way back to the Sun.' }
+        body: 'Each line is a crest. In water the crests travel at three-quarters of the speed they have in air, so they are closer together and the front bends. After one reflection the front folds over on itself. The fold is where light is concentrated, and it leaves the drop 42° from the way back to the Sun.' }
       : { title: 'Bent, reflected, and bent again',
         body: 'Light bends as it enters, reflects off the back, and bends again as it leaves toward you. The back reflects only part of the light: the light meets it at 40°, short of the 49° needed for total reflection, so most of it escapes there. Each wavelength bends by a slightly different amount.' };
   },

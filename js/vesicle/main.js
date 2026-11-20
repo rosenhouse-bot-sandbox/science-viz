@@ -17,28 +17,28 @@ const phone = matchMedia('(max-width: 899px)');
 
 const STAGES = [
   { at: -ARRIVE, name: 'Arrival', title: 'A vesicle arrives',
-    body: `A synaptic vesicle packed with glutamate wanders the last ${APPROACH} nanometres by Brownian motion. About ${REACH} nanometres up, tethers on the active zone catch it and reel it in. Its synaptobrevin strands hang free until syntaxin and SNAP-25 can reach them.`,
-    vitro: `A vesicle wanders toward the membrane on the glass until tethers catch it about ${REACH} nanometres up. Its pHluorin is quenched, but the orange protein beside it is still half lit, so the vesicle shows in orange and brightens as it sinks into the field. A reflection camera needs no dye: its spot flickers as the vesicle's height changes, then settles.` },
+    body: `A synaptic vesicle packed with glutamate wanders the last ${APPROACH} nanometers by Brownian motion. About ${REACH} nanometers up, tethers on the active zone catch it and reel it in. The synaptobrevin strands hang free until syntaxin and SNAP-25 can reach them.`,
+    vitro: `A vesicle wanders toward the membrane on the glass until tethers catch it about ${REACH} nanometers up. The pHluorin is quenched, but the orange protein beside it is still half lit. So the vesicle shows in orange, and it brightens as it sinks into the field. A reflection camera needs no dye. Its spot flickers as the height of the vesicle changes, then settles.` },
   { at: 0, name: 'Docked', title: 'Docked and loaded',
-    body: 'A synaptic vesicle packed with glutamate waits a few nanometres above the cell membrane. Half-zipped SNARE proteins hold it there, ready to fire.',
-    vitro: 'The vesicle waits just above the membrane, about 50 nanometres over the glass. In its acid pHluorin stays dark, so the camera sees a steady orange spot and almost nothing at 510 nanometres.' },
-  { at: PH.CA, name: 'Trigger', title: 'Calcium pulls the trigger',
-    body: 'A nerve impulse opens calcium channels. Calcium binds synaptotagmin, and the SNAREs zip shut toward their anchors, forcing the two membranes into contact.',
-    vitro: 'Calcium enters and the SNAREs zip shut, pulling the vesicle down into the brighter part of the evanescent field. The orange spot brightens a little; pHluorin is still quenched.' },
+    body: 'A synaptic vesicle packed with glutamate waits a few nanometers above the cell membrane. Half-zipped SNARE proteins hold it there, ready to fire.',
+    vitro: 'The vesicle waits just above the membrane, about 50 nanometers over the glass. The acid inside keeps pHluorin dark, so the camera sees a steady orange spot and almost nothing at 510 nanometers.' },
+  { at: PH.CA, name: 'Trigger', title: 'Calcium triggers fusion',
+    body: 'A nerve impulse opens channels that allow calcium from outside the cell to rush in. The calcium binds to synaptotagmin, which causes the SNAREs to \'zip\' closed, forcing the two membranes together.',
+    vitro: 'Calcium enters and the SNAREs \'zip\' shut, pulling the vesicle down into the brighter part of the evanescent field. The orange spot brightens a little. The pHluorin is still quenched.' },
   { at: PH.STALK, name: 'Hemifusion', title: 'The facing layers merge',
-    body: 'The near halves of the two bilayers join in an hourglass stalk. Their lipids start to mix, but the far layers are intact and the contents stay sealed.' },
+    body: 'The near halves of the two bilayers join in an hourglass stalk. The lipids start to mix, but the far layers are intact, so the contents stay sealed.' },
   { at: PH.PORE, name: 'Pore opens', title: 'A fusion pore opens',
-    body: 'The far layers give way and a channel barely two nanometres across connects the vesicle to the outside. The first glutamate slips through.',
-    vitro: 'A pore two nanometres wide opens. Protons rush out, the pH inside jumps from 5.5 to 7.4, and every pHluorin lights up at once: the spot on the camera flashes from orange to yellow. The orange protein only doubles.' },
+    body: 'The far layers break, and a channel barely two nanometers across connects the vesicle to the outside. The first glutamate passes through.',
+    vitro: 'A pore two nanometers wide opens. Protons rush out, and the pH inside rises from 5.5 to 7.4. Every pHluorin lights up at once, so the spot on the camera changes from orange to yellow. The orange protein only doubles in brightness.' },
   { at: PH.DILATE, name: 'Release', title: 'The pore widens',
-    body: 'The neck dilates and glutamate spreads out into the 20-nanometre cleft. Inside, the glutamate keeps moving about the whole vesicle, so it thins out evenly as it leaves. It reaches receptors on the next cell in microseconds, and their channels open.',
+    body: 'The neck dilates and glutamate spreads out into the 20-nanometer cleft. Inside, the glutamate keeps moving about the whole vesicle, so it thins out evenly as it leaves. It reaches receptors on the next cell in microseconds, and the receptor channels open.',
     vitro: 'The neck dilates and glutamate spreads out into the thin layer of medium over the glass. The glowing tags slide down toward the glass, where the laser field is strongest.' },
   { at: PH.OMEGA, name: 'Collapse', title: 'The vesicle flattens',
     body: 'Membrane tension pulls the vesicle flat. Its lipids spread into the cell membrane, and the spent SNARE complexes, now in one membrane, drift away.',
     vitro: 'The vesicle flattens into the cell membrane. Tagged synaptobrevin drifts outward with the lipids, and the spot on the camera spreads and dims.' },
   { at: PH.MERGED, name: 'Merged', title: 'One membrane',
-    body: 'The vesicle is gone and its lipids keep mixing with their neighbours. The cell will pull SNAREs apart for reuse and pinch off new vesicles nearby.',
-    vitro: 'The vesicle is gone. Its tags keep spreading until the spot fades into the background, which is how a fusion event is told apart from a vesicle that just arrives.' },
+    body: 'The vesicle has flattened and disappeared into the membrane. All the lipids are mixed together, and keep mixing. The cell will pull SNAREs apart for reuse and pinch off new vesicles nearby.',
+    vitro: 'The vesicle is gone. The tags keep spreading until the spot fades into the background. That is how a fusion event is told apart from a vesicle that has only arrived.' },
 ];
 const LABELS = Object.fromEntries(Object.entries(INFO).map(([id, v]) => [id, v.label]));
 LABELS.cleft = 'Synaptic cleft, 20 nm'; LABELS.gap = `Medium, ${GAP} nm`; LABELS.coverslip = 'Coverslip, 0.17 mm';
@@ -49,13 +49,13 @@ const INF_STAGES = [
   { at: -1e9, name: 'Waiting', title: 'Nothing at the membrane yet',
     body: 'The vesicle is still high in the field, a faint orange smudge. The beliefs on the right are the priors: what the literature would let us assume before seeing this video. The gold band in the scene is where the membrane could be.' },
   { arrive: true, name: 'Arrival', title: 'Orange without green: it has arrived',
-    body: 'The 589 nm band steps up and the 510 nm band does not. No pore has opened, so the change must be position: the vesicle has come down into brighter light. The green outline is the 510 nm band alone, which barely notices.',
-    irm: 'The 589 nm band steps up and the 510 nm band does not, so no pore has opened: the vesicle has come down into brighter light. The reflection picture changes at the same moment, because the vesicle now sits at a different height.' },
+    body: 'The 589 nm band steps up and the 510 nm band does not. No pore has opened, so the change must be in position. The vesicle has come down into brighter light. The green outline is the 510 nm band alone, which barely changes.',
+    irm: 'The 589 nm band steps up and the 510 nm band does not, so no pore has opened. The vesicle has come down into brighter light. The reflection picture changes at the same moment, because the vesicle now sits at a different height.' },
   { at: 0, name: 'The flash', title: 'Green catches up: the pore',
     body: `The ${LAMBDA_EM} nm band jumps ${Math.round(1 / QUENCH)}-fold and the ${LAMBDA_EM_O} nm band only doubles. Only acid leaving through a pore does that. Within two frames the moment of fusion is known to a few milliseconds, and the number of tags follows from how bright the flash is.` },
   { at: 25, name: 'Settling', title: 'The shape of the rise',
     body: 'Both bands now climb together as the vesicle flattens and its tags sink into brighter light. How fast that happens says how quickly it collapsed. Size is harder: it shows only in how much dimmer the docked vesicle was.',
-    irm: 'The reflection picture changes as the vesicle flattens. How large the change is depends on the size of the vesicle and not on its tags, and how fast it happens follows the pore as it widens.' },
+    irm: 'The reflection picture changes as the vesicle flattens. The size of the change depends on the size of the vesicle, not on the tags. The speed of the change follows the pore as it widens.' },
   { at: 120, name: 'Spreading', title: 'Spreading reveals diffusion',
     body: 'The spot widens as tagged synaptobrevin drifts away, and every extra frame sharpens the diffusion estimate. The blue fan is the forecast for frames not yet seen.',
     irm: 'The spot widens as the tags drift away, which gives diffusion. The green outlines are what the two fluorescence bands alone would allow: compare them with the gold for vesicle size, collapse time and pore width.' },
@@ -174,7 +174,7 @@ function syncUI() {
         // Every number here is read from the model: the fringe spacing, the blur, the docked vesicle's
         // contrast at the centre of its spot, and how far out of focus each camera is.
         const io = irmNow(), c = 100 * io.spot(moment(io, 0, st.diam / 2 - 2.4, [0, 0]), 0), nm = (v) => Math.round(Math.abs(v)) + ' nm';
-        $('wlNote').textContent = `Brightness repeats every ${Math.round(io.fringe)} nm of height. Blur ${Math.round(io.fwhm)} nm in focus. The centre of a docked ${st.diam} nm vesicle's spot is ${Math.abs(c).toFixed(2)}% ${c < 0 ? 'darker' : 'brighter'} than the background.`;
+        $('wlNote').textContent = `Brightness repeats every ${Math.round(io.fringe)} nm of height. Blur ${Math.round(io.fwhm)} nm in focus. The center of a docked ${st.diam} nm vesicle's spot is ${Math.abs(c).toFixed(2)}% ${c < 0 ? 'darker' : 'brighter'} than the background.`;
         $('focusNote').textContent = Math.abs(io.apart) < 15
           ? `One objective serves both cameras. At ${st.lambda} nm it focuses within ${nm(io.apart).replace(/^0 nm$/, '1 nm')} of where it focuses the ${LAMBDA_EM} nm fluorescence, so both pictures are sharp.`
           : `One objective serves both cameras, and at ${st.lambda} nm it focuses ${nm(io.apart)} ${io.apart > 0 ? 'deeper' : 'shallower'} than at ${LAMBDA_EM} nm. The reflection camera is ${Math.abs(io.dz) < 1 ? 'in focus' : nm(io.dz) + ' out of focus'}. The fluorescence camera is ${Math.abs(io.dzF) < 1 ? 'in focus' : nm(io.dzF) + ' out, which widens its blur from ' + Math.round(CAM.fwhm) + ' to ' + Math.round(CAM.fwhm * io.blurF) + ' nm'}.`;
@@ -227,8 +227,8 @@ function applyIrm() {
   $('obsCap').textContent = on ? 'TIRF' : 'Recorded'; $('expectCap').textContent = on ? 'Expected' : 'Model expects';
   $('pipNote').textContent = on
     ? `Left: fluorescence, ${LAMBDA_EM} nm drawn in green and ${LAMBDA_EM_O} nm in orange. Right: ${st.lambda} nm light reflected by the glass, mixed with the far weaker light scattered back by the membranes above it. ` + (st.sub
-      ? `A frame taken before our vesicle arrived has been subtracted, so mid-grey means no change since then, and black and white are ${+(SPAN_DIFF * 100).toFixed(1)}% of the background darker and brighter. Vesicles that were already docked cancel out. Ours shows alone, and fades to nothing as it merges into the flat membrane.`
-      : `Mid-grey is the bare background; black and white are ${+(SPAN * 100).toFixed(1)}% below and above it. Each spot is a vesicle seen through the flat membrane, not a dent in it, and it shows whether its tags are lit or not. A real cell would add a static mottle of its own, left out here.`)
+      ? `A frame taken before our vesicle arrived has been subtracted, so mid-gray means no change since then, and black and white are ${+(SPAN_DIFF * 100).toFixed(1)}% of the background darker and brighter. Vesicles that were already docked cancel out. Ours shows alone, and fades to nothing as it merges into the flat membrane.`
+      : `Mid-gray is the bare background; black and white are ${+(SPAN * 100).toFixed(1)}% below and above it. Each spot is a vesicle seen through the flat membrane, not a dent in it, and it shows whether its tags are lit or not. A real cell would add a static mottle of its own, left out here.`)
     : `Two pictures laid over each other: ${LAMBDA_EM} nm light from pHluorin, drawn in green, and ${LAMBDA_EM_O} nm light from the orange protein, drawn in orange. Orange alone is a vesicle that has not fused; yellow is one whose pore has opened. Each square is one ${CAM.nm} nm pixel, and the grain is shot noise.`;
 }
 $('irm').addEventListener('change', (e) => { st.irm = e.target.checked; applyIrm(); stageIdx = -1; delete shown.wl; syncUI(); resize(); pipRect = $(st.infer ? 'inf' : 'pip').getBoundingClientRect(); });
