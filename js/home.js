@@ -5,9 +5,9 @@
 const started = (t) => new Date(t).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 
 export function ago(then, now = Date.now()) {
-  const h = Math.floor((now - then) / 3.6e6);
-  if (h < 1) return 'under an hour ago';
-  if (h < 49) return h === 1 ? '1 hour ago' : `${h} hours ago`;
+  const m = Math.max(0, Math.floor((now - then) / 6e4)), h = Math.floor(m / 60);
+  if (h < 2) return m === 1 ? '1 minute ago' : `${m} minutes ago`;
+  if (h < 49) return `${h} hours ago`;
   return `${Math.floor(h / 24)} days ago`;
 }
 
