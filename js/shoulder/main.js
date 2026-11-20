@@ -87,7 +87,7 @@ function compute() {
   soft.push({ key: 'bursa' + (BURSA_MM[cond] ?? 0.8), b: bu, pos: bm.pos, col: COL.bursa, capCol: COL.bursaCut, glow: st.pick === 'bursa' ? 0.35 : 0,
     alpha: 0.55 + 0.45 * smooth((st.z - 1.2) / 0.5) });   // see-through until the cut, so that the tendon under it shows
   const g = model.gap(T);
-  frame = { P, T, soft, len, gap: g.mm, gapAt: g, slide: model.glideAt(model.stored(P.elev, P.plane), P.rot ?? 0), cond };
+  frame = { P, T, soft, len, gap: g.mm, gapAt: g, slide: T.glide, cond };
 }
 // impingement: the corners of the tendon that the acromion presses on at this pose, that is, the corners the model
 // has to push out of the shoulder blade (none are pushed with the arm at rest)

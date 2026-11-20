@@ -124,10 +124,13 @@ export function makeModel(bones, musclesJson, table = null) {
     const joint = { R: Rg, t: V.sub(HC, mv(Rg, HC)) };
     let hum = compose(scap, joint);
     // the ball slides down to keep its room (unless told not to), and a large tear lets it ride up
-    const slide = (P.auto === false ? 0 : -glideAt(fit, rot)) + up;
-    if (slide) { const dir = turn(scap, [0, 1, 0]); hum = { R: hum.R, t: V.add(hum.t, V.mul(dir, slide)) }; }
+    let glide = P.auto === false ? 0 : glideAt(fit, rot);
+    const dir = turn(scap, [0, 1, 0]), moved = (g) => ({ R: hum.R, t: V.add(hum.t, V.mul(dir, up - g)) });
+    // the stored glide is worked out on a grid of lifts and turns; between them, slide a little further if needed
+    if (P.auto !== false && up === 0) for (let k = 0; k < 3; k++) { const g = gap({ scapula: scap, humerus: moved(glide) }).mm; if (g >= CLEAR - 0.01) break; glide += CLEAR - g + 0.03; }
+    if (glide || up) hum = moved(glide);
     const fore = compose(hum, about(EL, ELB, rad(P.elbow ?? 0)));
-    return { scapula: scap, clavicle: clav, humerus: hum, forearm: fore, rest: I3(), fit };
+    return { scapula: scap, clavicle: clav, humerus: hum, forearm: fore, rest: I3(), fit, glide };
   }
   const bodyOf = (b) => BODY[b] || 'rest';
 
@@ -279,16 +282,32 @@ export function makeModel(bones, musclesJson, table = null) {
     return bursaFor.get(key);
   }
 
-  // how much of the insertion's movement a point at t (0 origin, 1 insertion) takes
-  const follow = (t) => sstep(0.55, 0.97, t);
+  // how much of the arm bone's turn a slice at t (0 origin, 1 insertion) takes: a cuff muscle crosses the joint
+  // near its end, the deltoid just below where it starts (the acromion and collarbone sit right over the joint)
+  const FOLLOW = { cuff: [0.55, 0.97], deltoid: [0.04, 0.6] };
   // A built mesh at a pose. opts.shape(t, s, top) may return { thick, lift }: the outline's half thickness is
   // multiplied by thick, and lift (a share of the full thickness) raises the bottom face (a tear from below).
   function muscle(b, T, opts = {}) {
     const O = T[b.from], H = T.humerus, ball = apply(H, HC), into = Object.keys(SOL).map((k) => [k, SOL[k], T[k], invT(T[k])]);
-    const tOf = b.tOf || ((i) => i / (b.S - 1));
-    const at = (p, t) => { const w = follow(t); return w <= 0 ? apply(O, p) : w >= 1 ? apply(H, p) : V.add(V.mul(apply(O, p), 1 - w), V.mul(apply(H, p), w)); };
+    const tOf = b.tOf || ((i) => i / (b.S - 1)), [f0, f1] = b.cuff === false ? FOLLOW.deltoid : FOLLOW.cuff, follow = (t) => sstep(f0, f1, t);
+    // The arm bone's turn as seen from the muscle's origin bone. Each slice of the muscle keeps its own shape and
+    // takes the share follow(t) of that turn, about the ball's middle, keeping its own shape (so that a muscle twists
+    // along its length rather than being crushed, and passes over the ball rather than through it).
+    // The turn is split into a swing of the arm bone's long axis and a twist about it, each shared out by w.
+    const rel = compose(invT(O), H), Rr = rel.R, a0 = DOWN, a1 = mv(Rr, a0);
+    const sw = Math.acos(clamp(V.dot(a0, a1), -1, 1)), sax = V.len(V.cross(a0, a1)) > 1e-9 ? V.norm(V.cross(a0, a1)) : [1, 0, 0];
+    const Tw = mm(tr(axisR(sax, sw)), Rr), tw = Math.atan2(V.dot(a0, [Tw[2][1] - Tw[1][2], Tw[0][2] - Tw[2][0], Tw[1][0] - Tw[0][1]]), Tw[0][0] + Tw[1][1] + Tw[2][2] - 1);
+    const turnAt = (w) => mm(axisR(sax, sw * w), axisR(a0, tw * w));
+    const slideRel = V.sub(apply(rel, HC), HC);
+    const frames = b.sl.map((s, i) => {
+      const w = follow(tOf(i));
+      if (w <= 0) return { c: apply(O, s.c), R: O.R };
+      if (w >= 1) return { c: apply(H, s.c), R: H.R };
+      const Rw = turnAt(w);                                    // turned about the ball's middle: it keeps its distance
+      return { c: apply(O, V.add(V.add(HC, mv(Rw, V.sub(s.c, HC))), V.mul(slideRel, w))), R: mm(O.R, Rw) };
+    });
     // a muscle keeps its volume: its cross-section grows as it shortens
-    const cs = b.sl.map((s, i) => at(s.c, tOf(i))), L = arc(cs), k = Math.sqrt(b.L0 / L);
+    const L = arc(frames.map((f) => f.c)), k = Math.sqrt(b.L0 / L);
     const out = new Float32Array(b.rest.length * 3), pressed = new Float32Array(b.rest.length);
     b.rest.forEach((p0, i) => {
       const c = b.at[i], t = b.t[i];
@@ -299,15 +318,15 @@ export function makeModel(bones, musclesJson, table = null) {
         if (sh?.lift && !c.top) v = Math.min(c.mid + c.h - 0.3, v + sh.lift * 2 * c.h);
         p = V.add(s.c, V.add(V.mul(s.U, c.u), V.mul(s.W, v)));
       }
-      const s = b.sl[c.cap !== undefined ? c.cap : c.i];
-      let q = at(V.add(s.c, V.mul(V.sub(p, s.c), k)), t);
+      const si = c.cap !== undefined ? c.cap : c.i, s = b.sl[si], f = frames[si];
+      let q = V.add(f.c, mv(f.R, V.mul(V.sub(p, s.c), k)));
       // wrapped over the ball: never closer to its middle than at rest
       const d = V.sub(q, ball), l = V.len(d); if (l < b.wrap) q = V.add(ball, V.mul(d, b.wrap / l));
-      for (const [kk, f, Tk, Ik] of into) {
+      for (let pass = 0; pass < 2; pass++) for (const [kk, f, Tk, Ik] of into) {     // twice: one push can lead into another bone
         if (b.restIn[kk][i]) continue;
         const loc = apply(Ik, q), dp = f.depth(loc); if (dp <= 0) continue;
         const o = f.out(loc); if (o) q = apply(Tk, V.add(loc, V.mul(o, dp + 0.4)));
-        if (kk === 'scapula' && loc[1] > HC[1] + 0.8 * headR) pressed[i] = dp;   // how far the acromion had to push this corner
+        if (kk === 'scapula' && loc[1] > HC[1] + 0.8 * headR) pressed[i] = Math.max(pressed[i], dp);   // how far the acromion had to push this corner
       }
       out[3 * i] = q[0]; out[3 * i + 1] = q[1]; out[3 * i + 2] = q[2];
     });
