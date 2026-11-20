@@ -17,7 +17,7 @@ out vec3 vDir;
 void main() { vDir = uRay * vec3(aPos.xy, 1.0); gl_Position = vec4(aPos.xy, 0.9999, 1.0); }`;
 export const SKY_FS = HEAD + `
 in vec3 vDir; out vec4 o;
-uniform vec3 uSunW; uniform float uDay;      // how far the Sun is up: 0 at the horizon, 1 well above it
+uniform vec3 uSunW; uniform float uDay, uLit;      // the sky's daylight: 0 at the end of twilight, 1 by day; and the sunlight's strength
 vec3 day(float y) { return mix(vec3(0.5,0.69,0.9), vec3(0.075,0.25,0.6), smoothstep(0.0, 0.55, y)); }
 vec3 sky(float y) {
   vec3 c = mix(vec3(0.886,0.635,0.455), vec3(0.655,0.412,0.478), smoothstep(0.0, 0.05, y));
@@ -30,7 +30,8 @@ void main() {
   vec3 d = normalize(vDir);
   vec3 c = d.y >= 0.0 ? mix(sky(d.y), day(d.y), uDay) : mix(mix(vec3(0.886,0.635,0.455) * 0.5, vec3(0.5,0.69,0.9), uDay), mix(vec3(0.03,0.05,0.06), vec3(0.2,0.3,0.25), uDay), smoothstep(0.0, 0.12, -d.y));
   float s = max(dot(d, uSunW), 0.0);
-  c += mix(vec3(1.0,0.72,0.45), vec3(1.0,0.95,0.86), uDay) * (0.5 * pow(s, 40.0) + 0.22 * pow(s, 6.0));
+  c += mix(vec3(1.0,0.72,0.45), vec3(1.0,0.95,0.86), uLit) * (0.5 * pow(s, 40.0) + 0.22 * pow(s, 6.0));
+  c += (1.0 - uLit) * uDay * vec3(0.55,0.32,0.12) * pow(s, 3.0) * exp(-max(d.y, 0.0) / 0.12);      // a low Sun yellows the sky near it
   o = vec4(c, 1.0);
 }`;
 
@@ -49,6 +50,7 @@ in vec3 vW; in vec3 vV; out vec4 o;
 uniform int uKind; uniform vec4 uShape; uniform vec3 uTint;
 uniform float uLum; uniform vec3 uHaze;        // how bright the daylight is, and the colour of the far air
 uniform vec4 uShade; uniform float uShadeL;    // the tree's shadow: the way to the Sun along the ground, how far off its middle lies, how dark it is; and its length
+uniform vec3 uTrunk;                           // the trunk's: its length, half-width and darkness
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float noise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(hash(i), hash(i + vec2(1,0)), f.x), mix(hash(i + vec2(0,1)), hash(i + vec2(1,1)), f.x), f.y); }
 void main() {
@@ -58,6 +60,8 @@ void main() {
     c *= 1.0 - 0.32 * exp(-dot(vW.xz, vW.xz) / 7.0);                                            // under the tree little of the sky is seen
     vec2 sd = vW.xz + uShade.xy * uShade.z; float al = dot(sd, uShade.xy), pe = sd.x * uShade.y - sd.y * uShade.x;
     c *= 1.0 - uShade.w * exp(-(al * al / (uShadeL * uShadeL) + pe * pe / 7.0));                  // the tree's shadow, longer the lower the Sun
+    { float ta = -dot(vW.xz, uShade.xy), tp = vW.x * uShade.y - vW.z * uShade.x;                  // the trunk's
+      c *= 1.0 - uTrunk.z * step(0.0, ta) * smoothstep(uTrunk.x, uTrunk.x * 0.85, ta) * exp(-tp * tp / (uTrunk.y * uTrunk.y)); }
     c = mix(c * uLum, uHaze, smoothstep(8.0, 60.0, r));                                         // haze with distance
     o = vec4(c, 1.0);
   } else {

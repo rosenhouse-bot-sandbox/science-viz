@@ -625,7 +625,13 @@ What the page shows, and where each part comes from (`js/maple/model.js` unless 
 - **The Sun** stands where it does at five in the afternoon, solar time, at 35° N on each date
   (`sunAt` in `model.js`): 25° up at midsummer, within a degree of the horizon in mid November, just set by
   late December. The sky, the brightness of the lawn, hills and leaves, and the tree's shadow
-  follow its height, so summer is the bright part of the year. The panel prints its height.
+  follow its height, so summer is the bright part of the year. The panel prints its height. The sky
+  stays day-blue until the Sun is near the horizon (yellowed near a low Sun) and darkens through twilight, which
+  ends 8° below it; the Sun on this page never gets lower than about 2° below, so the sky is never night-dark.
+  The sunlight on the tree weakens much sooner, as its path through the air lengthens: with the Sun 4°
+  up the tree is lit about half as brightly as in summer. Low sunlight is also yellower; that is not
+  drawn on the tree, so that each leaf's color stays the one its pigments give. The shadow is as dark
+  as the crown is full of leaf (bare twigs stop about an eighth as much light), and the trunk casts a line.
 - **Cells**: tall cells seen from the side, chloroplasts along their walls and the vacuole down
   the middle of each. In autumn the stacks of membrane inside each chloroplast go and drops of fat
   take their place (in the followed cell they are drawn one by one), the chloroplasts shrink and

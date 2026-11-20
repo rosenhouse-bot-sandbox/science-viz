@@ -1,6 +1,6 @@
 // The two small pictures in the panel: the light that comes back from the leaf, by wavelength, and
 // the foot of the leaf stalk cut lengthwise. Both are drawn from the same model as the main picture.
-import { returned, bandTable, wavelengthRGB, encode, NS, nm, NM0, NM1, PIG, css, clamp, smooth, mix, leafRGB, colourName, rgbOf } from './model.js?v=c721e257';
+import { returned, bandTable, wavelengthRGB, bright, encode, NS, nm, NM0, NM1, PIG, css, clamp, smooth, mix, leafRGB, colourName, rgbOf } from './model.js?v=9661f5dc';
 
 const spec = new Float64Array(NS);
 // Size the canvas for the screen's pixels and return a context that draws in CSS pixels.
@@ -17,8 +17,8 @@ export function drawSpectrum(cv, p, ink) {
   const { ctx, W, H } = prep(cv, 100), strip = Math.round(H * 0.24), top = strip + 8;
   returned(p, spec);
   for (let x = 0; x < W; x++) {                            // top: each wavelength, as bright as the share of it that comes back
-    const l = NM0 + (NM1 - NM0) * x / (W - 1), c = wavelengthRGB(l), r = at(spec, l) / 0.6;
-    ctx.fillStyle = css([encode(c[0] * r * 1.5), encode(c[1] * r * 1.5), encode(c[2] * r * 1.5)]);
+    const l = NM0 + (NM1 - NM0) * x / (W - 1), c = bright(wavelengthRGB(l), at(spec, l) / 0.6 * 1.5);
+    ctx.fillStyle = css(c.map(encode));
     ctx.fillRect(x, 0, 1, strip);
   }
   ctx.fillStyle = 'rgba(234,240,255,.05)'; ctx.fillRect(0, top, W, H - top);
@@ -111,7 +111,7 @@ export function drawChain(cv, n) {
   for (let x = 0; x < W; x++) {
     const l = UV0 + (NM1 - UV0) * x / (W - 1), pass = Math.exp(-2.2 * chainBand(l, m.peak));
     if (l < NM0) { const v = Math.round(18 + 52 * pass); ctx.fillStyle = `rgb(${v},${v},${v + 6})`; }
-    else { const c = wavelengthRGB(l); ctx.fillStyle = css([encode(c[0] * pass * 1.5), encode(c[1] * pass * 1.5), encode(c[2] * pass * 1.5)]); }
+    else { const c = bright(wavelengthRGB(l), pass * 1.5); ctx.fillStyle = css(c.map(encode)); }
     ctx.fillRect(x, top, 1, sh);
   }
   ctx.strokeStyle = 'rgba(234,240,255,.9)'; ctx.lineWidth = 1.5; ctx.lineJoin = 'round'; ctx.beginPath();
