@@ -363,7 +363,13 @@ every push to `main`. In the repository settings, set Pages → Source to
 
 ## Layout
 
-- `index.html`: the landing page with a button per experience.
+- `index.html`, `css/home.css`, `js/home.js`: the landing page, one tile per experience in
+  alphabetical order, each with a thumbnail (`img/thumbs/`, taken from the pages by
+  `node tests/home/thumbs.mjs` with a local server running) and when it was started and last
+  updated. Those dates come from git history: the Pages workflow runs `.github/dates.mjs` just
+  before it uploads the site, which writes `dates.json` (published, never committed), and the page
+  works out "5 hours ago" in the browser. Run the script by hand to see the dates locally;
+  without the file the date lines stay hidden.
 - `v2/index.html`, `css/v2.css`, `js/v2/`: Rainbows v2 (`gl.js` engine, `optics.js` physics, `main.js` controls, `stages/*.js` one module per scale).
 - `vesicle/index.html`, `css/vesicle.css`, `js/vesicle/*.js`: the vesicle fusion experience
   (`profile.js` geometry, `scene.js` molecules and drawing, `vitro.js` microscope, `shaders.js` GLSL,
