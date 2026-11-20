@@ -4,7 +4,8 @@
 // about the axis by its azimuth.
 import { V, DEG, rng, modelTRS, lerp, sstep } from '../gl.js';
 import * as O from '../optics.js';
-import { vis, backdrop, eyeGlyph, sunRay } from './common.js';
+import { vis, backdrop, eyeGlyph, sunRay, crestNote } from './common.js';
+const SP = 0.42, RADIUS = 1e-3;      // optical path between drawn crests, in drop radii; the drop's radius in metres
 
 const SPEC = O.spectrumSet([430, 470, 510, 550, 590, 630, 670]);
 const SPEC3 = O.spectrumSet([450, 545, 640]);
@@ -269,7 +270,7 @@ export default {
 <dt>Off the front</dt><dd>${out(0)}</dd>
 <dt>Out through the back</dt><dd>${out(1)}</dd>
 <dt>Primary bow</dt><dd>${out(2)}, ${(t.outs[2].Is / t.outs[2].I * 100).toFixed(0)}% polarised</dd>
-<dt>Secondary bow</dt><dd>${out(3)}</dd></dl>`;
+<dt>Secondary bow</dt><dd>${out(3)}</dd></dl>${S.mode === 'wave' ? crestNote(SP * RADIUS) : ''}`;
   },
 
   labels(S) {
@@ -382,7 +383,7 @@ void main(){ vec3 ro = uEye, rd = rayDir();
       R.flushPoints({ minPx: 1.3, gain: near, maxPx: R.zoom?.from === 'drop' ? 6 : undefined });
     } else {
       // crests: points of equal optical path length, joined across neighbouring rays
-      const SP = 0.42, phase = (T * 0.55) % 1, orders = S.second ? 2 : 1, tolE = (S.exag ? 2.4 : 1.1) * DEG;
+      const phase = (T * 0.55) % 1, orders = S.second ? 2 : 1, tolE = (S.exag ? 2.4 : 1.1) * DEG;
       for (const set of c.fronts) {
         const col = set.sp.part, rays = set.rays, nR = rays.length;
         for (let o = -1; o <= orders; o++) {

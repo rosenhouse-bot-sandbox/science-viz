@@ -1,10 +1,10 @@
 // Engine: the controller. Two numbers drive the page: the zoom (0 = car ... 4 = molecules) and the crank
 // angle of the cylinder we follow (0 to 720 degrees, one cycle). Time runs slower the further in the zoom is.
 // The picture is redrawn only when something changes.
-import * as M from './model.js?v=e513c19b';
-import { makeGroup, place, centre, tiles, copies, LAYERS, MAX_COPIES, MAX_ATOMS } from './mol.js?v=e513c19b';
-import { WORLD_FS, FULL_VS, BLIT_FS, BALL_VS, BALL_FS, DOT_VS, DOT_FS } from './shaders.js?v=e513c19b';
-import * as Flow from './flow.js?v=e513c19b';
+import * as M from './model.js?v=2b7405db';
+import { makeGroup, place, centre, tiles, copies, LAYERS, MAX_COPIES, MAX_ATOMS } from './mol.js?v=2b7405db';
+import { WORLD_FS, FULL_VS, BLIT_FS, BALL_VS, BALL_FS, DOT_VS, DOT_FS } from './shaders.js?v=2b7405db';
+import * as Flow from './flow.js?v=2b7405db';
 import { gamepad } from '../gamepad/gamepad.js';
 
 const { clamp, smooth, mix, wrap } = M;
@@ -51,7 +51,7 @@ const view = { cam: [0, 0, 0], fw: [0, 0, 1], rt: [1, 0, 0], up: [0, 1, 0], h: 1
 // ---- drawing ---------------------------------------------------------------------------------------
 let world = null, blit = null, balls = null, dotsP = null, fbo = null, tex = null, farTex = null, texW = 0, texH = 0, ballBuf = null, ballVao = null, dotBuf = null, dotVao = null;
 const MAX_DOTS = 24000, dotData = new Float32Array(MAX_DOTS * 9);
-const ballData = new Float32Array((MAX_ATOMS + 14000) * 8), group = makeGroup();
+const DOT_CAP = 60000, ballData = new Float32Array((MAX_ATOMS + DOT_CAP) * 8), group = makeGroup();
 function program(vs, fs) {
   const p = gl.createProgram();
   for (const [t, src] of [[gl.VERTEX_SHADER, vs], [gl.FRAGMENT_SHADER, fs]]) {
@@ -136,17 +136,27 @@ function molShow(box, pxPerNm) {
   const L = M.groupEdge(st.phi), f = 1 + 1.5 * L / box.dist, need = ((box.x1 - box.x0) * f / L + 1) * ((box.y1 - box.y0) * f / L + 1) * LAYERS;
   return smooth(9, 20, pxPerNm) * (1 - smooth(0.55 * MOL_BUDGET, MOL_BUDGET, need));
 }
+// The dots are scattered at random (each cell of a lattice holds 0 to 3 of them, 1 on average, anywhere in it), wander
+// about on the molecules' own clock, and are squeezed together as the gas is: their spacing goes with the cube root
+// of the gas's density, so that a view holds as many more of them as the gas has more molecules there.
+const RHO_REF = M.gasAt(180).perNm3, POIS = [Math.exp(-1), 2 * Math.exp(-1), 2.5 * Math.exp(-1)];      // chance of 0, at most 1, at most 2 dots in a cell
 function gasDots(n, box, pxPerNm, mols) {
   const g = M.gasAt(st.phi), stale = g.burn > 0.5 || wrap(st.phi) >= M.SPARK + 60 || wrap(st.phi) < 8;
-  const rmin = Math.max(3, Math.sqrt(W * H * 3 / 8000) / 6.6), hotGas = g.burn > 0.5 && M.tempBurned(st.phi) > 1500;
+  const rmin = Math.max(3, Math.sqrt(W * H * 3 / 8000) / 6.6), hotGas = g.burn > 0.5 && M.tempBurned(st.phi) > 1500, sq = Math.cbrt(RHO_REF / g.perNm3);
   DOT_R.forEach((r, lv) => {
     const rpx = r * pxPerNm, show = lv === DOT_R.length - 1 ? smooth(rmin, rmin * 2.2, rpx) * (1 - mols) : dotShow(rpx, rmin); if (show <= 0) return;
-    const cell = r * 6.6, x0 = Math.floor((box.x0 * 1.05 - r) / cell), x1 = Math.floor((box.x1 * 1.05 + r) / cell), y0 = Math.floor((box.y0 * 1.05 - r) / cell), y1 = Math.floor((box.y1 * 1.05 + r) / cell);
-    if ((x1 - x0 + 1) * (y1 - y0 + 1) * 3 > 11000) return;
-    for (let k = 0; k < 3; k++) for (let j = y0; j <= y1; j++) for (let i = x0; i <= x1; i++) {
-      const o = n * 8, fuel = !stale && g.fuel && hash(i, j, k, lv + 40) < 1 / 15, c = stale ? (hotGas ? [1.0, 0.54, 0.16] : [0.56, 0.47, 0.40]) : fuel ? [0.30, 0.95, 0.42] : [0.36, 0.64, 1.0];
-      ballData[o] = (i + 0.5 + 0.56 * (hash(i, j, k, lv) - 0.5)) * cell; ballData[o + 1] = (j + 0.5 + 0.56 * (hash(i, j, k, lv + 10) - 0.5)) * cell; ballData[o + 2] = (k + 0.5 + 0.56 * (hash(i, j, k, lv + 20) - 0.5)) * cell;
-      ballData[o + 3] = r; ballData[o + 4] = c[0]; ballData[o + 5] = c[1]; ballData[o + 6] = c[2]; ballData[o + 7] = (stale ? 0.5 : fuel ? 0.9 : 0.6) * show; n++;
+    const cell = r * 6.6 * sq, x0 = Math.floor((box.x0 * 1.05 - 2 * r) / cell) - 1, x1 = Math.floor((box.x1 * 1.05 + 2 * r) / cell) + 1, y0 = Math.floor((box.y0 * 1.05 - 2 * r) / cell) - 1, y1 = Math.floor((box.y1 * 1.05 + 2 * r) / cell) + 1;
+    const kn = Math.max(1, Math.round(3 / sq));      // as deep a slab of gas, whatever its density
+    if ((x1 - x0 + 1) * (y1 - y0 + 1) * kn > DOT_CAP / 1.2) return;
+    for (let k = 0; k < kn; k++) for (let j = y0; j <= y1; j++) for (let i = x0; i <= x1; i++) {
+      const u = hash(i, j, k, lv + 50), many = u < POIS[0] ? 0 : u < POIS[1] ? 1 : u < POIS[2] ? 2 : 3;
+      for (let m = 0; m < many && n < DOT_CAP; m++) {
+        const sd = lv + 60 * (m + 1), o = n * 8, fuel = !stale && g.fuel && hash(i, j, k, sd + 40) < 1 / 15, c = stale ? (hotGas ? [1.0, 0.54, 0.16] : [0.56, 0.47, 0.40]) : fuel ? [0.30, 0.95, 0.42] : [0.36, 0.64, 1.0];
+        const ph = 6.283 * hash(i, j, k, sd + 30), w = 0.6 + 0.8 * hash(i, j, k, sd + 31), A = 0.45 * cell;      // its wander
+        ballData[o] = (i + hash(i, j, k, sd)) * cell + A * Math.sin(w * tau + ph); ballData[o + 1] = (j + hash(i, j, k, sd + 10)) * cell + A * Math.sin(1.3 * w * tau + 2 * ph);
+        ballData[o + 2] = (k + hash(i, j, k, sd + 20)) * cell + A * Math.sin(0.8 * w * tau + 3 * ph);
+        ballData[o + 3] = r; ballData[o + 4] = c[0]; ballData[o + 5] = c[1]; ballData[o + 6] = c[2]; ballData[o + 7] = (stale ? 0.5 : fuel ? 0.9 : 0.6) * show; n++;
+      }
     }
   });
   return n;
@@ -173,7 +183,7 @@ function gasDotsWorld(c, gasCut, on) {
     const heat = (1 - smooth(372, 640, phi)) ** 2;
     // the burned gas glows (drawn by the world shader) and hides what is behind it: a dot is dimmed by the glow between it and the eye
     const Rf = phi > M.SPARK ? M.flameR(phi) : 0, squeeze = phi >= 180 && phi < 540 ? clamp(0.0985 / (M.DECK + 0.008 - top), 1, 10) : 1;
-    const glow = Rf > 0 ? (30 * squeeze + (gasCut > M.XC + 0.001 ? 200 : 0)) * heat : 0, eye = [EO[0] - view.cam[0], view.cam[1] - EO[1], -view.cam[2]], pg = [cx, M.PLUG_GAP[1], 0];
+    const glow = Rf > 0 ? (8 * squeeze + (gasCut > M.XC + 0.001 ? 30 : 0)) * heat : 0, eye = [EO[0] - view.cam[0], view.cam[1] - EO[1], -view.cam[2]], pg = [cx, M.PLUG_GAP[1], 0];
     for (let i = 0; i < flow.n; i++) for (let k = 0; k < flow.cycles; k++) {
       const t = phi + 720 * k; if (!Flow.at(flow, i, t, dotAt, j * 6 + k)) continue;
       const x = dotAt[0] + cx, y = dotAt[1], z = dotAt[2], inside = Flow.inChamber(dotAt[0], y, z);
@@ -211,11 +221,10 @@ function draw() {
   gl.uniform3fv(u.uCam, view.cam); gl.uniform3fv(u.uRt, view.rt); gl.uniform3fv(u.uUp, view.up); gl.uniform3fv(u.uFw, view.fw); gl.uniform3fv(u.uSun, SUN);
   gl.uniform1f(u.uTan, TAN); gl.uniform1f(u.uPhi, wrap(st.phi + 360));
   gl.uniform1f(u.uCutCar, c.car); gl.uniform1f(u.uCutLift, c.lift); gl.uniform1f(u.uCutEnd, c.end);
-  gl.uniform1f(u.uGas, st.z < 0.3 ? 0 : st.z < 0.8 ? 1 : 2); gl.uniform1f(u.uGasStep, clamp(view.hw / 420, 0.00028, 0.003)); gl.uniform1f(u.uRoad, road % 900); const gasCut = mix(M.XC, M.GAS_CUT, smooth(2.3, 2.85, st.z)); gl.uniform1f(u.uGasCut, gasCut);
+  gl.uniform1f(u.uGas, st.z < 0.3 ? 0 : st.z < 0.8 ? 1 : 2); gl.uniform1f(u.uGasStep, clamp(view.hw / 420, 0.00028, 0.003)); gl.uniform1f(u.uRoad, road % 900); gl.uniform2f(u.uWheel, (road / M.TIRE_R) % (2 * Math.PI), M.SPEED / slowNow(st.z) / M.TIRE_R / 60); const gasCut = mix(M.XC, M.GAS_CUT, smooth(2.3, 2.85, st.z)); gl.uniform1f(u.uGasCut, gasCut);
   const eng = e2w([0.02, 0.105, 0]), far = Math.hypot(view.cam[0] - eng[0], view.cam[1] - eng[1], view.cam[2] - eng[2]), tr = [Math.max(0, far - 0.6), far + 0.6];
   gl.uniform2f(u.uTr, tr[0], tr[1]);
   const dotsOn = 1 - smooth(28, 70, 0.85e-3 * view.k);
-  gl.uniform1f(u.uDots, dotsOn);      // the cylinder's dots, 0.85 mm in radius, give way to the smaller sizes
   gl.drawArrays(gl.TRIANGLES, 0, 3);
   // onto the screen, magnified once the zoom has passed the nearest view the world is drawn at
   gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, cv.width, cv.height);
@@ -391,7 +400,7 @@ const CAP = {
 const NOTE = {
   car: '',
   engine: 'The near half of the block and its cover are left out to show the pistons. Not drawn: oil, coolant, the throttle, the gearbox and the exhaust system. The engine is drawn set lengthwise with its belt end toward the driver; in a car that end faces the front, or the side when the engine is set crosswise, as in most cars.',
-  cylinder: 'The end of the engine is cut off and left out. Dots stand for gas: far fewer and far larger than molecules, and in the picture\'s own colors, since air and gasoline vapor are colorless. Each dot is followed the whole way, in along the intake pipe and out along the exhaust pipe, so none appears or vanishes and the number in the cylinder follows the mass of gas there. The dots move as a smooth flow; real gas in a cylinder is turbulent. The tan dots that stay on the piston are burned gas left over from the last cycle; really it mixes through the fresh air. One dot in 15 is drawn as fuel, its share of the mixture by mass; by count fuel is 1 molecule in 60.',
+  cylinder: 'The end of the engine is cut off and left out. Dots stand for gas: far fewer and far larger than molecules, and in the picture\'s own colors, since air and gasoline vapor are colorless. Each dot is followed the whole way, in along the intake pipe or out of the injector and out along the exhaust pipe, so none appears or vanishes on the way and the number in the cylinder follows the mass of gas there. Burned gas is hotter, so it is thinner: its dots spread out and push the rest away from the plug. The dots move as a smooth flow; real gas in a cylinder is turbulent. The tan dots that stay on the piston are burned gas left over from the last cycle; really it mixes through the fresh air. One dot in 15 is drawn as fuel, its share of the mixture by mass; by count fuel is 1 molecule in 60.',
   flame: 'Burned gas is drawn glowing orange so that it can be told apart. A real gasoline flame gives off only faint light, at short visible wavelengths, which we see as blue.',
   molecules: 'Atoms are drawn in the usual model colors, at their real spacing for this pressure and temperature, each atom a little smaller than its real size so that the molecules\' shapes can be seen. Real molecules fly in straight lines between collisions; here each drifts about one place so that it stays in view. Iso-octane stands for the many hydrocarbons in gasoline. The burn of this group is stretched out so that it can be followed: a real flame front passes a spot this small in a few millionths of a second, the fuel breaks up through many short-lived pieces that are not drawn, and about 1 molecule in 100 of the burned gas is carbon monoxide or nitric oxide. Also not drawn: argon, 1 molecule in 100 of air, and the burned gas left from the last cycle, about 1 molecule in 10 before the burn. The molecules\' own motion is slowed far more than the engine\'s, or it would be a blur.',
 };

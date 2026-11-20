@@ -24,7 +24,8 @@ A rebuild at `v2/`, in three dimensions at every scale, from the whole Earth dow
 - The continents and clouds on the globe, and the cloud tops you pass on the way down to the field,
   are generated noise and not a map of the real Earth. The ring and dot at "You are here" are a marker
   and nothing more; they fade as the camera dives towards them. The cloud also parts around your spot
-  as the camera comes down on it, which is staging and not weather.
+  as the camera comes down on it, which is staging and not weather. The cloud pattern does not
+  move: weather crosses a few kilometres in the time the picture plays, too little to see from orbit.
 - The Rain scale used to be two, Sky and Rain. It is now one scene with one camera, which starts
   behind your shoulder with the bow across the sky and moves in among the drops. How far in the
   camera is sets the dressing: the sky is turned down (to about a third of its brightness, close in)
@@ -35,6 +36,9 @@ A rebuild at `v2/`, in three dimensions at every scale, from the whole Earth dow
   you nothing, falls straight down, and is drawn as a streak with its head down; a drop near enough
   to have a size on screen is drawn round, because drops are spheres. The streak is a drawing of
   motion, not the drop's shape. The panel carries a key.
+- Time is slowed so the fall can be followed: the rain about 15 times, and the four marked drops
+  about 116 times, so that one can be watched crossing the bow (a real drop would cross it in a few
+  hundredths of a second). The readout gives both, computed from the speeds in `rain.js`.
 - The near drops are coloured by what each sends to the standing figure, not to the camera, while
   the bow on the far rain is painted for the camera. From behind the figure the two nearly coincide;
   from the side they part, which is the point: a bow belongs to one pair of eyes.
@@ -79,7 +83,9 @@ The physics, all in `js/v2/optics.js`:
   `js/v2/stages/surface.js`): the half nearer the camera is taken away, so the surface is seen
   edge-on as a bright line with the water's blue cut face on one side and air on the other, and the
   beams bend at that line. It is a drawing aid and the panel says so: the light is a round beam on
-  both sides of the cut. From far off the cutting plane is out beyond the drop and closes in as the
+  both sides of the cut. With Waves the crests are drawn in a thin slice through the middle of the
+  beam, lying in the cut face: seen through the whole round beam at a slant, the crests in the water
+  averaged away. From far off the cutting plane is out beyond the drop and closes in as the
   camera does (`cutAt`), and the Drop scale's sphere is cut by the same plane on the flight in.
 - The Molecules panel carries two moving pictures drawn from the model, on the scene's clock, so
   Pause stops them. One shows a molecule's electrons (a disc) moved by the field of 700 nm and of 400 nm light; how
@@ -104,7 +110,9 @@ The physics, all in `js/v2/optics.js`:
   molecules and moving electrons. Energy held in matter does not travel, which gives the energy
   velocity; nearer the ultraviolet resonance more is held, so violet is slower than red.
 
-Simplifications: drops are spheres, air's index is taken as 1, and brightness is compressed so that
+Simplifications: with Waves at Orbit, Rain and Drop, the crests are drawn far further apart than real
+ones (6,690 km, 2.4 m and 0.4 mm against 550 nm), which the readout says; only the Surface and
+Molecules scales draw them at their true spacing. Drops are spheres, air's index is taken as 1, and brightness is compressed so that
 the 5% of light in the bow can be seen beside the 89% that escapes. A toggle spreads the colours 5×
 for visibility; it is off by default.
 
@@ -121,7 +129,14 @@ presynaptic membrane, drawn lipid by lipid and to scale in nanometres.
 - **Fusion progress** starts with the vesicle's arrival: it wanders the last 120 nm by Brownian
   motion until tethers on the active zone (Munc13 and RIM, drawn as rods) catch it about 42 nm up
   and reel it in, with synaptobrevin free until syntaxin and SNAP-25 can reach it. The wander is a
-  fixed path, so the slider is repeatable, and only its up-and-down part is drawn. It then scrubs
+  fixed path, so the slider is repeatable. It goes as far sideways as up and down (up to 20 nm either
+  way before the tethers catch it, 4 nm after), and it tumbles, with everything it carries: the same
+  knocks turn a sphere this size about 40° for each 16 nm it wanders, so it turns through a few
+  radians on the way. Once tethered it keeps one side down and only shivers, and it docks in the
+  place and the turn the later stages start from. The reflection camera does not see the sideways
+  part: it is a fifth of one of its pixels. Inside, the glutamate moves about the whole lumen, and which
+  molecule leaves through the pore next is a matter of chance, so the vesicle empties evenly: a molecule
+  crosses the lumen about a thousand times faster than it can leave. It then scrubs
   from a docked vesicle through SNARE zippering, the hemifusion stalk,
   the opening and widening of the fusion pore, to full collapse into the membrane.
 - The vesicle carries more than its fusion machinery: about 30 synaptophysins, 10 glutamate
@@ -620,7 +635,13 @@ What the page shows, and where each part comes from (`js/maple/model.js` unless 
 - **The Sun** stands where it does at five in the afternoon, solar time, at 35° N on each date
   (`sunAt` in `model.js`): 25° up at midsummer, within a degree of the horizon in mid November, just set by
   late December. The sky, the brightness of the lawn, hills and leaves, and the tree's shadow
-  follow its height, so summer is the bright part of the year. The panel prints its height.
+  follow its height, so summer is the bright part of the year. The panel prints its height. The sky
+  stays day-blue until the Sun is near the horizon (yellowed near a low Sun) and darkens through twilight, which
+  ends 8° below it; the Sun on this page never gets lower than about 2° below, so the sky is never night-dark.
+  The sunlight on the tree weakens much sooner, as its path through the air lengthens: with the Sun 4°
+  up the tree is lit about half as brightly as in summer. Low sunlight is also yellower; that is not
+  drawn on the tree, so that each leaf's color stays the one its pigments give. The shadow is as dark
+  as the crown is full of leaf (bare twigs stop about an eighth as much light), and the trunk casts a line.
 - **Cells**: tall cells seen from the side, chloroplasts along their walls and the vacuole down
   the middle of each. In autumn the stacks of membrane inside each chloroplast go and drops of fat
   take their place (in the followed cell they are drawn one by one), the chloroplasts shrink and
@@ -758,9 +779,11 @@ The engine (`js/engine/model.js`): four cylinders in a row, 2.0 liters (bore 84 
 connecting rod 145 mm), compression ratio 10.5 to 1 from the drawn geometry, two camshafts above four
 valves per cylinder, fuel sprayed straight into the cylinder. Burning order 1, 3, 4, 2. The intake
 valve opens 10° before the top and closes 40° after the bottom; the exhaust valve opens 50° before
-the bottom and closes 10° after the top; both lift 9 mm. The spark is 25° before the top. The car
+the bottom and closes 10° after the top; both lift 9 mm. The spark is 25° before the top and lasts 1.5 thousandths of a second (22° of
+crank): a breakdown, then a dimmer glow while the coil empties. The car
 cruises at 60 mph with the crankshaft at 2,400 turns a minute, so 1° of crank takes 69 millionths of
-a second.
+a second. The tires (0.68 m across) roll, so their five spokes turn 12.5 times a second; where they
+turn too far in one frame to follow, they are drawn blurred.
 
 What is computed, not typed:
 
@@ -773,14 +796,21 @@ What is computed, not typed:
   port and valve.
   Seventy-two percent of the fuel's heat is kept in the gas; the rest is taken as lost to the walls.
 - How the gas moves (`js/engine/flow.js`). Each dot of gas is followed the whole way: in along the
-  intake pipe, past the intake valves, through compression and the burn, out past the exhaust valves
+  intake pipe (air) or out of the injector's tip (fuel), past the intake valves, through compression and the burn, out past the exhaust valves
   and down the exhaust pipe. No dot is made or lost on the way, so the number of dots in the cylinder
   at each crank angle is the mass of gas the model has there, to within a few percent: about a third
   of the burned gas rushes out by its own pressure when the exhaust valve opens, before the piston
   starts back up, and the rising piston pushes out most of the rest. While a valve is open the gas under
   the cylinder head moves as a flow without swirl (a potential flow), worked out on a grid of
   1.75 mm cells when the page loads; below the head it moves with the piston; with both valves shut it
-  is squeezed evenly. The dots' paths are worked out once, in a few seconds after the page opens,
+  is squeezed evenly. A dot of fuel leaves the injector's tip at its moment in the spray (70° to 95°) and flies out
+  along the cone, slowing as it drags air along (from about 100 m/s, 62 mm at most); 30° later it goes where the gas
+  goes, and drifts to its own place in the evenly spread gas by the time the intake valve shuts, which stands for
+  the turbulent mixing that is not modeled. While the flame spreads, the burned gas is as many times thinner than
+  the gas ahead of it as it is hotter (about 2.7 times, from the model's two temperatures, at the same pressure).
+  The dots are moved sideways out from the cylinder's axis, where the plug is: along each line out from the axis
+  at one height, the burned gas fills the stretch inside the flame's sphere and the unburned gas is squeezed into
+  the rest. The burned gas glows faintly, so the dots in it can be seen. The dots' paths are worked out once, in a few seconds after the page opens,
   and the picture at any angle is read from them, so it is the same however that angle was reached.
 - The flame front's distance from the plug, which sets where the glow is drawn and when the spot the
   Molecules stop looks at burns. That spot is 13 mm from the plug, so it burns about 6° before the
@@ -805,7 +835,10 @@ Where the picture simplifies, which the page also says:
   tumbling jet; pressure waves in the pipes are not modeled either. Where a dot passes behind a
   valve's taper it is hidden by the valve.
   Between the Flame and Molecules stops the dots are drawn at six smaller sizes in turn, each a tenth of the last, so that
-  something is in view at every zoom; past them, the space between molecules is drawn dark.
+  something is in view at every zoom; past them, the space between molecules is drawn dark. These dots are scattered
+  at random (each cell of a lattice holds none to three, one on average), wander on the molecules' clock while the
+  page plays, and are squeezed together with the gas: their spacing goes with the cube root of its density, so a
+  view holds about six times as many at the top of compression as during intake, as it holds molecules.
 - Burned gas is drawn glowing orange. A real gasoline flame gives off only faint light, at short
   visible wavelengths, which we see as blue.
 - Iso-octane stands for the hundreds of hydrocarbons in gasoline. The burn is drawn as one step; the
@@ -822,8 +855,8 @@ Where the picture simplifies, which the page also says:
   each molecule's shape can be seen. The group of molecules is repeated side by side, each copy
   turned a different way, to fill the view.
 - The valves are 32 mm (intake) and 28 mm (exhaust) across and the spark plug's gap is 0.9 mm, as
-  in a real engine of this size. The fuel spray is drawn as one narrow cone; a real injector makes
-  several.
+  in a real engine of this size. The fuel spray is one narrow cone of dots; a real injector makes
+  several, of droplets far smaller than a dot.
 - Not drawn: oil, coolant, the throttle, the flywheel, the gearbox, the exhaust system, the alternator and its belt.
   Knock is left out: it does not happen at this light load.
 

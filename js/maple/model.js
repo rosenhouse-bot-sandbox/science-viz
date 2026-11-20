@@ -151,10 +151,13 @@ export function wavelengthRGB(l) {
   const Y = 0.821 * g2(l, 568.8, 46.9, 40.5) + 0.286 * g2(l, 530.9, 16.3, 31.1);
   const Z = 1.217 * g2(l, 437.0, 11.8, 36.0) + 0.681 * g2(l, 459.0, 26.0, 13.8);
   let r = 3.2406 * X - 1.5372 * Y - 0.4986 * Z, gg = -0.9689 * X + 1.8758 * Y + 0.0415 * Z, b = 0.0557 * X - 0.2040 * Y + 1.0570 * Z;
-  const lo = Math.min(r, gg, b); if (lo < 0) { r -= lo; gg -= lo; b -= lo; }
+  // Light of one wavelength is more saturated than any screen can show. The channels that would have to be negative are
+  // left at nothing: adding white instead would push 500 to 540 nm toward cyan and 620 to 640 nm toward rose.
   const k = 0.62;
-  return [r * k, gg * k, b * k];                 // linear; the caller scales and encodes
+  return [Math.max(r, 0) * k, Math.max(gg, 0) * k, Math.max(b, 0) * k];                 // linear; the caller scales (with `bright`) and encodes
 }
+// c made `gain` times brighter, but never past what the screen can show: brought down as a whole, so its hue stays.
+export function bright(c, gain) { const m = Math.max(c[0], c[1], c[2]) * gain, k = m > 1 ? gain / m : gain; return [c[0] * k, c[1] * k, c[2] * k]; }
 export const encode = enc;
 
 // What a person would call this colour. From the computed colour's hue, not from the season.

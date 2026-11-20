@@ -8,6 +8,11 @@ import * as O from '../optics.js';
 import { backdrop } from './common.js';
 import { crossAngle } from './drop.js';
 
+// With Waves the field is drawn in a slice THIN µm thick through the middle of the beam, lying in the
+// plane of the ray, which is the plane the drop is cut open along. A sight line through the whole round
+// beam passes through several crests at a slant and averages them away; through the slice it sees the
+// crests in the air and in the water from any side. The photons fill the round beam.
+const THIN = 0.11;
 const WAIST = 1.25, BOX = [46, 46, 2.3], LEN = 30, RD = 1000;      // BOX: how far the beams are drawn; LEN: how far the photons run;      // RD: the drop's radius
 let prog = null, photons = [], photonKey = '', omegaT = 0, lastT = null;
 const rand = rng(23);
@@ -148,7 +153,7 @@ export default {
 <dt>Reflected</dt><dd>${(c.F.R * 100).toFixed(1)}% (other polarisation ${(other.R * 100).toFixed(1)}%)</dd>`;
     rows += `<dt>Transmitted, leaving at</dt><dd>${((1 - c.F.R) * 100).toFixed(1)}% at ${d(c.F.thetaT)}</dd>
 <dt>700 nm would leave at</dt><dd>${d(bend(nr))}</dd><dt>400 nm would leave at</dt><dd>${d(bend(nv))}</dd>`;
-    return `<dl>${rows}</dl><p>The drop is drawn cut open along the plane of the ray: the bright line is its surface seen edge-on, with the water's cut face on one side and air on the other. The light itself is a round beam, in front of the cut as well as behind it.</p>` + (S.pol === 'p' && S.mode === 'wave' ? '<p>With the electric field in the plane of the bend, the quantity drawn is the magnetic field, which then points along the surface.</p>' : '');
+    return `<dl>${rows}</dl><p>The drop is drawn cut open along the plane of the ray: the bright line is its surface seen edge-on, with the water's cut face on one side and air on the other. ${S.mode === 'wave' ? 'The crests are drawn in a thin slice through the middle of the beam, lying in the cut face. The light itself is a round beam, in front of the cut as well as behind it.' : 'The light itself is a round beam, in front of the cut as well as behind it.'}</p>` + (S.pol === 'p' && S.mode === 'wave' ? '<p>With the electric field in the plane of the bend, the quantity drawn is the magnetic field, which then points along the surface.</p>' : '');
   },
   labels(S) {
     const c = setup(S), L = [];
@@ -166,7 +171,7 @@ float sg(float a){ return exp(-a*a); }       // a beam with a fairly flat top an
 // x: the field; y: its envelope squared; z: how strongly to draw it
 vec3 field(vec3 p){
   vec3 q = vec3(p.x, p.y*uA.w, p.z);
-  float w2 = uD.x*uD.x, gz = sg(q.z*q.z/w2), ci = uA.z, c2 = ci*ci/w2;
+  float w2 = uD.x*uD.x, gz = sg(q.z*q.z/(uC.y*uC.y)), ci = uA.z, c2 = ci*ci/w2;
   float r = uC.x, tm = 1.0 + r;          // Fresnel's reflected and transmitted amplitudes
   if(q.y >= 0.0){
     float xi = q.x + q.y*uD.z, xr = q.x - q.y*uD.z;
@@ -183,7 +188,8 @@ ${SKIN_GLSL}
 bool clear(vec2 d, float m){ return d.x*d.y > 0.0 && min(abs(d.x), abs(d.y)) > m; }
 void main(){
   vec3 ro = uEye, rd = rayDir();
-  vec3 inv = 1.0/rd, t0 = (-BOX-ro)*inv, t1 = (BOX-ro)*inv;
+  vec3 box = vec3(BOX.xy, min(BOX.z, 3.0*uC.y));       // the slab the light is drawn in
+  vec3 inv = 1.0/rd, t0 = (-box-ro)*inv, t1 = (box-ro)*inv;
   vec3 tn = min(t0,t1), tf = max(t0,t1);
   float ta = max(max(tn.x,tn.y),max(tn.z,0.0)), tb = min(min(tf.x,tf.y),tf.z);
   vec3 col = vec3(0.0);
@@ -207,7 +213,7 @@ void main(){
       vec3 f = field(p);
       f.z *= 1.0 - smoothstep(0.55, 1.0, max(abs(p.x), abs(p.y))/BOX.x);       // the beams fade out far off
       float crest = max(f.x, 0.0), c2 = crest*crest;
-      float e = mix(f.y*0.07, c2*c2*5.0 + f.x*f.x*0.12, uD.y)*f.z;
+      float e = mix(f.y*0.07, c2*c2*5.0 + f.x*f.x*0.12, uD.y)*f.z*uD.x/uC.y;       // a slice glows as the whole beam would
       col += Tr*mix(uCol, vec3(1.0), 0.35*c2*c2*uD.y)*e*ds;
       Tr *= exp(-e*ds*mix(0.0, 2.2, uD.y));
     }
@@ -228,7 +234,7 @@ void main(){
     gl.useProgram(prog.p); R.setRayUniforms(prog, T);
     gl.uniform4f(prog.u.uA, c.k0 * c.n1, si, ci, c.sy);
     gl.uniform4f(prog.u.uB, c.k0 * c.n2, st, ct, 0);
-    gl.uniform4f(prog.u.uC, c.F.r, 0, 0, omegaT);
+    gl.uniform4f(prog.u.uC, c.F.r, wave ? THIN : WAIST, 0, omegaT);
     gl.uniform4f(prog.u.uD, WAIST, wave ? 1 : 0, si / ci, st / ct);
     gl.uniform3fv(prog.u.uCol, col.map(x => x * 0.9 + 0.06)); gl.uniform3fv(prog.u.uW, W);
     // The drop's skin and the water under it are the same sphere the Drop scale draws, in the same

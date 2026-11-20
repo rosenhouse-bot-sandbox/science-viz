@@ -10,6 +10,14 @@ export const WHITE = [1, 1, 1];
 // Sunlight as it is drawn wherever there is rain about: a strong gold, so that it cannot be taken for
 // water. Rain is drawn cool and blue-white, falls straight down, and is never gold.
 export const SUN = [1.0, 0.66, 0.2];
+
+// Away from the Surface scale, wave crests are drawn far further apart than real ones (550 nm in air),
+// so that they can be seen at all. Said in the readout, from the spacing the stage really draws (metres).
+export function crestNote(drawn) {
+  const f = drawn / 550e-9, d = drawn >= 1000 ? `${Math.round(drawn / 1000).toLocaleString('en-US')} km` : drawn >= 1 ? `${drawn.toFixed(1)} m` : `${(drawn * 1000).toFixed(1)} mm`;
+  const times = f >= 1e12 ? `${Math.round(f / 1e12)} trillion` : f >= 1e9 ? `${Math.round(f / 1e9)} billion` : f >= 1e6 ? `${Math.round(f / 1e6)} million` : Math.round(f).toLocaleString('en-US');
+  return `<p>Not to scale: crests drawn ${d} apart. Real ones are 550 nm apart, ${times} times closer.</p>`;
+}
 export const RAIN = [0.45, 0.68, 1.0];
 
 // One ray of sunlight from a to b: a steady gold line with arrowheads that travel along it with the

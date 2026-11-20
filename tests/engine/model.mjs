@@ -7,6 +7,8 @@
 import * as M from '../../js/engine/model.js';
 import { ATOM, SHAPES, count, makeGroup, place, MAX_ATOMS } from '../../js/engine/mol.js';
 import { WORLD_FS } from '../../js/engine/shaders.js';
+import { readFileSync } from 'node:fs';
+const MAIN_JS = readFileSync(new URL('../../js/engine/main.js', import.meta.url), 'utf8');
 import { stamp } from './stamp.mjs';
 
 let fails = 0;
@@ -114,8 +116,11 @@ ok(M.burnAt(M.SPOT_BURNS + M.BURN_SPAN[0] - 1e-6) === 0 && M.burnAt(M.SPOT_BURNS
   ok(WORLD_FS.includes('float OFF[4] = float[4](0., 540., 180., 360.)') && M.OFFSET.join() === '0,540,180,360', 'the shader has the model\'s burning order');
   ok(WORLD_FS.includes(`mod(phi + ${-M.IVO}., 720.) / ${M.IVC - M.IVO}.`) && WORLD_FS.includes(`mod(phi - ${M.EVO}., 720.) / ${M.EVC - M.EVO}.`), 'the shader has the model\'s valve timing');
   ok(WORLD_FS.includes(`0.066 * pow(max(phi - ${M.SPARK}., 0.) / 55., 1.5)`), 'the shader has the model\'s flame front');
+  ok(WORLD_FS.includes(`phi > ${M.SPARK}. && phi < ${M.SPARK_END}.`) && M.SPARK_END - M.SPARK >= 15, `the shader's spark lasts the model's ${M.SPARK_MS} ms (${M.SPARK_END - M.SPARK}° of crankshaft)`);
+  ok(WORLD_FS.includes(`length(q.xy) - ${(M.TIRE_R - 0.012).toFixed(2)}`) && WORLD_FS.includes(`- 0.012; }`), 'the shader\'s tire is the model\'s size');
   ok(WORLD_FS.includes('vec3(0., 0.9455, 0.3256)') && M.VALVE_AXIS.join() === '0,0.9455,0.3256', 'the shader has the model\'s valve axis');
-  ok(WORLD_FS.includes(`phi > ${M.INJECT[0]}. && phi < 125.`) && WORLD_FS.includes(`smoothstep(${M.INJECT[1]}., 125., phi)`), 'the shader sprays fuel over the model\'s angles');
+  ok(!WORLD_FS.includes('phi > 70. && phi < 125.'), 'the shader draws no spray of its own: the fuel is dots that leave the injector (flow.js)');
+  ok(WORLD_FS.includes('(8. * clamp(sq, 1., 10.) + 30. * step(') && /\(8 \* squeeze \+ \(gasCut > M\.XC \+ 0\.001 \? 30 : 0\)\)/.test(MAIN_JS), 'the burned gas glows as thinly in the shader as main.js dims the dots behind it');
 }
 
 console.log(fails ? `${fails} failed` : 'engine model: all checks passed');

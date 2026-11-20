@@ -5,7 +5,7 @@
 export const WORLD_FS = `#version 300 es
 precision highp float;
 uniform vec2 uRes, uCenter; uniform vec3 uCam, uRt, uUp, uFw, uSun; uniform float uTan;
-uniform float uPhi, uCutCar, uCutLift, uCutEnd, uGas, uGasStep, uRoad, uDots, uGasCut; uniform vec2 uTr;
+uniform float uPhi, uCutCar, uCutLift, uCutEnd, uGas, uGasStep, uRoad, uGasCut; uniform vec2 uTr, uWheel;
 layout(location = 0) out vec4 o; layout(location = 1) out vec4 o2;      // the picture; and how far away each pixel's surface is, for the dots of gas drawn after
 const vec3 EO = vec3(1.30, 0.36, 0.0);
 const float DECK = 0.2207, CR = 0.045, ROD = 0.145, BORE = 0.042, XC = -0.1615, VX = 0.0175;
@@ -212,22 +212,14 @@ vec3 sky(vec3 d){
   return c;
 }
 
-// ---- gas: the flame's glow and the fuel spray inside the cylinder (engine frame). The dots that stand for the gas itself
+// ---- gas: the flame's glow inside the cylinder (engine frame). The burned gas glows only faintly: it is the thinnest gas there. The dots that stand for the gas itself
 // are drawn afterwards, one by one, from the paths in flow.js.
-vec4 dots(vec3 u, float cell, float rad, float squash){
-  vec3 c = floor(u / cell); vec4 best = vec4(0.);
-  for (int k = -1; k <= 1; k++) { vec3 cc = c + vec3(0., float(k), 0.);
-    vec3 ctr = (cc + .5 + .56 * (vec3(hash(cc), hash(cc + 7.3), hash(cc + 13.7)) - .5)) * cell;
-    vec3 dv = u - ctr; dv.y *= squash; float I = smoothstep(rad, rad * .35, length(dv));
-    if (I > best.x) best = vec4(I, hash(cc + 3.1), 0., 0.); }
-  return best;
-}
 vec4 gasAt(vec3 p){
   if (gEnd && p.x < uGasCut) return vec4(0.);
   float xl; float j = cylOf(p.x, xl); float phi = phiOf(j);
   float top = pinY(phi) + 0.030, rad = length(vec2(xl, p.z));
   float roof = DECK + 0.015 - 0.35 * abs(p.z);
-  vec3 FUEL = vec3(0.30, 0.95, 0.42), BURN = vec3(1.0, 0.42, 0.08), FRONT = vec3(0.86, 0.80, 1.0);
+  vec3 BURN = vec3(1.0, 0.42, 0.08), FRONT = vec3(0.86, 0.80, 1.0);
   float others = j == 3. || !gEnd ? 1. : 0.;     // once the end of the engine is off, only the cylinder looked into shows its gas
   if (rad < BORE - 0.0006 && p.y > top + 0.0006 && p.y < roof - 0.0004) {
     // where the near half of the block is gone, the gas is left out too; once the end is off, the cylinder looked into shows all of its gas
@@ -240,15 +232,11 @@ vec4 gasAt(vec3 p){
     bool lit = phi > 335. && rf < Rf;
     vec3 cs = vec3(0.); float as = 0.;
     float hot = 1. - smoothstep(372., 640., phi); hot *= hot;
-    if (lit) { float a = (30. * clamp(sq, 1., 10.) + 200. * step(XC + 0.001, uGasCut)) * others * hot * (0.55 + 0.9 * noise(p * 110.)); cs += mix(BURN, vec3(1.25, 0.5, 0.1), hot * .6) * (0.5 + 0.35 * hot) * a; as += a; }
+    if (lit) { float a = (8. * clamp(sq, 1., 10.) + 30. * step(XC + 0.001, uGasCut)) * others * hot * (0.55 + 0.9 * noise(p * 110.)); cs += mix(BURN, vec3(1.25, 0.5, 0.1), hot * .6) * (0.5 + 0.35 * hot) * a; as += a; }
     if (phi > 335. && phi < 392.) { float e = (rf - Rf) / 0.0007, f = exp(-e * e) * 2600. * others; cs += FRONT * 2.6 * f; as += f; }
-    if (phi > 335. && phi < 339.) { float f = exp(-dot(g, g) / (0.0014 * 0.0014)) * 9000.; cs += vec3(2.4, 2.2, 3.0) * f; as += f; }     // the spark, across the plug's gap
-    if (uGas > 1.5 && phi > 70. && phi < 125. && p.z > -0.03) {   // the spray: a cone of fuel from the injector's tip, whose last drops take a moment to turn to vapor
-      float left = 1. - smoothstep(95., 125., phi);
-      vec3 f = vec3(xl, p.y, p.z), v = f - INJ0, dirS = normalize(vec3(0., -0.62, -0.79));
-      float tt = dot(v, dirS), rr = length(v - dirS * tt);
-      if (tt > 0.0005 && tt < 0.062 && rr < 0.0012 + tt * 0.15) { vec4 d2 = dots(f * 1.9, 0.0056, 0.0012, 1.); float a = 6500. * d2.x * uDots * left; cs += FUEL * a; as += a; }
-    }
+    if (phi > 335. && phi < 357.) {     // the spark, across the plug's gap: the breakdown, then the glow while the coil empties
+      float k = phi - 335., f = exp(-dot(g, g) / (0.0014 * 0.0014)) * 9000. * (k < 1. ? 1. : 0.3 * (1. - smoothstep(12., 22., k)));
+      cs += vec3(2.4, 2.2, 3.0) * f; as += f; }
     return as > 0. ? vec4(cs / as, as) : vec4(0.);
   }
   return vec4(0.);
@@ -289,8 +277,12 @@ void main(){
       if (gCar && abs(carCut(q)) < 0.004) { base = hatch(vec3(0.80, 0.77, 0.71), q, 31.); rough = .9; metal = 0.; }
       else if (shellD(q) < -0.006) { base = vec3(0.07, 0.075, 0.085); rough = .8; metal = 0.; }
     }
-    else if (m == 3.) { float rr = length(vec2(abs(p.x) - 1.3, p.y - 0.33));
-      base = rr < 0.215 ? vec3(0.62, 0.64, 0.68) : vec3(0.035); metal = rr < 0.215 ? .8 : 0.; rough = rr < 0.215 ? .35 : .9; }
+    else if (m == 3.) { vec2 w = vec2(p.x - sign(p.x) * 1.3, p.y - 0.33); float rr = length(w);
+      base = rr < 0.215 ? vec3(0.62, 0.64, 0.68) : vec3(0.035); metal = rr < 0.215 ? .8 : 0.; rough = rr < 0.215 ? .35 : .9;
+      // five spokes, turned by how far the tire has rolled (uWheel.x); where they turn too far in a frame to be told
+      // apart (uWheel.y, the turn in one frame), they blur into the mean of spoke and gap, as a fast wheel does
+      if (rr > 0.05 && rr < 0.19) { float s = smoothstep(0.25, 0.45, cos(5. * (atan(w.y, w.x) + uWheel.x))), b = clamp(uWheel.y / 1.2566, 0., 1.);
+        s = mix(s, 0.45, b); base = mix(vec3(0.05), base, s); metal *= s; } }
     else if (m == 5.) { float z = p.z, x = p.x + uRoad; base = vec3(0.30, 0.42, 0.22) * (0.85 + 0.3 * noise(vec3(x, 0., z) * 1.7));
       if (z < 2.25 && z > -5.6) { base = vec3(0.115, 0.118, 0.125) * (0.85 + 0.3 * noise(vec3(x, 0., z) * 40.));
         if (abs(z - 2.0) < 0.06 || abs(z + 5.35) < 0.06) base = vec3(0.8);
