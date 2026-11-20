@@ -1,12 +1,12 @@
 // Shoulder: the controller. The state is the zoom (0 Shoulder, 1 Joint, 2 Tendon), a condition or an exercise,
 // and the arm's lift and turn. Everything drawn and every number shown comes from model.js.
-import { unpack, makeModel, MUSCLES, clamp, smooth, apply, turn as turnDir } from './model.js?v=c01bf6b1';
-import { V } from './geom.js?v=c01bf6b1';
-import { makeView, COL } from './view.js?v=c01bf6b1';
-import { SRC, DOES, CONDITIONS, EXERCISES, MODEL_NOTE, MODEL_SRC } from './facts.js?v=c01bf6b1';
+import { unpack, makeModel, MUSCLES, clamp, smooth, apply, turn as turnDir } from './model.js?v=ecd3e6ce';
+import { V } from './geom.js?v=ecd3e6ce';
+import { makeView, COL } from './view.js?v=ecd3e6ce';
+import { SRC, DOES, CONDITIONS, EXERCISES, MODEL_NOTE, MODEL_SRC } from './facts.js?v=ecd3e6ce';
 import { gamepad } from '../gamepad/gamepad.js';
 
-const STAMP = 'c01bf6b1';                                        // written by tests/shoulder/stamp.mjs: the data files' version
+const STAMP = 'ecd3e6ce';                                        // written by tests/shoulder/stamp.mjs: the data files' version
 const $ = (id) => document.getElementById(id);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const cv = $('view'), gl = cv.getContext('webgl2', { antialias: true, alpha: false, stencil: true, powerPreference: 'high-performance' });
@@ -226,7 +226,7 @@ function sync() {
   if (shown.cap !== key) {
     shown.cap = key;
     $('capTitle').textContent = it.title || it.name; $('capBody').textContent = it.body;
-    $('note').textContent = [it.note, modelNote].filter(Boolean).join(' ');
+    $('note').textContent = it.note || ''; $('modelNote').textContent = modelNote;
     sources(it);
   }
   set('gapV', mm(frame.gap)); set('slideV', mm(frame.slide));

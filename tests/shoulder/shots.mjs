@@ -37,7 +37,7 @@ for (let i = 0; i < N; i++) {
   await page.evaluate((h) => { location.hash = h; }, h);
   await page.evaluate(() => { __shoulder.st.yaw = 0; __shoulder.st.pitch = 0; __shoulder.settle(); __shoulder.redraw(); });
   const info = await page.evaluate(() => ({
-    title: document.getElementById('capTitle').textContent, body: document.getElementById('capBody').textContent, note: document.getElementById('note').textContent,
+    title: document.getElementById('capTitle').textContent, body: document.getElementById('capBody').textContent, note: document.getElementById('note').textContent, model: document.getElementById('modelNote').textContent,
     numbers: [...document.querySelectorAll('#nums > div')].map((d) => d.querySelector('dd').textContent + ' ' + d.querySelector('dt').textContent),
     labels: [...document.querySelectorAll('.tag')].filter((e) => e.style.display !== 'none' && +e.style.opacity > 0.5).map((e) => e.textContent),
     muscles: [...document.querySelectorAll('#muscleList li')].map((li) => li.querySelector('span').textContent + ' ' + li.querySelector('b').textContent),
