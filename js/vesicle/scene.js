@@ -1,7 +1,7 @@
 // Builds and draws the synapse: lipids, proteins, transmitter and the hazy surroundings.
 // Units are nanometres. y points into the sending cell; the cleft is below y = 0.
 import { program, instancedVAO, rng, sstep, lerp } from './glx.js';
-import { compute, surf, outline, D, CLEFT, TABW, BAREA, PH, ARRIVE } from './profile.js';
+import { compute, surf, outline, drift, D, CLEFT, TABW, BAREA, PH, ARRIVE } from './profile.js';
 import * as SH from './shaders.js';
 import { irmBeam, irmOptics, hue } from './irm.js';
 import { optics, buildBench, beamPath, QUENCH, QUENCH_O, GAP, GLASS_TOP, GLASS_BOT, LENS_Y, MM, UM, F_OBJ, N_GLASS, CELL, SPOT, spot, domeY } from './vitro.js';
@@ -320,6 +320,16 @@ export class Scene {
     }
     const S = this.S, p = st.p;
     S.hV = S.h + (S.fused[0] ? 0 : S.extra);
+    // While it arrives the vesicle wanders sideways and tumbles as well as bobbing up and down: everything it carries is
+    // turned about its centre and moved with it (vx), the lipids and the glutamate in their shaders (uVes, uVesRot).
+    { const dr = drift(p), [ax, ay, az] = dr.rot, th = Math.hypot(ax, ay, az), k = th > 1e-9 ? [ax / th, ay / th, az / th] : [1, 0, 0], c = Math.cos(th), s = Math.sin(th), t = 1 - c;
+      const M = [c + k[0] * k[0] * t, k[0] * k[1] * t - k[2] * s, k[0] * k[2] * t + k[1] * s,
+        k[1] * k[0] * t + k[2] * s, c + k[1] * k[1] * t, k[1] * k[2] * t - k[0] * s,
+        k[2] * k[0] * t - k[1] * s, k[2] * k[1] * t + k[0] * s, c + k[2] * k[2] * t];
+      this.vesMove = { off: [dr.x, 0, dr.z], M, C: [0, S.hV, 0] }; }
+    const VM = this.vesMove, vx = (q) => { const x = q[0] - VM.C[0], y = q[1] - VM.C[1], z = q[2] - VM.C[2], M = VM.M;
+      return [M[0] * x + M[1] * y + M[2] * z + VM.C[0] + VM.off[0], M[3] * x + M[4] * y + M[5] * z + VM.C[1], M[6] * x + M[7] * y + M[8] * z + VM.C[2] + VM.off[2]]; };
+    let OWN = 0;      // how far the balls being placed go with the vesicle (1: they are carried by it)
     S.Rin = R - D - 0.9;
     this.glutamate = Math.round(GLU_PER_NM3 * 4 / 3 * PI * Math.pow(S.Rin, 3));
     const cut = this.cutNow(st), half = cut * PI / 360;
@@ -328,7 +338,7 @@ export class Scene {
     const d = this.dynData; let n = 0;
     // Each ball carries a category, so the legend can pick out one kind of molecule.
     let CAT = 0;
-    const ball = (q, rad, c, style = 0, cat = CAT) => { if (n >= BALL_MAX) return; const k = n++ * 8; d[k] = q[0]; d[k + 1] = q[1]; d[k + 2] = q[2]; d[k + 3] = rad; d[k + 4] = c[0]; d[k + 5] = c[1]; d[k + 6] = c[2]; d[k + 7] = style + 8 * cat; };
+    const ball = (q, rad, c, style = 0, cat = CAT) => { if (n >= BALL_MAX) return; if (OWN > 0) q = OWN >= 1 ? vx(q) : mixv(q, vx(q), OWN); const k = n++ * 8; d[k] = q[0]; d[k + 1] = q[1]; d[k + 2] = q[2]; d[k + 3] = rad; d[k + 4] = c[0]; d[k + 5] = c[1]; d[k + 6] = c[2]; d[k + 7] = style + 8 * cat; };
     const tmp = new Float64Array(6);
     const at = (leaf, a, phi) => { surf(S, leaf, a, phi, tmp); return { p: [tmp[0], tmp[1], tmp[2]], n: [tmp[3], tmp[4], tmp[5]] }; };
     const strand = (a, b, steps, rad, c) => { for (let i = 0; i <= steps; i++) ball(mixv(a, b, i / steps), rad, c); };
@@ -366,16 +376,18 @@ export class Scene {
       const side = norm(cross(dir, Math.abs(dir[1]) > 0.9 ? [1, 0, 0] : [0, 1, 0]));
       const fold = 1 - sstep(0.05, 0.25, nR) * (1 - sstep(1.3, 5, rB - 4.9 * nR));
       const dir2 = norm(mixv(dir, add(shade(dir, 0.25), side, 1), fold)), hinge = add(base, dir, 6.0), c2 = add(hinge, dir2, 1.6);
-      const E = opt.at(c[1] + GAP), E2 = opt.at(c2[1] + GAP);
+      const cT = vx(c), c2T = vx(c2), E = opt.at(cT[1] + GAP), E2 = opt.at(c2T[1] + GAP);
       const b = E * (QUENCH + (1 - QUENCH) * unq), lit = b > 0.05, bo = E2 * (QUENCH_O + (1 - QUENCH_O) * unq), litO = bo > 0.05;
-      this.emit.push([c[0], c[2], b, c[1], bo]);
-      if (!draw) return c;
+      this.emit.push([cT[0], cT[2], b, cT[1], bo]);
+      if (!draw) return cT;
+      const own = OWN; OWN = 1;
       const col = lit ? shade(C.phluorin, Math.min(1.25, 0.3 + 1.5 * b)) : [0.30, 0.40, 0.34];
       ball(add(base, dir, 0.9), 0.34, shade(C.synaptobrevin, 0.9), 0, 5);
       for (const t of [2.3, 3.6, 4.9]) ball(add(base, dir, t), 1.15, col, lit ? 1 : 0, lit ? 13 : 14);
       const colO = litO ? shade(C.ofp, Math.min(1.25, 0.3 + 1.5 * bo)) : [0.42, 0.33, 0.27];
       for (const t of [0.3, 1.6, 2.9]) ball(add(hinge, dir2, t), 1.15, colO, litO ? 1 : 0, 20);
-      return c;
+      OWN = own;
+      return cT;
     };
 
     // SNARE complexes. Syntaxin (red) and SNAP-25 (green) belong to the plasma membrane,
@@ -420,15 +432,16 @@ export class Scene {
           if (s > zip) { const u = (s - zip) / (1 - zip); q = add(q, off, u * u * (3 - 2 * u)); rad = 0.36; }
           // Synaptobrevin, not yet engaged: a loose strand reaching out from the vesicle.
           if (j === 2 && apart > 0) q = mixv(q, add(add(B.p, B.n, 1.2 + (1 - s) * Lb * 0.85), et, 2.2 * Math.sin(3.1 * s + sn.phi * 5) * (1 - s)), apart);
-          ball(q, rad, cols[j], 0, [3, 4, 5, 4][j]);
+          OWN = j === 2 ? apart : 0; ball(q, rad, cols[j], 0, [3, 4, 5, 4][j]); OWN = 0;
           if (i === 27) tips.push(q);
         }
       }
       // Linkers and the two membrane-spanning helices.
       for (const [tip, A, c] of [[tips[0], Sx, C.syntaxin], [tips[2], B, C.synaptobrevin]]) {
-        CAT = c === C.syntaxin ? 3 : 5;
+        CAT = c === C.syntaxin ? 3 : 5; OWN = c === C.syntaxin ? 0 : apart;
         strand(tip, A.p, 3, 0.36, c);
         for (let t = 0.5; t <= 2 * D + 0.3; t += 0.55) ball(add(A.p, A.n, -t), 0.55, shade(c, 0.82));
+        OWN = 0;
       }
       // SNAP-25's two helices are joined by a loop that is lipid-anchored to the plasma membrane.
       CAT = 4;
@@ -447,7 +460,7 @@ export class Scene {
       for (let i = 0; i <= 12; i++) ball(mixv(add(F.p, F.n, -1.5), tip, i / 12), i > 9 ? 1.25 : 0.9, shade(c, 0.85 + 0.15 * (i % 2)));
       if (p >= PH.STALK) return;
       // The link from the rod to the vesicle: loose until capture, taut after.
-      const ctr = [0, S.hV, 0], dv = add(ctr, tip, -1), dist = Math.hypot(dv[0], dv[1], dv[2]), hit = add(ctr, norm(dv), -(S.Rc + D + 0.6));
+      const ctr = vx([0, S.hV, 0]), dv = add(ctr, tip, -1), dist = Math.hypot(dv[0], dv[1], dv[2]), hit = add(ctr, norm(dv), -(S.Rc + D + 0.6));
       const end = S.tethered ? hit : add(tip, norm(add(dv, [0.3 * Math.sin(time * 2.1 + k), 0, 0.3 * Math.cos(time * 1.7 + k)])), Math.min(9, Math.max(0, dist - S.Rc - D - 2)));
       const nb = Math.max(3, Math.round(Math.hypot(end[0] - tip[0], end[1] - tip[1], end[2] - tip[2]) / 0.9));
       for (let i = 1; i <= nb; i++) ball(mixv(tip, end, i / nb), 0.32, c);
@@ -455,6 +468,7 @@ export class Scene {
     });
 
     // The rest of the coat rides on the vesicle and spreads into the cell membrane with its lipids.
+    OWN = S.fused[0] ? 0 : 1;      // the coat rides on the vesicle
     this.coat.forEach((pr) => {
       const site = freeSite(S, pr, p, gate[pr.kind]), A = at(0, site[0], site[1]);
       if (!kept(A.p[0], A.p[2])) return;
@@ -487,10 +501,11 @@ export class Scene {
         anchors.pump = P(0, 0, 12.5);
       }
     });
+    OWN = 0;
 
     CAT = 0;
     if (vitro) {
-      CAT = 5;
+      CAT = 5; OWN = 1;      // free synaptobrevins, with their tags, ride on the vesicle
       this.free.forEach((fr) => {
         const site = freeSite(S, fr, p, gate.free), A = at(0, roomy(site[0], site[1]), site[1]), draw = kept(A.p[0], A.p[2]);
         if (draw) {
@@ -500,6 +515,7 @@ export class Scene {
         const c = tag(A, draw);
         if (draw && !anchors.phl) anchors.phl = c;
       });
+      OWN = 0;
       // Fluorescence leaves in every direction; the objective below catches about half of it.
       // Every other one of these is a 589 nm photon from the orange protein, which starts before the pore opens.
       const hash = (n) => { const v = Math.sin(n * 12.9898) * 43758.5453; return v - Math.floor(v); };
@@ -744,6 +760,7 @@ export class Scene {
       gl.uniform2f(v.uAv, S.Av[0], S.Av[1]); gl.uniform2f(v.uRW, S.rW[0], S.rW[1]);
       gl.uniform2f(v.uSigma, sig[0], sig[1]); gl.uniform2f(v.uSigmaPM, sigPM[0], sigPM[1]); gl.uniform2f(v.uRl, S.R + D, S.R - D);
       gl.uniform4f(v.uGeo, D, CLEFT, BAREA, PATCH);
+      gl.uniform4f(v.uVes, this.vesMove.off[0], S.hV, this.vesMove.off[2], 0); gl.uniformMatrix3fv(v.uVesRot, true, this.vesMove.M);
       gl.uniform3fv(v.uCol, [...C.vesicle, ...C.vesicleIn, ...C.plasma, ...C.plasmaOut, ...C.post, ...C.postIn]);
       gl.uniform1f(v.uHeadR, this.headR);
       return v;
@@ -763,6 +780,7 @@ export class Scene {
     const ntU = (pr, scale) => {
       const v = common(pr);
       gl.uniform4f(v.uNT, S.p, S.hV, S.Rin - 0.6, S.rho);
+      gl.uniform4f(v.uVes, this.vesMove.off[0], S.hV, this.vesMove.off[2], 0); gl.uniformMatrix3fv(v.uVesRot, true, this.vesMove.M);
       gl.uniform4f(v.uNT2, Math.max(0.15, S.neck - D - 0.6), -D - 1.4, this.gapBottom, 0.36);
       gl.uniform4f(v.uNT3, PH.PORE + 0.012, 0.30, scale, 0);
       gl.uniform3fv(v.uNTCol, C.glutamate);

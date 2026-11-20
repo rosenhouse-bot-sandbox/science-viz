@@ -27,9 +27,20 @@ export const ARRIVE = 0.2, APPROACH = 120;
 // The arrival has two parts. First the vesicle wanders by Brownian motion, drifting down; then,
 // CAPTURE of the way from docking and REACH nanometres up, a tether on the active zone catches it,
 // which quiets the wandering, and reels it in. The wander is a fixed sum of sines so that the
-// slider always shows the same path; only its up-and-down part is drawn.
+// slider always shows the same path. Brownian motion has no favored direction, so the vesicle
+// wanders as far sideways as up and down, and it tumbles: the same knocks turn a sphere of this
+// size about 40 degrees for each 16 nm it wanders (see drift). Held by the tethers, it keeps one
+// side down and only shivers.
 export const CAPTURE = 0.42, REACH = 42;
-const wander = (u) => 0.5 * Math.sin(33.3 * u + 1.1) + 0.3 * Math.sin(55.9 * u + 4.0) + 0.2 * Math.sin(89.2 * u + 2.3);
+const wander = (u, k = 0) => 0.5 * Math.sin((33.3 - 3.1 * k) * u + 1.1 + 2.3 * k) + 0.3 * Math.sin((55.9 + 4.7 * k) * u + 4.0 + 1.7 * k) + 0.2 * Math.sin((89.2 - 6.9 * k) * u + 2.3 + 3.9 * k);
+const swing = (u) => 16 * sstep(CAPTURE - 0.04, CAPTURE + 0.1, u) + 4 * sstep(0.02, 0.2, u);       // how far it wanders either way, nm
+// The sideways part of the wander (x, z in nm) and the tumble (a turn about the vesicle's centre, as an axis
+// times an angle in radians), at progress p. Both are nothing once it docks.
+export function drift(p) {
+  const u = Math.min(1, Math.max(0, -p / ARRIVE)), w = swing(u);
+  const turn = 2.4 * sstep(CAPTURE - 0.04, CAPTURE + 0.15, u) + 0.12 * sstep(0.02, 0.2, u);
+  return { x: wander(u, 1) * w, z: wander(u, 2) * w, rot: [wander(u, 3) * turn, wander(u, 4) * turn, wander(u, 5) * turn] };
+}
 export const PH = { CA: 0.10, STALK: 0.22, PORE: 0.36, DILATE: 0.50, OMEGA: 0.70, MERGED: 0.92 };
 const PI = Math.PI, NC = 220, NF = 160;
 
@@ -41,7 +52,7 @@ export function shape(p, R) {
   else n = D + 1.6 * sstep(PH.PORE, PH.DILATE, p);
   const u = Math.min(1, Math.max(0, -p / ARRIVE));
   const approachBase = u > CAPTURE ? REACH + (APPROACH - REACH) * sstep(CAPTURE, 1, u) : REACH * sstep(0, CAPTURE, u);
-  const jitter = wander(u) * (16 * sstep(CAPTURE - 0.04, CAPTURE + 0.1, u) + 4 * sstep(0.02, 0.2, u));
+  const jitter = wander(u) * swing(u);
   const approach = u > 0 ? Math.max(0, approachBase + jitter) : 0;   // height still to come down before docking
   const extra = approach + 5 * (1 - sstep(0, PH.CA, p));   // plus the docking gap that the SNAREs close
   const th50 = PI - Math.asin((D + 1.6 + RHO0) / (R + RHO0));

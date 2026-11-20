@@ -126,7 +126,14 @@ presynaptic membrane, drawn lipid by lipid and to scale in nanometres.
 - **Fusion progress** starts with the vesicle's arrival: it wanders the last 120 nm by Brownian
   motion until tethers on the active zone (Munc13 and RIM, drawn as rods) catch it about 42 nm up
   and reel it in, with synaptobrevin free until syntaxin and SNAP-25 can reach it. The wander is a
-  fixed path, so the slider is repeatable, and only its up-and-down part is drawn. It then scrubs
+  fixed path, so the slider is repeatable. It goes as far sideways as up and down (up to 20 nm either
+  way before the tethers catch it, 4 nm after), and it tumbles, with everything it carries: the same
+  knocks turn a sphere this size about 40° for each 16 nm it wanders, so it turns through a few
+  radians on the way. Once tethered it keeps one side down and only shivers, and it docks in the
+  place and the turn the later stages start from. The reflection camera does not see the sideways
+  part: it is a fifth of one of its pixels. Inside, the glutamate moves about the whole lumen, and which
+  molecule leaves through the pore next is a matter of chance, so the vesicle empties evenly: a molecule
+  crosses the lumen about a thousand times faster than it can leave. It then scrubs
   from a docked vesicle through SNARE zippering, the hemifusion stalk,
   the opening and widening of the fusion pore, to full collapse into the membrane.
 - The vesicle carries more than its fusion machinery: about 30 synaptophysins, 10 glutamate

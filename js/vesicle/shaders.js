@@ -78,6 +78,8 @@ uniform vec2 uAv, uSigma, uSigmaPM, uRl, uRW;
 uniform vec4 uGeo;       // D, cleft, BAREA, patch radius
 uniform vec3 uCol[6];
 uniform float uHeadR;
+uniform vec4 uVes; uniform mat3 uVesRot;      // the arriving vesicle's wander: its sideways move (x, z), its centre's height (y), and its turn
+vec3 vesMove(vec3 p){ vec3 c = vec3(0.0, uVes.y, 0.0); return uVesRot * (p - c) + c + vec3(uVes.x, 0.0, uVes.z); }
 const float TW = ${TABW}.0;
 vec4 row(int r, float t){
   int i = min(int(t), ${TABW - 2});
@@ -105,6 +107,7 @@ void lipid(out vec3 pos, out vec3 nrm, out vec3 col, out float scale, out float 
     vec2 cs = U / max(length(U), 1e-5);
     pos = vec3(s.x * cs.x, s.y, s.x * cs.y);
     nrm = normalize(vec3(s.z * cs.x, s.w, s.z * cs.y));
+    if(PI * dot(U, U) < Av){ pos = vesMove(pos); nrm = uVesRot * nrm; }      // on the vesicle: it goes where the vesicle goes
     // Mixing. Rather than move lipids (which would wreck the even packing), each site shows the
     // origin of the lipid that has random-walked into it. On the vesicle, the chance of finding a
     // cell-membrane lipid falls off with distance along the surface from the neck; on the cell
@@ -256,6 +259,9 @@ void main(){
 
 // Neurotransmitter: every molecule's whole journey is a function of the progress slider, so it
 // can be scrubbed. It waits in the lumen, squeezes through the pore, then spreads in the cleft.
+// Glutamate in the lumen diffuses across it a thousand times faster than it can leave through the pore, so what is left
+// inside is always spread evenly: the molecules keep moving about the whole lumen, and which one leaves next is a matter
+// of chance, not of where it was. The vesicle thins out everywhere at once.
 export const transmitterVS = HEAD + CUT + `
 layout(location=0) in vec2 aCorner;
 layout(location=1) in vec3 aBall;   // home position in the unit ball
@@ -264,15 +270,18 @@ uniform vec4 uNT;        // progress, vesicle centre height, lumen radius, neck 
 uniform vec4 uNT2;       // pore radius, cleft top, cleft bottom, ball radius
 uniform vec4 uNT3;       // first release, release span, radius scale, _
 uniform vec3 uNTCol;
+uniform vec4 uVes; uniform mat3 uVesRot;      // the arriving vesicle's wander (as for the lipids)
 ` + SPHERE_OUT + `
 void main(){
-  float e = clamp(0.62 * (aBall.y + 1.0) * 0.5 + 0.38 * aSeed.x, 0.0, 1.0);
+  float e = aSeed.x;
   float s = (uNT.x - (uNT3.x + uNT3.y * pow(e, 0.6))) / 0.05;
   float sd = aSeed.w * 100.0, t = uTime;
   vec3 jig = vec3(sin(t * 2.1 + sd), sin(t * 1.7 + sd * 1.3 + 1.0), sin(t * 2.6 + sd * 0.7 + 2.0));
-  float sw = t * 0.07 * (aSeed.x - 0.5);
+  // each wanders through the whole lumen: its place in the ball is turned about two axes at its own rates
+  float sw = t * 0.5 * (aSeed.w - 0.5) + sd, tw = t * 0.37 * (fract(sd * 0.137) - 0.5) + 0.7 * sd;
   vec3 b = vec3(aBall.x * cos(sw) - aBall.z * sin(sw), aBall.y, aBall.x * sin(sw) + aBall.z * cos(sw));
-  vec3 home = vec3(0.0, uNT.y, 0.0) + b * uNT.z + jig * 0.32;
+  b = vec3(b.x, b.y * cos(tw) - b.z * sin(tw), b.y * sin(tw) + b.z * cos(tw));
+  vec3 home = vec3(uVes.x, uNT.y, uVes.z) + uVesRot * (b * uNT.z + jig * 0.32);
   vec3 pos = home; float fade = 1.0;
   if(s > 0.0){
     vec2 q = aSeed.yz / max(1.0, length(aSeed.yz) / 1.5);

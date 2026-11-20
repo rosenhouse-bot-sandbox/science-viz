@@ -38,15 +38,24 @@ for (const vitro of [false, true]) for (const diam of [30, 42, 70]) {
       if (!NAMES[cat]) continue;
       const tag = (cat === 13 || cat === 14 || cat === 20) && Math.abs(rad - 1.15) < 0.01;
       if ((cat === 13 || cat === 14) && !tag) continue;                    // glows, not molecules
-      const r = Math.hypot(d[k], d[k + 2]), y = d[k + 1], cyto = sd(0, r, y), lumen = sd(1, r, y);
+      // A ball the arriving vesicle carries has been moved and turned with it: judge it where it would be without that
+      // (whichever of the two places it passes in; the cell's own membrane does not move).
+      const judge = (x, y, z) => {
+      const r = Math.hypot(x, z), cyto = sd(0, r, y), lumen = sd(1, r, y);
       let why = null;
       if (tag) {
         if (cyto > 0.4 && lumen < 0) why = 'is on the cytoplasmic side';
         else if (lumen > 0 && lumen < rad - 0.75) why = 'is pushed into the membrane';
         else if (r < rad - 0.3 && y > -D && y < S.hV && lumen < 2 * rad) why = 'lies across the axis of the pore';   // only where the lumen is narrow: in a wide one a folded tag may cross the axis
-      } else if (cat === 5 && rad < 0.35 && lumen < 1.3 && cyto < 0) continue;    // the stem that carries the tag
+      } else if (cat === 5 && rad < 0.35 && lumen < 1.3 && cyto < 0) return 'skip';    // the stem that carries the tag
       else if (lumen > 0.4 && cyto < 0) why = 'is on the lumen or cleft side';
       else if (rad >= 0.9 && cyto > 0.05 && cyto < rad - (SINK[cat] || 0.9)) why = 'is pushed into a membrane';
+      return why;
+      };
+      const V = scene.vesMove, qx = d[k] - V.C[0] - V.off[0], qy = d[k + 1] - V.C[1], qz = d[k + 2] - V.C[2] - V.off[2], M = V.M;
+      let why = judge(d[k], d[k + 1], d[k + 2]);
+      if (why && why !== 'skip') why = judge(M[0] * qx + M[3] * qy + M[6] * qz + V.C[0], M[1] * qx + M[4] * qy + M[7] * qz + V.C[1], M[2] * qx + M[5] * qy + M[8] * qz + V.C[2]);
+      if (why === 'skip') continue;
       if (why) { const key = NAMES[cat] + ' ' + why; bad.set(key, (bad.get(key) || 0) + 1); }
     }
     for (const [key, n] of bad) { findings++; if (findings <= 40) console.log(`${vitro ? 'on glass' : 'in cell'}, ${diam} nm, progress ${p.toFixed(3)}: ${key} (${n} balls)`); }
