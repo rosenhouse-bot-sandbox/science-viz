@@ -61,6 +61,9 @@ export const SPOT_BURNS = flameAt(SPOT_DIST);
 
 // ---- the road
 export const MPH = 60, SPEED = MPH * 0.44704, RPM = 2400, DEG_PER_S = RPM * 6;
+export const TIRE_R = 0.342;      // the tire's radius, m: it rolls, so it turns SPEED / TIRE_R radians a second
+// A coil's spark lasts about 1.5 thousandths of a second: a breakdown of a few billionths, then a glow while the coil empties
+export const SPARK_MS = 1.5, SPARK_END = SPARK + Math.round(SPARK_MS / 1000 * DEG_PER_S);
 
 // ---- pressure and temperature through the cycle, in steps of half a degree
 const K_B = 1.380649e-23, R_GAS = 287;

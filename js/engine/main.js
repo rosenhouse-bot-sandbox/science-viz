@@ -1,10 +1,10 @@
 // Engine: the controller. Two numbers drive the page: the zoom (0 = car ... 4 = molecules) and the crank
 // angle of the cylinder we follow (0 to 720 degrees, one cycle). Time runs slower the further in the zoom is.
 // The picture is redrawn only when something changes.
-import * as M from './model.js?v=e513c19b';
-import { makeGroup, place, centre, tiles, copies, LAYERS, MAX_COPIES, MAX_ATOMS } from './mol.js?v=e513c19b';
-import { WORLD_FS, FULL_VS, BLIT_FS, BALL_VS, BALL_FS, DOT_VS, DOT_FS } from './shaders.js?v=e513c19b';
-import * as Flow from './flow.js?v=e513c19b';
+import * as M from './model.js?v=0b3e7bfb';
+import { makeGroup, place, centre, tiles, copies, LAYERS, MAX_COPIES, MAX_ATOMS } from './mol.js?v=0b3e7bfb';
+import { WORLD_FS, FULL_VS, BLIT_FS, BALL_VS, BALL_FS, DOT_VS, DOT_FS } from './shaders.js?v=0b3e7bfb';
+import * as Flow from './flow.js?v=0b3e7bfb';
 import { gamepad } from '../gamepad/gamepad.js';
 
 const { clamp, smooth, mix, wrap } = M;
@@ -211,7 +211,7 @@ function draw() {
   gl.uniform3fv(u.uCam, view.cam); gl.uniform3fv(u.uRt, view.rt); gl.uniform3fv(u.uUp, view.up); gl.uniform3fv(u.uFw, view.fw); gl.uniform3fv(u.uSun, SUN);
   gl.uniform1f(u.uTan, TAN); gl.uniform1f(u.uPhi, wrap(st.phi + 360));
   gl.uniform1f(u.uCutCar, c.car); gl.uniform1f(u.uCutLift, c.lift); gl.uniform1f(u.uCutEnd, c.end);
-  gl.uniform1f(u.uGas, st.z < 0.3 ? 0 : st.z < 0.8 ? 1 : 2); gl.uniform1f(u.uGasStep, clamp(view.hw / 420, 0.00028, 0.003)); gl.uniform1f(u.uRoad, road % 900); const gasCut = mix(M.XC, M.GAS_CUT, smooth(2.3, 2.85, st.z)); gl.uniform1f(u.uGasCut, gasCut);
+  gl.uniform1f(u.uGas, st.z < 0.3 ? 0 : st.z < 0.8 ? 1 : 2); gl.uniform1f(u.uGasStep, clamp(view.hw / 420, 0.00028, 0.003)); gl.uniform1f(u.uRoad, road % 900); gl.uniform2f(u.uWheel, (road / M.TIRE_R) % (2 * Math.PI), M.SPEED / slowNow(st.z) / M.TIRE_R / 60); const gasCut = mix(M.XC, M.GAS_CUT, smooth(2.3, 2.85, st.z)); gl.uniform1f(u.uGasCut, gasCut);
   const eng = e2w([0.02, 0.105, 0]), far = Math.hypot(view.cam[0] - eng[0], view.cam[1] - eng[1], view.cam[2] - eng[2]), tr = [Math.max(0, far - 0.6), far + 0.6];
   gl.uniform2f(u.uTr, tr[0], tr[1]);
   const dotsOn = 1 - smooth(28, 70, 0.85e-3 * view.k);

@@ -763,9 +763,11 @@ The engine (`js/engine/model.js`): four cylinders in a row, 2.0 liters (bore 84 
 connecting rod 145 mm), compression ratio 10.5 to 1 from the drawn geometry, two camshafts above four
 valves per cylinder, fuel sprayed straight into the cylinder. Burning order 1, 3, 4, 2. The intake
 valve opens 10° before the top and closes 40° after the bottom; the exhaust valve opens 50° before
-the bottom and closes 10° after the top; both lift 9 mm. The spark is 25° before the top. The car
+the bottom and closes 10° after the top; both lift 9 mm. The spark is 25° before the top and lasts 1.5 thousandths of a second (22° of
+crank): a breakdown, then a dimmer glow while the coil empties. The car
 cruises at 60 mph with the crankshaft at 2,400 turns a minute, so 1° of crank takes 69 millionths of
-a second.
+a second. The tires (0.68 m across) roll, so their five spokes turn 12.5 times a second; where they
+turn too far in one frame to follow, they are drawn blurred.
 
 What is computed, not typed:
 
