@@ -1,10 +1,10 @@
 // Engine: the controller. Two numbers drive the page: the zoom (0 = car ... 4 = molecules) and the crank
 // angle of the cylinder we follow (0 to 720 degrees, one cycle). Time runs slower the further in the zoom is.
 // The picture is redrawn only when something changes.
-import * as M from './model.js?v=0b3e7bfb';
-import { makeGroup, place, centre, tiles, copies, LAYERS, MAX_COPIES, MAX_ATOMS } from './mol.js?v=0b3e7bfb';
-import { WORLD_FS, FULL_VS, BLIT_FS, BALL_VS, BALL_FS, DOT_VS, DOT_FS } from './shaders.js?v=0b3e7bfb';
-import * as Flow from './flow.js?v=0b3e7bfb';
+import * as M from './model.js?v=5c0071d5';
+import { makeGroup, place, centre, tiles, copies, LAYERS, MAX_COPIES, MAX_ATOMS } from './mol.js?v=5c0071d5';
+import { WORLD_FS, FULL_VS, BLIT_FS, BALL_VS, BALL_FS, DOT_VS, DOT_FS } from './shaders.js?v=5c0071d5';
+import * as Flow from './flow.js?v=5c0071d5';
 import { gamepad } from '../gamepad/gamepad.js';
 
 const { clamp, smooth, mix, wrap } = M;
@@ -173,7 +173,7 @@ function gasDotsWorld(c, gasCut, on) {
     const heat = (1 - smooth(372, 640, phi)) ** 2;
     // the burned gas glows (drawn by the world shader) and hides what is behind it: a dot is dimmed by the glow between it and the eye
     const Rf = phi > M.SPARK ? M.flameR(phi) : 0, squeeze = phi >= 180 && phi < 540 ? clamp(0.0985 / (M.DECK + 0.008 - top), 1, 10) : 1;
-    const glow = Rf > 0 ? (30 * squeeze + (gasCut > M.XC + 0.001 ? 200 : 0)) * heat : 0, eye = [EO[0] - view.cam[0], view.cam[1] - EO[1], -view.cam[2]], pg = [cx, M.PLUG_GAP[1], 0];
+    const glow = Rf > 0 ? (8 * squeeze + (gasCut > M.XC + 0.001 ? 30 : 0)) * heat : 0, eye = [EO[0] - view.cam[0], view.cam[1] - EO[1], -view.cam[2]], pg = [cx, M.PLUG_GAP[1], 0];
     for (let i = 0; i < flow.n; i++) for (let k = 0; k < flow.cycles; k++) {
       const t = phi + 720 * k; if (!Flow.at(flow, i, t, dotAt, j * 6 + k)) continue;
       const x = dotAt[0] + cx, y = dotAt[1], z = dotAt[2], inside = Flow.inChamber(dotAt[0], y, z);
@@ -215,7 +215,6 @@ function draw() {
   const eng = e2w([0.02, 0.105, 0]), far = Math.hypot(view.cam[0] - eng[0], view.cam[1] - eng[1], view.cam[2] - eng[2]), tr = [Math.max(0, far - 0.6), far + 0.6];
   gl.uniform2f(u.uTr, tr[0], tr[1]);
   const dotsOn = 1 - smooth(28, 70, 0.85e-3 * view.k);
-  gl.uniform1f(u.uDots, dotsOn);      // the cylinder's dots, 0.85 mm in radius, give way to the smaller sizes
   gl.drawArrays(gl.TRIANGLES, 0, 3);
   // onto the screen, magnified once the zoom has passed the nearest view the world is drawn at
   gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, cv.width, cv.height);
@@ -391,7 +390,7 @@ const CAP = {
 const NOTE = {
   car: '',
   engine: 'The near half of the block and its cover are left out to show the pistons. Not drawn: oil, coolant, the throttle, the gearbox and the exhaust system. The engine is drawn set lengthwise with its belt end toward the driver; in a car that end faces the front, or the side when the engine is set crosswise, as in most cars.',
-  cylinder: 'The end of the engine is cut off and left out. Dots stand for gas: far fewer and far larger than molecules, and in the picture\'s own colors, since air and gasoline vapor are colorless. Each dot is followed the whole way, in along the intake pipe and out along the exhaust pipe, so none appears or vanishes and the number in the cylinder follows the mass of gas there. The dots move as a smooth flow; real gas in a cylinder is turbulent. The tan dots that stay on the piston are burned gas left over from the last cycle; really it mixes through the fresh air. One dot in 15 is drawn as fuel, its share of the mixture by mass; by count fuel is 1 molecule in 60.',
+  cylinder: 'The end of the engine is cut off and left out. Dots stand for gas: far fewer and far larger than molecules, and in the picture\'s own colors, since air and gasoline vapor are colorless. Each dot is followed the whole way, in along the intake pipe or out of the injector and out along the exhaust pipe, so none appears or vanishes on the way and the number in the cylinder follows the mass of gas there. Burned gas is hotter, so it is thinner: its dots spread out and push the rest away from the plug. The dots move as a smooth flow; real gas in a cylinder is turbulent. The tan dots that stay on the piston are burned gas left over from the last cycle; really it mixes through the fresh air. One dot in 15 is drawn as fuel, its share of the mixture by mass; by count fuel is 1 molecule in 60.',
   flame: 'Burned gas is drawn glowing orange so that it can be told apart. A real gasoline flame gives off only faint light, at short visible wavelengths, which we see as blue.',
   molecules: 'Atoms are drawn in the usual model colors, at their real spacing for this pressure and temperature, each atom a little smaller than its real size so that the molecules\' shapes can be seen. Real molecules fly in straight lines between collisions; here each drifts about one place so that it stays in view. Iso-octane stands for the many hydrocarbons in gasoline. The burn of this group is stretched out so that it can be followed: a real flame front passes a spot this small in a few millionths of a second, the fuel breaks up through many short-lived pieces that are not drawn, and about 1 molecule in 100 of the burned gas is carbon monoxide or nitric oxide. Also not drawn: argon, 1 molecule in 100 of air, and the burned gas left from the last cycle, about 1 molecule in 10 before the burn. The molecules\' own motion is slowed far more than the engine\'s, or it would be a blur.',
 };

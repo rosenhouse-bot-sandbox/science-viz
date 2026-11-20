@@ -8,10 +8,44 @@
 // or the other way. Below the head the gas moves with the piston. While both valves are shut the gas is squeezed
 // or let spread evenly. The dots are then moved along that flow, one degree of crankshaft at a time, and the
 // path of each is kept, so the picture at any angle is the same however it was reached.
+// The fuel does not come in with the air: its dots leave the injector's tip one after another while it sprays,
+// fly out along the spray, slowing as they drag air with them, and from then on go where the gas goes. While the
+// flame spreads, the gas it has burned is about three times hotter than the gas ahead of it at the same pressure,
+// so it takes three times the room: the dots are moved out from the plug, so that the burned gas fills the flame's
+// sphere and the unburned gas is squeezed into what is left (see expand).
 // Not modeled: turbulence, the tumble and swirl of a real intake, and pressure waves in the pipes.
-import * as M from './model.js?v=0b3e7bfb';
+import * as M from './model.js?v=5c0071d5';
 
 const { clamp, mix, DECK, BORE, ROOF, ROOF_SLOPE, EVO, IVC, SPARK } = M;
+export const FUEL_SHARE = 1 / 15;                                    // fuel to air, by mass
+export const INJ = [-0.012, DECK + 0.0015, 0.0375];                  // the injector's tip (as in shaders.js)
+const SPRAY_DIR = (() => { const l = Math.hypot(0.3, 0.62, 0.79); return [0.3 / l, -0.62 / l, -0.79 / l]; })();      // down, and in toward the cylinder's axis
+const SPRAY_LEN = 0.062, SPRAY_K = 9, SPRAY_DEG = 30, SPRAY_SPREAD = 0.15;   // how far a drop could fly, m; the degrees in which its speed falls by e; how long it is followed as spray; the cone's spread
+const SPRAY_V = (() => { const l = Math.hypot(SPRAY_DIR[1], SPRAY_DIR[2]); return [0, -SPRAY_DIR[2] / l, SPRAY_DIR[1] / l]; })(), SPRAY_U = [SPRAY_V[1] * SPRAY_DIR[2] - SPRAY_V[2] * SPRAY_DIR[1], SPRAY_V[2] * SPRAY_DIR[0] - SPRAY_V[0] * SPRAY_DIR[2], SPRAY_V[0] * SPRAY_DIR[1] - SPRAY_V[1] * SPRAY_DIR[0]];
+// where a dot of fuel that left the tip at `t0` is, `t` degrees later, flying out along its own line in the cone (a, b in -1..1)
+function sprayAt(t, a, b, top, out) {
+  const s = SPRAY_LEN * (1 - Math.exp(-t / SPRAY_K)), u = SPRAY_U, v = SPRAY_V;
+  for (let k = 0; k < 3; k++) out[k] = INJ[k] + s * (SPRAY_DIR[k] + SPRAY_SPREAD * (a * u[k] + b * v[k]));
+  out[1] = Math.max(out[1], top + 0.0004);
+}
+// The burned gas's room: p (a point of the evenly spread gas) moved for a flame of radius Rf about the plug whose burned gas
+// is E times thinner than the unburned. Near the top the chamber is a flat disc, so the gas is moved sideways: each line
+// out from the cylinder's axis (where the plug is) at one height between piston and roof keeps its own gas, the burned
+// part of it filling the line's stretch inside the flame and the rest squeezed into what is left.
+const PY = M.PLUG_GAP[1];
+export function expand(p, top, Rf, E) {
+  const x = p[0], z = p[2], rho = Math.hypot(x, z); if (rho < 1e-7) return;
+  const H0 = DECK + ROOF - top, sl = ROOF_SLOPE * Math.abs(z) / rho, h = (r) => H0 - sl * r;
+  const eta = clamp((p[1] - top) / h(rho), 0, 1), d2 = (r) => r * r + (top + eta * h(r) - PY) ** 2, R2 = Rf * Rf;
+  if (d2(0) >= R2 || d2(BORE) < R2) return;      // a line the flame has not reached, or has wholly crossed
+  const W = (r) => H0 * r * r / 2 - sl * r * r * r / 3, WB = W(BORE);      // the gas between the axis and r
+  let a = 0, b = BORE; for (let k = 0; k < 30; k++) { const m = (a + b) / 2; if (d2(m) < R2) a = m; else b = m; }
+  const gb = W((a + b) / 2) / WB, f = W(rho) / WB, fb = gb / (E - gb * (E - 1)), all = fb * E + 1 - fb;
+  const want = (f < fb ? f * E / all : (fb * E + f - fb) / all) * WB;
+  a = 0; b = BORE; for (let k = 0; k < 34; k++) { const m = (a + b) / 2; if (W(m) < want) a = m; else b = m; }
+  const r2 = (a + b) / 2; p[0] = x / rho * r2; p[2] = z / rho * r2; p[1] = top + eta * h(r2);
+}
+export const burnRoom = (phi) => (phi > SPARK && phi < M.FLAME_OUT ? { Rf: M.flameR(phi), E: M.tempBurned(phi) / M.tempUnburned(phi) } : null);
 const AX = M.VALVE_AXIS, VS = M.VALVE_SEAT, VX = 0.0175;            // the valves sit 17.5 mm either side of the cylinder's middle
 export const RP = 0.0102;                                            // radius of the gas drawn in a port, m
 const P1 = [0, VS[1] + AX[1] * 0.022, VS[2] + AX[2] * 0.022], P0 = [0, VS[1] + AX[1] * 0.001, VS[2] + AX[2] * 0.001];
@@ -216,7 +250,14 @@ export function* build() {
     const along = Z_IN - ZG + (l + 0.5 + jl) * dl;      // beyond the grid's end, along the pipe
     X.push(cx); Y.push(P2[1] + (ZG - P2[2]) / PIPE[1] * PIPE[0] + cy + along * PIPE[0]); Z.push(ZG + along * PIPE[1]);
   }
-  const N = X.length, perDot = perCycle / N;      // each dot stands for this much gas; the pattern is one cycle's length of pipe, so each cycle's dots follow on from the last
+  const N = X.length, perDot = perCycle / N;
+  // one dot in 15 is fuel: it is not in the pipe but waits at the injector's tip until its moment in the spray
+  const fuel = new Uint8Array(N), injT = new Float32Array(N).fill(1e9), sprayA = new Float32Array(N), sprayB = new Float32Array(N);
+  { let nf = 0; for (let i = 0; i < N; i++) if (hash(i, 77) < FUEL_SHARE) fuel[i] = 1, nf++;
+    for (let i = 0, k = 0; i < N; i++) if (fuel[i]) {
+      injT[i] = M.INJECT[0] + (M.INJECT[1] - M.INJECT[0]) * (k++ + 0.5) / nf;
+      const r = Math.sqrt(hash(i, 5)), th = 2 * Math.PI * hash(i, 6); sprayA[i] = r * Math.cos(th); sprayB[i] = r * Math.sin(th);
+      X[i] = INJ[0]; Y[i] = INJ[1]; Z[i] = INJ[2]; } }      // each dot stands for this much gas; the pattern is one cycle's length of pipe, so each cycle's dots follow on from the last
   const px = Float64Array.from(X), py = Float64Array.from(Y), pz = Float64Array.from(Z);
   const lab = new Uint8Array(N), gone = new Uint8Array(N), t0 = new Float32Array(N).fill(-1);
   const rec = Array.from({ length: N }, () => []), burns = Array.from({ length: N }, () => []), fuelAt = new Float32Array(N).fill(1e9);
@@ -224,14 +265,23 @@ export function* build() {
   const v = [0, 0, 0], w = [0, 0, 0], q = [0, 0, 0], o3 = [0, 0, 0];
   // where dot i is in the engine: out of the copy, and squeezed with the chamber when the piston is near the top
   const phys = (i, top, squeezed, side, lift) => {
-    if (lab[i]) { fromLabel(px[i], py[i], pz[i], top, o3); return o3; }
+    if (lab[i]) { fromLabel(px[i], py[i], pz[i], top, o3); if (room) expand(o3, top, room.Rf, room.E); return o3; }
     if (side) { warp(px[i], py[i], pz[i] * side, lift, squeezed ? YB : top, o3); o3[2] *= side; } else { o3[0] = px[i]; o3[1] = py[i]; o3[2] = pz[i]; }
     if (squeezed && inChamber(o3[0], o3[1], o3[2]) && o3[1] >= YB - 1e-6) { toLabel(o3[0], o3[1], o3[2], YB, q); fromLabel(q[0], q[1], q[2], top, o3); }
     return o3;
   };
+  let room = null;      // the burned gas's room at the angle being kept
+  // Once out of the spray, the fuel mixes into the air (turbulence, not modeled as such): each dot of fuel drifts to its own
+  // place in gas spread evenly, which it reaches as the intake valve closes. Air and fuel are then both spread evenly.
+  const fuelHome = new Float32Array(N * 3); for (let i = 0; i < N; i++) if (fuel[i]) { fuelHome[i * 3] = 0.94 * (2 * hash(i, 11) - 1); fuelHome[i * 3 + 1] = 0.05 + 0.9 * hash(i, 12); fuelHome[i * 3 + 2] = 0.03 + 0.94 * hash(i, 13); }
+  const fh = [0, 0, 0];
+  const mixFuel = (i, b, top, p) => {
+    if (!fuel[i] || b <= injT[i] + SPRAY_DEG || b > IVC) return p;
+    const w = M.smooth(injT[i] + SPRAY_DEG, IVC, b); fromLabel(fuelHome[i * 3], fuelHome[i * 3 + 1], fuelHome[i * 3 + 2], top, fh);
+    p[0] = mix(p[0], fh[0], w); p[1] = mix(p[1], fh[1], w); p[2] = mix(p[2], fh[2], w); return p;
+  };
   const toCopy = (i, side, lift, floor) => { warp(px[i], py[i], pz[i] * side, lift, floor, q, true); py[i] = q[1]; pz[i] = q[2] * side; };
   const marks = []; for (let d = 0; d <= 720; d += 2) marks.push(d); marks.push(PHI_B, 720 - PHI_B); marks.sort((a, b) => a - b);
-  const INJ = [-0.012, DECK + 0.0015, 0.0375];
   let alive = N, tMax = 0;
   for (let cyc = 0; cyc < 6 && alive > 0; cyc++) {
     for (let s = 0; s + 1 < marks.length; s++) {
@@ -242,7 +292,7 @@ export function* build() {
       const rhoPort = side > 0 ? 1 : RHO_OUT;
       const liftOf = (phi, sd) => (sd > 0 ? M.liftIn(phi) : M.liftEx(phi));
       if (closed) {
-        if (a === IVC) for (let i = 0; i < N; i++) if (!gone[i]) { const p = phys(i, M.pistonTop(IVC), false, 1, 0); if (inChamber(p[0], p[1], p[2])) { toLabel(p[0], p[1], p[2], M.pistonTop(IVC), q); px[i] = q[0]; py[i] = q[1]; pz[i] = q[2]; lab[i] = 1; } else { px[i] = p[0]; py[i] = p[1]; pz[i] = p[2]; } }
+        if (a === IVC) for (let i = 0; i < N; i++) if (!gone[i]) { let p = phys(i, M.pistonTop(IVC), false, 1, 0); if (cyc === 0) p = mixFuel(i, IVC, M.pistonTop(IVC), p); if (inChamber(p[0], p[1], p[2])) { toLabel(p[0], p[1], p[2], M.pistonTop(IVC), q); px[i] = q[0]; py[i] = q[1]; pz[i] = q[2]; lab[i] = 1; } else { px[i] = p[0]; py[i] = p[1]; pz[i] = p[2]; } }
       } else {
         if (a === EVO) for (let i = 0; i < N; i++) if (!gone[i]) { if (lab[i]) { fromLabel(px[i], py[i], pz[i], M.pistonTop(EVO), q); px[i] = q[0]; py[i] = q[1]; pz[i] = q[2]; lab[i] = 0; } toCopy(i, -1, 0, M.pistonTop(EVO)); }
         if (a === 0 && cyc > 0) for (let i = 0; i < N; i++) if (!gone[i]) { warp(px[i], py[i], -pz[i], M.liftEx(720), YB, q); px[i] = q[0]; py[i] = q[1]; pz[i] = -q[2]; toCopy(i, 1, M.liftIn(0), YB); }
@@ -252,6 +302,10 @@ export function* build() {
         const pipeV = Qp / A_PIPE, floor = squeezed ? YB : top, lift = liftOf(mid, side);
         for (let i = 0; i < N; i++) {
           if (gone[i]) continue;
+          if (fuel[i] && cyc === 0 && b <= injT[i] + SPRAY_DEG) {      // fuel waiting in the injector, or flying out in the spray
+            if (b > injT[i]) { sprayAt(b - injT[i], sprayA[i], sprayB[i], M.pistonTop(b), o3); px[i] = o3[0]; py[i] = o3[1]; pz[i] = o3[2]; toCopy(i, side, lift, floor); }
+            continue;
+          }
           let x = px[i], y = py[i], z = pz[i], left = dphi, guard = 0;
           while (left > 1e-9 && guard++ < 400) {
             const zs = z * side; let mode;
@@ -276,6 +330,7 @@ export function* build() {
             if (trav[i] > 0.004 && left > 1e-9 && t0[i] >= 0) {      // a quick dot: keep its path between the steps too
               const tn = T + b - left, fl = squeezed ? YB : M.pistonTop(b - left); warp(x, y, z * side, lift, fl, o3); o3[2] *= side;
               if (squeezed && inChamber(o3[0], o3[1], o3[2]) && o3[1] >= YB - 1e-6) { toLabel(o3[0], o3[1], o3[2], YB, q); fromLabel(q[0], q[1], q[2], M.pistonTop(b - left), o3); }
+              if (cyc === 0) mixFuel(i, b - left, M.pistonTop(b - left), o3);
               rec[i].push(tn, o3[0], o3[1], o3[2]); lastT[i] = tn; hasPrev[i] = 0; trav[i] = 0;
             }
           }
@@ -286,23 +341,29 @@ export function* build() {
       }
       // keep the path, and note when a dot is reached by the fuel and by the flame
       const tb = T + b, topB = M.pistonTop(b), shut = b > IVC && b <= EVO, sqB = !shut && (b <= PHI_B || b > 720 - PHI_B), Rf = M.flameR(b), sideB = shut ? 0 : side, liftB = shut ? 0 : liftOf(b, side);
+      room = shut ? burnRoom(b) : null;
       for (let i = 0; i < N; i++) {
         if (gone[i]) continue;
-        const p = phys(i, topB, sqB, sideB, liftB), x = p[0], y = p[1], z = p[2];
+        if (fuel[i] && t0[i] < 0) {      // a dot of fuel starts at the injector's tip, the moment it leaves it
+          if (cyc > 0 || b <= injT[i]) continue;
+          t0[i] = T + injT[i]; fuelAt[i] = t0[i]; rec[i].push(t0[i], INJ[0], INJ[1], INJ[2]); lastT[i] = t0[i];
+        }
+        const p = phys(i, topB, sqB, sideB, liftB); if (cyc === 0) mixFuel(i, b, topB, p);
+        const x = p[0], y = p[1], z = p[2];
         if (t0[i] < 0) { if (z < Z_IN) t0[i] = tb; else continue; }
         const inside = inChamber(x, y, z), r = rec[i];
         if (inside) {
           if (b > SPARK && b < 400 && Math.hypot(x, y - M.PLUG_GAP[1], z) < Rf && (!burns[i].length || tb - burns[i][burns[i].length - 1] > 360)) burns[i].push(tb);
-          if (fuelAt[i] > 1e8 && !burns[i].length && b > M.INJECT[0] && b < 300 && (b > 150 || Math.hypot(x - INJ[0], y - INJ[1], z - INJ[2]) < (b - M.INJECT[0]) / 80 * 0.13)) fuelAt[i] = tb;
         }
         const n = r.length, far = n ? Math.hypot(x - r[n - 3], y - r[n - 2], z - r[n - 1]) : 1;
         const end = -z > 0.20 || tb - t0[i] >= LIFE;
-        if (!n || far > 0.003 || tb - lastT[i] >= 8 || end) {
+        if (!n || far > 0.003 || tb - lastT[i] >= 8 || end || (room && inside)) {      // (while the flame spreads, every step: the gas it pushes moves unevenly)
           if (n && hasPrev[i] && far > 0.003 && prevS[i * 4] > lastT[i] + 1e-6) r.push(prevS[i * 4], prevS[i * 4 + 1], prevS[i * 4 + 2], prevS[i * 4 + 3]);
           r.push(tb, x, y, z); lastT[i] = tb; hasPrev[i] = 0; trav[i] = 0;
         } else { prevS[i * 4] = tb; prevS[i * 4 + 1] = x; prevS[i * 4 + 2] = y; prevS[i * 4 + 3] = z; hasPrev[i] = 1; }
         if (end) { gone[i] = 1; alive--; tMax = Math.max(tMax, tb); }
       }
+      room = null;
       if (s % 2 === 1) yield;
     }
   }
@@ -314,8 +375,7 @@ export function* build() {
     for (let k = 0; k < r.length; k += 4, o++) { time[o] = r[k]; pos[o * 3] = Math.round(r[k + 1] * 1e5); pos[o * 3 + 1] = Math.round(r[k + 2] * 1e5); pos[o * 3 + 2] = Math.round(r[k + 3] * 1e5); }
     start[i + 1] = o; for (let k = 0; k < Math.min(4, burns[i].length); k++) burn[i * 4 + k] = burns[i][k];
   }
-  const fuel = new Uint8Array(N); for (let i = 0; i < N; i++) fuel[i] = hash(i, 77) < 1 / 15 ? 1 : 0;
-  return { n: N, start, time, pos, burn, fuel, fuelAt, perDot, cells: G.cells, cycles: Math.ceil(tMax / 720), hint: new Uint32Array(N * 8) };
+  return { n: N, start, time, pos, burn, fuel, fuelAt, injT, perDot, cells: G.cells, cycles: Math.ceil(tMax / 720), hint: new Uint32Array(N * 8) };
 }
 
 // The paths are kept as points a few millimeters apart, with straight lines between.

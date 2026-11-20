@@ -780,14 +780,21 @@ What is computed, not typed:
   port and valve.
   Seventy-two percent of the fuel's heat is kept in the gas; the rest is taken as lost to the walls.
 - How the gas moves (`js/engine/flow.js`). Each dot of gas is followed the whole way: in along the
-  intake pipe, past the intake valves, through compression and the burn, out past the exhaust valves
+  intake pipe (air) or out of the injector's tip (fuel), past the intake valves, through compression and the burn, out past the exhaust valves
   and down the exhaust pipe. No dot is made or lost on the way, so the number of dots in the cylinder
   at each crank angle is the mass of gas the model has there, to within a few percent: about a third
   of the burned gas rushes out by its own pressure when the exhaust valve opens, before the piston
   starts back up, and the rising piston pushes out most of the rest. While a valve is open the gas under
   the cylinder head moves as a flow without swirl (a potential flow), worked out on a grid of
   1.75 mm cells when the page loads; below the head it moves with the piston; with both valves shut it
-  is squeezed evenly. The dots' paths are worked out once, in a few seconds after the page opens,
+  is squeezed evenly. A dot of fuel leaves the injector's tip at its moment in the spray (70° to 95°) and flies out
+  along the cone, slowing as it drags air along (from about 100 m/s, 62 mm at most); 30° later it goes where the gas
+  goes, and drifts to its own place in the evenly spread gas by the time the intake valve shuts, which stands for
+  the turbulent mixing that is not modeled. While the flame spreads, the burned gas is as many times thinner than
+  the gas ahead of it as it is hotter (about 2.7 times, from the model's two temperatures, at the same pressure).
+  The dots are moved sideways out from the cylinder's axis, where the plug is: along each line out from the axis
+  at one height, the burned gas fills the stretch inside the flame's sphere and the unburned gas is squeezed into
+  the rest. The burned gas glows faintly, so the dots in it can be seen. The dots' paths are worked out once, in a few seconds after the page opens,
   and the picture at any angle is read from them, so it is the same however that angle was reached.
 - The flame front's distance from the plug, which sets where the glow is drawn and when the spot the
   Molecules stop looks at burns. That spot is 13 mm from the plug, so it burns about 6° before the
@@ -829,8 +836,8 @@ Where the picture simplifies, which the page also says:
   each molecule's shape can be seen. The group of molecules is repeated side by side, each copy
   turned a different way, to fill the view.
 - The valves are 32 mm (intake) and 28 mm (exhaust) across and the spark plug's gap is 0.9 mm, as
-  in a real engine of this size. The fuel spray is drawn as one narrow cone; a real injector makes
-  several.
+  in a real engine of this size. The fuel spray is one narrow cone of dots; a real injector makes
+  several, of droplets far smaller than a dot.
 - Not drawn: oil, coolant, the throttle, the flywheel, the gearbox, the exhaust system, the alternator and its belt.
   Knock is left out: it does not happen at this light load.
 
