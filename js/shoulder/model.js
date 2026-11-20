@@ -8,8 +8,8 @@
 //   rot    turning the arm about its own length: + turns out (the forearm swings out), - turns in
 //   elbow  elbow bend, in degrees (0 straight, 90 the forearm level)
 //   up     how far the ball of the arm bone has moved up toward the acromion, in mm (a large cuff tear)
-import { V, K, bandMesh, binU } from './geom.js?v=7579d653';
-import { solid } from './solid.js?v=7579d653';
+import { V, K, bandMesh, binU } from './geom.js?v=96d17a8d';
+import { solid } from './solid.js?v=96d17a8d';
 
 // ---- reading the packed meshes -------------------------------------------------------------------
 export function unpack(json, buf) {
@@ -78,7 +78,7 @@ export const BONES = ['scapula', 'clavicle', 'humerus', 'radius', 'ulna', 'rib1'
 const BODY = { scapula: 'scapula', clavicle: 'clavicle', humerus: 'humerus', radius: 'forearm', ulna: 'forearm' };
 
 // the bursa: from how far along the supraspinatus it starts (0 origin, 1 insertion), and how much wider than the tendon
-export const BURSA = { from: 0.62, wide: 1.15 };
+export const BURSA = { from: 0.7, wide: 1.15 };
 export const CLEAR = 2;       // mm kept between the arm bone and the acromion as the arm lifts (see glide)
 export const ROTS = [-90, -75, -60, -45, -30, -15, 0, 15, 30, 45, 60, 75, 90];   // the arm's turns the glide is worked out for
 export function makeModel(bones, musclesJson, table = null) {
@@ -127,8 +127,9 @@ export function makeModel(bones, musclesJson, table = null) {
     let glide = P.auto === false ? 0 : glideAt(fit, rot);
     const dir = turn(scap, [0, 1, 0]), moved = (g) => ({ R: hum.R, t: V.add(hum.t, V.mul(dir, up - g)) });
     // the stored glide is worked out on a grid of lifts and turns; between them, slide a little further if needed
-    // (with a large tear the ball rides up, and is let come nearer the acromion, but never into it)
-    const keep = up > 0 ? Math.max(0.5, CLEAR - up) : CLEAR;
+    // (with a large tear the ball rides up where there is room, but never nearer the acromion than CLEAR, which
+    // leaves room for the tendon and bursa drawn between them)
+    const keep = CLEAR;
     if (P.auto !== false) for (let k = 0; k < 3; k++) { const g = gap({ scapula: scap, humerus: moved(glide) }).mm; if (g >= keep - 0.01) break; glide += keep - g + 0.03; }
     if (glide || up) hum = moved(glide);
     const fore = compose(hum, about(EL, ELB, rad(P.elbow ?? 0)));

@@ -897,7 +897,7 @@ wrong with it, and what the common physical therapy exercises do to it.
   supraspinatus tendon where it passes under the acromion; the half nearer the eye fades). Each cuff
   muscle has its own color, which is only the picture's; tendon is drawn white.
 - **Conditions**: healthy, tendinopathy (the tendon drawn half as thick again near its end), partial tear
-  (half the thickness gone from the underside), full tear (a hole through, and the ball 3 mm higher),
+  (half the thickness gone from the underside), full tear (a hole through, and the ball up to 3 mm higher, never nearer the acromion than 2 mm),
   bursitis (the bursa 3 mm thick instead of 0.8 mm) and impingement (the tendon is lit in red where the
   acromion presses on it: where the model has to push it out of the bone's way). The sizes are drawn,
   not measured, and the page says so under each.

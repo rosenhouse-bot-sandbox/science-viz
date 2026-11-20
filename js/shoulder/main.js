@@ -1,12 +1,12 @@
 // Shoulder: the controller. The state is the zoom (0 Shoulder, 1 Joint, 2 Tendon), a condition or an exercise,
 // and the arm's lift and turn. Everything drawn and every number shown comes from model.js.
-import { unpack, makeModel, MUSCLES, clamp, smooth, apply, turn as turnDir } from './model.js?v=7579d653';
-import { V } from './geom.js?v=7579d653';
-import { makeView, COL } from './view.js?v=7579d653';
-import { SRC, DOES, CONDITIONS, EXERCISES, MODEL_NOTE, MODEL_SRC } from './facts.js?v=7579d653';
+import { unpack, makeModel, MUSCLES, clamp, smooth, apply, turn as turnDir } from './model.js?v=96d17a8d';
+import { V } from './geom.js?v=96d17a8d';
+import { makeView, COL } from './view.js?v=96d17a8d';
+import { SRC, DOES, CONDITIONS, EXERCISES, MODEL_NOTE, MODEL_SRC } from './facts.js?v=96d17a8d';
 import { gamepad } from '../gamepad/gamepad.js';
 
-const STAMP = '7579d653';                                        // written by tests/shoulder/stamp.mjs: the data files' version
+const STAMP = '96d17a8d';                                        // written by tests/shoulder/stamp.mjs: the data files' version
 const $ = (id) => document.getElementById(id);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const cv = $('view'), gl = cv.getContext('webgl2', { antialias: true, alpha: false, stencil: true, powerPreference: 'high-performance' });
@@ -97,7 +97,9 @@ function compute() {
   soft.push({ key: 'bursa' + (BURSA_MM[cond] ?? 0.8), b: bu, pos: bm.pos, col: COL.bursa, capCol: COL.bursaCut, glow: st.pick === 'bursa' ? 0.35 : 0,
     alpha: 0.55 + 0.45 * smooth((st.z - 1.2) / 0.5) });   // see-through until the cut, so that the tendon under it shows
   const g = model.gap(T);
-  frame = { P, T, soft, len, gap: g.mm, gapAt: g, slide: T.glide, cond, cut0, view0 };
+  // where the hole is: the middle of the tendon there as it would be untorn
+  const whole = cond === 'full' && su ? model.muscle(su.b, T).pos : null;
+  frame = { P, T, soft, len, gap: g.mm, gapAt: g, slide: T.glide, cond, cut0, view0, whole };
 }
 // impingement: the corners of the tendon that the acromion presses on at this pose, that is, the corners the model
 // has to push out of the shoulder blade (none are pushed with the arm at rest)
@@ -152,7 +154,7 @@ const sliceAt = (key, t) => { const s = frame.soft.find((x) => x.key === key), b
 const bone = (b, p) => apply(frame.T[model.bodyOf(b)], p);
 // a point in the tear, on the cut: in the slice at 0.92 of the tendon's length, f of the way up from its underside
 function tearAt(f) {
-  const s = frame.soft.find((x) => x.key === 'supra'), i = Math.round(0.92 * (s.b.S - 1)), n = frame.cut0.n, d = -V.dot(n, frame.cut0.p);
+  const s0 = frame.soft.find((x) => x.key === 'supra'), s = frame.whole ? { b: s0.b, pos: frame.whole } : s0, i = Math.round(0.92 * (s.b.S - 1)), n = frame.cut0.n, d = -V.dot(n, frame.cut0.p);
   const ring = Array.from({ length: 32 }, (_, j) => [s.pos[3 * (i * 32 + j)], s.pos[3 * (i * 32 + j) + 1], s.pos[3 * (i * 32 + j) + 2]]);
   // the middle of the slice, and its top and bottom faces at the corners nearest the cut
   const near = (a) => a.reduce((b, q) => (Math.abs(V.dot(n, q) + d) < Math.abs(V.dot(n, b) + d) ? q : b));
@@ -171,7 +173,7 @@ const LABELS = [
   { z: [0.6, 1.6], key: 'infra', text: 'Infraspinatus', at: () => sliceAt('infra', 0.4), d: [0.14, 0.04] },
   { z: [0.6, 1.6], key: 'tminor', text: 'Teres minor', at: () => sliceAt('tminor', 0.55), d: [0.12, 0.12] },
   { z: [0.6, 1.6], key: 'subscap', text: 'Subscapularis', sub: 'on the front of the shoulder blade', at: () => sliceAt('subscap', 0.7), d: [0.1, 0.18] },
-  { z: [1.6, 9], key: 'scapula', text: 'Acromion', at: () => frame.gapAt.to, d: [-0.1, -0.14], side: 'r' },
+  { z: [1.6, 9], key: 'scapula', reach: 90, text: 'Acromion', at: () => V.add(frame.gapAt.to, V.mul(turnDir(frame.T.scapula, [0, 1, 0]), 5)), d: [-0.1, -0.14], side: 'r' },
   { z: [1.6, 9], key: () => 'bursa' + (BURSA_MM[frame.cond] ?? 0.8), text: 'Bursa', sub: 'a thin sac that lets the tendon slide', at: () => sliceAt('bursa' + (BURSA_MM[frame.cond] ?? 0.8), 0.7), d: [0.14, -0.14] },
   { z: [1.6, 9], key: 'supra', text: 'Supraspinatus tendon', at: () => sliceAt('supra', 0.94), d: [-0.16, 0.12], side: 'r' },
   // the tears: pointed at where the tendon is torn, on the cut (no check that a part is seen there: a hole is not a part)
@@ -194,7 +196,7 @@ function labels() {
   for (const L of LABELS) {
     const op = smooth((st.z - L.z[0]) / 0.12) * (1 - smooth((st.z - L.z[1] + 0.12) / 0.12));
     const p0 = op > 0.02 && (!L.when || L.when()) ? view.project(L.at(), cam.W, cam.H) : null;
-    const pt = p0 && (L.key === null ? p0 : view.nearest(typeof L.key === 'function' ? L.key() : L.key, p0[0], p0[1], 48));
+    const pt = p0 && (L.key === null ? p0 : view.nearest(typeof L.key === 'function' ? L.key() : L.key, p0[0], p0[1], L.reach || 48));
     const on = !!pt && pt[0] > free.x + 8 && pt[0] < free.x + free.w - 8 && pt[1] > free.y + 8 && pt[1] < free.y + free.h - 8, disp = on ? '' : 'none';
     if (L.el.style.display !== disp) { L.el.style.display = disp; L.line.style.display = L.dot.style.display = disp; }
     if (!on) continue;
