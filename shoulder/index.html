@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self'; connect-src 'self'; base-uri 'none'; object-src 'none'; form-action 'none'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>Shoulder</title>
+<meta name="description" content="The rotator cuff in 3D: scanned bones and muscles built to match scans, healthy, torn, swollen and pinched, and moving through physical therapy exercises.">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#05070F">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..700&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="../css/shoulder.css?v=0">
+</head>
+<body>
+<canvas id="view" role="img" aria-label="Picture of the right shoulder at the chosen zoom, condition and arm position" aria-describedby="capTitle capBody"></canvas>
+<div class="labels" id="labels" aria-hidden="true"><svg id="leaders"></svg></div>
+
+<a class="back" href="../" aria-label="Back to all experiences">
+  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M14.5 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+</a>
+<div class="scalebar" aria-hidden="true"><i id="scaleBar"></i><b id="scaleText"></b></div>
+
+<div class="oops" id="oops" role="alert" hidden>
+  <p id="oopsText">The picture could not be drawn. Loading the page again usually fixes it.</p>
+  <button type="button" id="reload">Load again</button>
+</div>
+<p class="loading" id="loading">Loading the scanned bones…</p>
+
+<main class="panel" id="panel">
+  <header class="title">
+    <h1>Shoulder</h1>
+    <span>the rotator cuff, from the bones in to the tendon</span>
+  </header>
+
+  <div class="zoom">
+    <div class="lab"><label for="zoom">Zoom</label><b id="zoomV" aria-hidden="true"></b></div>
+    <input id="zoom" type="range" min="0" max="2" step="0.002" value="0">
+    <div class="ticks zt" id="zticks" aria-hidden="true"></div>
+    <nav class="stops" id="stops" aria-label="Zoom to a scale"></nav>
+  </div>
+
+  <div class="seg mode" role="group" aria-label="What to do">
+    <button type="button" data-mode="explore" aria-pressed="true">Conditions</button>
+    <button type="button" data-mode="exercise" aria-pressed="false">Exercises</button>
+  </div>
+
+  <div class="ctl" id="condCtl">
+    <span class="lab" id="lab-cond">The shoulder</span>
+    <div class="chips" role="group" aria-labelledby="lab-cond" id="conds"></div>
+  </div>
+
+  <div class="ctl" id="exCtl" hidden>
+    <span class="lab" id="lab-ex">Exercise</span>
+    <div class="chips" role="group" aria-labelledby="lab-ex" id="exs"></div>
+  </div>
+
+  <div class="arm" id="armCtl">
+    <div class="row">
+      <div class="lab"><label for="lift">Lift the arm</label><b id="liftV" aria-hidden="true"></b></div>
+      <input id="lift" type="range" min="0" max="150" step="1" value="0">
+    </div>
+    <div class="row">
+      <div class="lab"><label for="turn">Turn the arm</label><b id="turnV" aria-hidden="true"></b></div>
+      <input id="turn" type="range" min="-60" max="60" step="1" value="0">
+    </div>
+  </div>
+
+  <div class="transport" id="exPlay" hidden>
+    <button type="button" class="play" id="play" aria-label="Play the exercise" aria-pressed="false">
+      <svg class="i-play" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M7 4.5v15l12-7.5z" fill="currentColor"/></svg>
+      <svg class="i-pause" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6 4.5h4v15H6zM14 4.5h4v15h-4z" fill="currentColor"/></svg>
+    </button>
+    <div class="prog">
+      <div class="lab"><label for="phase">Through the exercise</label><b id="phaseV" aria-hidden="true"></b></div>
+      <input id="phase" type="range" min="0" max="1000" step="1" value="0">
+    </div>
+  </div>
+
+  <div class="cap" id="cap" aria-live="polite">
+    <h2 id="capTitle"></h2>
+    <p id="capBody"></p>
+  </div>
+
+  <dl class="nums" id="nums">
+    <div><dd id="gapV"></dd><dt>narrowest gap between the arm bone and the acromion</dt></div>
+    <div><dd id="slideV"></dd><dt>the ball slid down in its socket</dt></div>
+  </dl>
+
+  <details class="each" id="each">
+    <summary>Each muscle</summary>
+    <p class="fine">How long each muscle is now, against its length at rest with the arm hanging. Lit in gold on the picture when you point at it.</p>
+    <ul id="muscleList"></ul>
+  </details>
+
+  <p class="fine" id="note"></p>
+  <p class="fine">Not medical advice: ask a doctor or physical therapist about a shoulder that hurts.</p>
+  <p class="fine credit">Bones and muscle shapes: BodyParts3D, © The Database Center for Life Science, licensed under CC Attribution 4.0 International.</p>
+  <details class="sources"><summary>Sources for what this page says</summary><ol id="sources"></ol></details>
+</main>
+
+<script type="module" src="../js/shoulder/main.js?v=0"></script>
+</body>
+</html>

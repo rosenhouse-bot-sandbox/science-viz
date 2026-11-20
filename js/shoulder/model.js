@@ -8,7 +8,7 @@
 //   rot    turning the arm about its own length: + turns out (the forearm swings out), - turns in
 //   elbow  elbow bend, in degrees (0 straight, 90 the forearm level)
 //   up     how far the ball of the arm bone has moved up toward the acromion, in mm (a large cuff tear)
-import { V, K, bandMesh } from './geom.js';
+import { V, K, bandMesh, binU } from './geom.js';
 import { solid } from './solid.js';
 
 // ---- reading the packed meshes -------------------------------------------------------------------
@@ -77,8 +77,10 @@ export const BONES = ['scapula', 'clavicle', 'humerus', 'radius', 'ulna', 'rib1'
 // which body each bone moves with
 const BODY = { scapula: 'scapula', clavicle: 'clavicle', humerus: 'humerus', radius: 'forearm', ulna: 'forearm' };
 
+// the bursa: from how far along the supraspinatus it starts (0 origin, 1 insertion), and how much wider than the tendon
+export const BURSA = { from: 0.62, wide: 1.5 };
 export const CLEAR = 2;       // mm kept between the arm bone and the acromion as the arm lifts (see glide)
-export const ROTS = [-60, -45, -30, -15, 0, 15, 30, 45, 60];   // the arm's turns the glide is worked out for
+export const ROTS = [-90, -75, -60, -45, -30, -15, 0, 15, 30, 45, 60, 75, 90];   // the arm's turns the glide is worked out for
 export function makeModel(bones, musclesJson, table = null) {
   const mk = musclesJson.marks, HC = mk.HC, AC = mk.AC, EL = mk.EL, headR = mk.headR;
   // The shoulder blade's own plane, measured from the scanned bone: the direction it is thinnest in.
@@ -213,42 +215,106 @@ export function makeModel(bones, musclesJson, table = null) {
     clavicle: solid(bones.clavicle, 1.5),
   };
   const invT = (T) => { const R = tr(T.R); return { R, t: V.mul(mv(R, T.t), -1) }; };
-  const built = MUSCLES.map((m) => {
-    const sl = musclesJson.muscles[m.id][0], mesh = bandMesh({ sl }), S = sl.length, L0 = arc(sl.map((s) => s.c));
+  // Each corner of a built mesh, in its slice's own terms: which slice, how far across (u), the middle of the
+  // outline there and its half thickness, and whether it is on the top face; so that a condition can thicken or
+  // thin the outline before the muscle is moved.
+  function corners(sl, mesh) {
+    const S = sl.length, M = 2 * K, out = [];
+    for (let i = 0; i < S; i++) for (let j = 0; j < M; j++) {
+      const s = sl[i], top = j < K, jj = top ? j : M - 1 - j, u = s.lo + binU(jj) * (s.hi - s.lo);
+      out.push({ i, u, mid: (s.top[jj] + s.bot[jj]) / 2, h: Math.max(0.3, (s.top[jj] - s.bot[jj]) / 2), top, s: binU(jj) });
+    }
+    out.push({ cap: 0 }, { cap: S - 1 });
+    return out;
+  }
+  function makeBuilt(m, sl) {
+    const mesh = bandMesh({ sl }), S = sl.length, L0 = arc(sl.map((q) => q.c));
     const rest = pts(mesh.pos), t = []; for (let i = 0; i < mesh.tt.length; i += 3) t.push(mesh.tt[i]);
-    const slice = rest.map((_, i) => (i < S * 2 * K ? Math.floor(i / (2 * K)) : i === S * 2 * K ? 0 : S - 1));
     // how close the muscle comes to the middle of the ball at rest: it is never pushed in closer than that
     const near = Math.min(...rest.map((p) => V.len(V.sub(p, HC))));
     // The scans overlap the bones where a muscle attaches, and a little elsewhere. A point already inside a bone
     // at rest is left there; any other point is never let into a bone.
     const restIn = Object.fromEntries(Object.entries(SOL).map(([k, f]) => [k, rest.map((p) => f.depth(p) > 0)]));
-    return { ...m, sl, mesh, rest, t, slice, L0, wrap: Math.min(headR + 1.2, near), restIn };
-  });
+    return { ...m, sl, mesh, rest, t, at: corners(sl, mesh), L0, S, wrap: Math.min(headR + 1.2, near), restIn };
+  }
+  // Each slice's W axis is turned, if need be, to point away from the ball, so that a muscle's "top" face is the
+  // one away from the joint (for the supraspinatus, the side the bursa lies on). Turning U and W together by half
+  // a turn leaves the shape as it is.
+  function outward(sl) {
+    if (sl.reduce((a, q) => a + V.dot(q.W, V.sub(q.c, HC)), 0) >= 0) return sl;
+    return sl.map((q) => ({ ...q, U: V.mul(q.U, -1), W: V.mul(q.W, -1), lo: -q.hi, hi: -q.lo,
+      top: q.bot.map((_, k) => -q.bot[K - 1 - k]), bot: q.top.map((_, k) => -q.top[K - 1 - k]) }));
+  }
+  const built = MUSCLES.map((m) => makeBuilt(m, outward(musclesJson.muscles[m.id][0])));
+
+  // The subacromial bursa: a thin closed sac between the supraspinatus tendon and the acromion. It is not in the
+  // scans; it is built as a sheet lying on the tendon's top face, over its last part (BURSA.from to the end) and
+  // wider than the tendon, and it moves with the tendon. Its thickness is set by the condition.
+  const supra = built[0];
+  function bursaSlices(thick) {
+    const out = [], S = supra.S, i0 = Math.floor(BURSA.from * (S - 1));
+    for (let i = i0; i < S; i++) {
+      const s = supra.sl[i], w = (s.hi - s.lo) * BURSA.wide, c0 = (s.lo + s.hi) / 2, lo = c0 - w / 2, hi = c0 + w / 2, along = (i - i0) / (S - 1 - i0);
+      const end = Math.sin(Math.PI * clamp(along * 0.9 + 0.05));               // the sac closes at both ends
+      const top = [], bot = [];
+      for (let j = 0; j < K; j++) {
+        const u = lo + binU(j) * (hi - lo), f = clamp((u - s.lo) / (s.hi - s.lo)), x = f * (K - 1), k = Math.min(K - 2, Math.floor(x)), g = x - k;
+        const floor = s.top[k] + (s.top[k + 1] - s.top[k]) * g + 0.15;         // on the tendon's top face
+        const across = Math.sin(Math.PI * binU(j));                             // and closes at both sides
+        bot.push(floor); top.push(floor + Math.max(0.05, thick * Math.sqrt(across * end)));
+      }
+      out.push({ c: s.c, U: s.U, W: s.W, lo, hi, top, bot });
+    }
+    return out;
+  }
+  const bursaFor = new Map();
+  function bursa(thick) {
+    const key = thick.toFixed(2);
+    if (!bursaFor.has(key)) {
+      const sl = bursaSlices(thick), S = supra.S, i0 = Math.floor(BURSA.from * (S - 1)), b = makeBuilt({ id: 'bursa', name: 'Subacromial bursa', from: 'scapula' }, sl);
+      // it moves as the tendon under it does: its t runs over the same part of the tendon
+      b.t = b.t.map((t) => (i0 + t * (S - 1 - i0)) / (S - 1)); b.tOf = (i) => (i0 + i) / (S - 1);
+      bursaFor.set(key, b);
+    }
+    return bursaFor.get(key);
+  }
+
   // how much of the insertion's movement a point at t (0 origin, 1 insertion) takes
   const follow = (t) => sstep(0.55, 0.97, t);
+  // A built mesh at a pose. opts.shape(t, s, top) may return { thick, lift }: the outline's half thickness is
+  // multiplied by thick, and lift (a share of the full thickness) raises the bottom face (a tear from below).
   function muscle(b, T, opts = {}) {
     const O = T[b.from], H = T.humerus, ball = apply(H, HC), into = Object.keys(SOL).map((k) => [k, SOL[k], T[k], invT(T[k])]);
+    const tOf = b.tOf || ((i) => i / (b.S - 1));
     const at = (p, t) => { const w = follow(t); return w <= 0 ? apply(O, p) : w >= 1 ? apply(H, p) : V.add(V.mul(apply(O, p), 1 - w), V.mul(apply(H, p), w)); };
     // a muscle keeps its volume: its cross-section grows as it shortens
-    const cs = b.sl.map((s, i) => at(s.c, i / (b.sl.length - 1))), L = arc(cs), k = Math.sqrt(b.L0 / L) * (opts.thick || 1);
-    const out = new Float32Array(b.rest.length * 3);
-    b.rest.forEach((p, i) => {
-      const s = b.sl[b.slice[i]], kk = k;
-      const sw = opts.swell ? opts.swell(b.t[i], i) : 1;
-      let q = at(V.add(s.c, V.mul(V.sub(p, s.c), kk * sw)), b.t[i]);
+    const cs = b.sl.map((s, i) => at(s.c, tOf(i))), L = arc(cs), k = Math.sqrt(b.L0 / L);
+    const out = new Float32Array(b.rest.length * 3), pressed = new Float32Array(b.rest.length);
+    b.rest.forEach((p0, i) => {
+      const c = b.at[i], t = b.t[i];
+      let p = p0;
+      if (c.cap === undefined) {
+        const s = b.sl[c.i], sh = opts.shape ? opts.shape(t, c.s, c.top) : null;
+        let v = c.mid + (c.top ? c.h : -c.h) * (sh?.thick ?? 1);
+        if (sh?.lift && !c.top) v = Math.min(c.mid + c.h - 0.3, v + sh.lift * 2 * c.h);
+        p = V.add(s.c, V.add(V.mul(s.U, c.u), V.mul(s.W, v)));
+      }
+      const s = b.sl[c.cap !== undefined ? c.cap : c.i];
+      let q = at(V.add(s.c, V.mul(V.sub(p, s.c), k)), t);
       // wrapped over the ball: never closer to its middle than at rest
       const d = V.sub(q, ball), l = V.len(d); if (l < b.wrap) q = V.add(ball, V.mul(d, b.wrap / l));
-      for (const [k, f, Tk, Ik] of into) {
-        if (b.restIn[k][i]) continue;
+      for (const [kk, f, Tk, Ik] of into) {
+        if (b.restIn[kk][i]) continue;
         const loc = apply(Ik, q), dp = f.depth(loc); if (dp <= 0) continue;
         const o = f.out(loc); if (o) q = apply(Tk, V.add(loc, V.mul(o, dp + 0.4)));
+        if (kk === 'scapula' && loc[1] > HC[1] + 0.8 * headR) pressed[i] = dp;   // how far the acromion had to push this corner
       }
       out[3 * i] = q[0]; out[3 * i + 1] = q[1]; out[3 * i + 2] = q[2];
     });
-    return { pos: out, length: L, rest: b.L0 };
+    return { pos: out, length: L, rest: b.L0, pressed };
   }
 
-  return { marks: mk, headR, NS, DOWN, pose, bodyOf, gap, stored, glideAt, makeTable, PLANES, built, muscle, bones, SOL, invT, ribPen };
+  return { marks: mk, headR, NS, DOWN, pose, bodyOf, gap, stored, glideAt, makeTable, PLANES, built, muscle, bursa, bones, SOL, invT, ribPen };
 }
 
 export function arc(cs) { let L = 0; for (let i = 1; i < cs.length; i++) L += V.len(V.sub(cs[i], cs[i - 1])); return L; }
