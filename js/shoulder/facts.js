@@ -36,12 +36,12 @@ export const CONDITIONS = [
     src: ['cuff', 'uw', 'bursitis'] },
   { id: 'tendinopathy', name: 'Tendinopathy',
     title: 'A worn tendon',
-    body: 'Tendinopathy is wear in a tendon, most often the supraspinatus near where it attaches. The tendon can thicken, and it hurts most when the arm is lifted.',
+    body: 'Tendinopathy is damage and wear in a tendon, most often the supraspinatus near where it attaches. The tendon can thicken, and it hurts most when the arm is lifted.',
     note: 'The tendon is drawn half as thick again; how much a worn tendon thickens differs from one person to the next.',
     src: ['merck'] },
   { id: 'partial', name: 'Partial tear',
     title: 'Torn partway through, from below',
-    body: 'A partial tear goes only partway through the tendon. Most start on its underside, the side facing the joint: those are two to three times as common as tears on the side facing the bursa.',
+    body: 'A partial tear goes only partway through the tendon. Most are on its underside, the side facing the joint: those are two to three times as common as tears on the side facing the bursa.',
     note: 'Drawn as half the tendon\'s thickness gone from its underside near where it attaches.',
     src: ['partial'] },
   { id: 'full', name: 'Full tear',
@@ -57,28 +57,30 @@ export const CONDITIONS = [
   { id: 'impingement', name: 'Impingement',
     title: 'Pinched under the acromion',
     body: 'As the arm lifts, the top of the arm bone carries the tendon and bursa under the acromion, and they can be squeezed between the two. That often hurts in the middle of the lift, from about 60° to 120° (the painful arc), and less below or above it. Lift the arm and watch the part of the tendon nearest the acromion, lit in red.',
-    note: 'Red marks where the acromion presses on the tendon at this pose: the places the model has to push the tendon out of the bone\'s way. It is not a measure of pain.',
+    note: 'Red marks where the acromion presses on the tendon at this pose: the places the model has to push the tendon out of the bone\'s way. It is not a measure of pain, and this model does not show the easing above 120° that people feel.',
     src: ['arc', 'bursitis'] },
 ];
 
-// Exercises from the AAOS program, with the muscles it lists as worked for each (only those this model has).
+// Exercises from the AAOS program, with the muscles it lists as targeted by each (only those this model has).
+// role: how the panel names them: 'works' (they do the work), 'stretch' (they are stretched), 'relaxed' (targeted,
+// with the arm kept relaxed).
 export const EXERCISES = [
-  { id: 'pendulum', name: 'Pendulum', works: ['deltA', 'deltM', 'deltP', 'supra', 'infra', 'subscap'], stretch: false,
-    body: 'Lean forward with one hand on a table and let the other arm hang, then swing it gently in small circles. Leaning makes the hanging arm point forward from the body.',
+  { id: 'pendulum', name: 'Pendulum', works: ['deltA', 'deltM', 'deltP', 'supra', 'infra', 'subscap'], role: 'relaxed',
+    body: 'Lean forward with one hand on a table and let the other arm hang loose, its muscles relaxed. Swing it gently forward and back, then side to side, then in small circles. Leaning makes the hanging arm point forward from the body.',
     note: 'The body is not drawn leaning: the arm is drawn lifted forward instead, the same pose seen from the body.', src: ['aaos'] },
-  { id: 'sleeper', name: 'Sleeper stretch', works: ['infra', 'tminor'], stretch: true,
-    body: 'Lying on the side of the shoulder, arm forward and elbow bent, the other hand presses the forearm down until a stretch is felt at the back of the shoulder. Watch the muscles that turn the arm out grow longer.',
+  { id: 'sleeper', name: 'Sleeper stretch', works: ['infra', 'tminor'], role: 'stretch',
+    body: 'Lie on your side with the sore shoulder under you, arm forward and elbow bent. The other hand presses the forearm down until a stretch is felt at the back of the shoulder. The muscles that turn the arm out are stretched: watch them grow longer.',
     note: 'The body is not drawn lying down: only the shoulder and arm, posed as they are relative to the body.', src: ['aaos'] },
-  { id: 'external', name: 'Turn out with a band', works: ['infra', 'tminor', 'deltP'], stretch: false,
+  { id: 'external', name: 'Turn out with a band', works: ['infra', 'tminor', 'deltP'], role: 'works',
     body: 'Elbow at the side and bent, hold a band and turn the forearm outward. The infraspinatus and teres minor do the work, shortening as they turn the arm.',
     src: ['aaos'] },
-  { id: 'internal', name: 'Turn in with a band', works: ['subscap'], stretch: false,
+  { id: 'internal', name: 'Turn in with a band', works: ['subscap'], role: 'works',
     body: 'Elbow at the side and bent, pull a band across the body. The subscapularis turns the arm inward (the program also lists the chest muscle, not drawn here).',
     src: ['aaos'] },
-  { id: 'external90', name: 'Turn out, arm up', works: ['infra', 'tminor'], stretch: false,
+  { id: 'external90', name: 'Turn out, arm up', works: ['infra', 'tminor'], role: 'works',
     body: 'Elbow out at shoulder height and bent, hand forward, raise the hand against a band until it is level with the head. The infraspinatus and teres minor do the work.',
     src: ['aaos'] },
 ];
 
-export const MODEL_NOTE = 'Bones are one person\'s scanned right shoulder; muscles are built to match the scans of the same body (checked against them: within 1 mm over 95% of each surface). The shoulder blade turns a third of the lift (the 2 to 1 rhythm, a simplification). In this scan the acromion sits low over the ball, so as the arm lifts the model lets the ball slide down in its socket enough to keep 2 mm between the bones; real shoulders slide less. The gap is the narrowest distance between the two bones in this model, not an X-ray measurement. How a muscle bends as the arm moves follows a simple rule (each slice of it takes a share of the arm bone\'s turn, more toward the arm), not a simulation of muscle.';
+export const MODEL_NOTE = 'Bones are one person\'s scanned right shoulder; muscles are built to match the scans of the same body (checked against them: within 1 mm over 95% of each surface). The shoulder blade turns a third of the lift (the 2 to 1 rhythm, a simplification). In this scan the acromion sits low over the ball, so as the arm lifts the model lets the ball slide down in its socket enough to keep 2 mm between the bones. That is a correction for this scan, not a motion to learn from: in a real shoulder the ball stays close to the middle of its socket. The gap is the narrowest distance between the two bones in this model, not an X-ray measurement. How a muscle bends as the arm moves follows a simple rule (each slice of it takes a share of the arm bone\'s turn, more toward the arm), not a simulation of muscle.';
 export const MODEL_SRC = ['bp3d', 'inman', 'ludewig'];

@@ -115,6 +115,8 @@ input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;bac
 .each li small{grid-column:1/-1;color:var(--ink3);font-size:0.7188rem;line-height:1.3}
 .each li.works button{color:var(--ink)}
 .each li.works b::before{content:'working · ';color:var(--gold);font-family:var(--body)}
+.each li.works.stretch b::before{content:'stretched · '}
+.each li.works.relaxed b::before{content:'targeted, relaxed · '}
 .credit a{color:var(--ink2)}
 .sources{border-top:1px solid var(--line);padding-top:10px}
 .sources summary{cursor:pointer;font-size:0.8125rem;color:var(--ink2)}

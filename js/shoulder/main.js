@@ -1,12 +1,12 @@
 // Shoulder: the controller. The state is the zoom (0 Shoulder, 1 Joint, 2 Tendon), a condition or an exercise,
 // and the arm's lift and turn. Everything drawn and every number shown comes from model.js.
-import { unpack, makeModel, MUSCLES, clamp, smooth, apply, turn as turnDir } from './model.js?v=ecd3e6ce';
-import { V } from './geom.js?v=ecd3e6ce';
-import { makeView, COL } from './view.js?v=ecd3e6ce';
-import { SRC, DOES, CONDITIONS, EXERCISES, MODEL_NOTE, MODEL_SRC } from './facts.js?v=ecd3e6ce';
+import { unpack, makeModel, MUSCLES, clamp, smooth, apply, turn as turnDir } from './model.js?v=7579d653';
+import { V } from './geom.js?v=7579d653';
+import { makeView, COL } from './view.js?v=7579d653';
+import { SRC, DOES, CONDITIONS, EXERCISES, MODEL_NOTE, MODEL_SRC } from './facts.js?v=7579d653';
 import { gamepad } from '../gamepad/gamepad.js';
 
-const STAMP = 'ecd3e6ce';                                        // written by tests/shoulder/stamp.mjs: the data files' version
+const STAMP = '7579d653';                                        // written by tests/shoulder/stamp.mjs: the data files' version
 const $ = (id) => document.getElementById(id);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const cv = $('view'), gl = cv.getContext('webgl2', { antialias: true, alpha: false, stencil: true, powerPreference: 'high-performance' });
@@ -78,9 +78,18 @@ function compute() {
   // the supraspinatus's cut turns from muscle to tendon along it, as its surface does
   const su = soft.find((x) => x.key === 'supra');
   if (su) { const ctr = (t) => { const i = Math.round(t * (su.b.S - 1)); let m = [0, 0, 0]; for (let j = 0; j < 32; j++) m = V.add(m, [su.pos[3 * (i * 32 + j)], su.pos[3 * (i * 32 + j) + 1], su.pos[3 * (i * 32 + j) + 2]]); return V.mul(m, 1 / 32); }; su.capG = [ctr(0.74), ctr(0.88)]; }
+  // the cut goes through the tendon where it is now: through the middle of its slice at 0.86 of its length, square
+  // to the tendon's width, so that whatever the pose it shows the tendon along its length
+  let cut0 = CUT0 && { p: apply(T.scapula, CUT0.p), n: V.norm(turnDir(T.scapula, CUT0.n)) }, view0 = null;
+  if (su && CUT0) {
+    const i = Math.round(0.86 * (su.b.S - 1)), P3 = (j) => [su.pos[3 * (i * 32 + j)], su.pos[3 * (i * 32 + j) + 1], su.pos[3 * (i * 32 + j) + 2]];
+    let n = V.norm(V.sub(P3(15), P3(0))); if (V.dot(n, cut0.n) < 0) n = V.mul(n, -1);
+    const ctr = (t) => { const k = Math.round(t * (su.b.S - 1)); let m = [0, 0, 0]; for (let j = 0; j < 32; j++) m = V.add(m, [su.pos[3 * (k * 32 + j)], su.pos[3 * (k * 32 + j) + 1], su.pos[3 * (k * 32 + j) + 2]]); return V.mul(m, 1 / 32); };
+    cut0 = { p: ctr(0.86), n }; view0 = V.mul(V.add(ctr(0.8), ctr(0.98)), 0.5);   // the view: the tendon's last part, where tears are
+  }
   // impingement: the lit corners near the cut light the cut face too
-  if (su && su.warm && CUT0) {
-    const c = cutPlane0(T), pts = [];
+  if (su && su.warm && cut0) {
+    const c = { n: cut0.n, d: -V.dot(cut0.n, cut0.p) }, pts = [];
     for (let i = 0; i < su.warm.length && pts.length < 144; i++) if (su.warm[i] > 0 && Math.abs(V.dot(c.n, [su.pos[3 * i], su.pos[3 * i + 1], su.pos[3 * i + 2]]) + c.d) < 2.5) pts.push(su.pos[3 * i], su.pos[3 * i + 1], su.pos[3 * i + 2]);
     su.capWarm = new Float32Array(pts);
   }
@@ -88,7 +97,7 @@ function compute() {
   soft.push({ key: 'bursa' + (BURSA_MM[cond] ?? 0.8), b: bu, pos: bm.pos, col: COL.bursa, capCol: COL.bursaCut, glow: st.pick === 'bursa' ? 0.35 : 0,
     alpha: 0.55 + 0.45 * smooth((st.z - 1.2) / 0.5) });   // see-through until the cut, so that the tendon under it shows
   const g = model.gap(T);
-  frame = { P, T, soft, len, gap: g.mm, gapAt: g, slide: T.glide, cond };
+  frame = { P, T, soft, len, gap: g.mm, gapAt: g, slide: T.glide, cond, cut0, view0 };
 }
 // impingement: the corners of the tendon that the acromion presses on at this pose, that is, the corners the model
 // has to push out of the shoulder blade (none are pushed with the arm at rest)
@@ -106,7 +115,7 @@ function aimAt(z) {
   const views = [
     { at: V.mul(V.add(V.add(ball, blade), [0, -40, 0]), 0.5), size: 300, dir: V.norm([-1, 0.45, -0.4]) },
     { at: V.add(V.mul(V.add(ball, blade), 0.5), [0, 10, 0]), size: 170, dir: V.norm([-1, 0.6, -0.45]) },
-    { at: V.add(ball, V.mul(up, 22)), size: 50, dir: cutN() },
+    { at: frame.view0 || V.add(ball, V.mul(up, 22)), size: 60, dir: cutN() },
   ];
   const i = Math.min(LAST - 1, Math.floor(z)), f = smooth(z - i), a = views[i], b = views[i + 1];
   const at = V.add(V.mul(a.at, 1 - f), V.mul(b.at, f)), size = Math.exp(Math.log(a.size) * (1 - f) + Math.log(b.size) * f);
@@ -119,13 +128,12 @@ function aimAt(z) {
   return { eye: V.add(at, V.mul(dir, dist)), at, up: [0, 1, 0], fov: FOV, W: cam.W, H: cam.H, near: dist * 0.05, far: dist * 6,
     ox: 2 * (free.x + free.w / 2) / cam.W - 1, oy: 1 - 2 * (free.y + free.h / 2) / cam.H, dist, size, dir };
 }
-// the cut, front to back through the supraspinatus tendon where it passes under the acromion; it moves with the
-// shoulder blade. Its normal points backward, toward the eye: the back half fades.
+// the cut, front to back through the supraspinatus tendon where it passes under the acromion (compute() places it
+// on the tendon as it is posed). Its normal points backward, toward the eye: the back half fades.
 let CUT0 = null;
-function cutN() { return V.norm(turnDir(frame.T.scapula, CUT0.n)); }
-function cutPlane0(T) { const n = V.norm(turnDir(T.scapula, CUT0.n)); return { n, d: -V.dot(n, apply(T.scapula, CUT0.p)) }; }
+function cutN() { return frame.cut0.n; }
 function cutPlane(c) {
-  const T = frame.T, n = cutN(), p = apply(T.scapula, CUT0.p), d = -V.dot(n, p);
+  const n = frame.cut0.n, p = frame.cut0.p, d = -V.dot(n, p);
   const a = V.norm(V.cross(n, [0, 1, 0])), b = V.cross(a, n), R = 400;
   const facing = clamp(V.dot(c.dir, n) * 2.5);           // turned round behind the cut, it fades away
   const amount = smooth((st.z - 1.15) / 0.7) * facing;
@@ -142,6 +150,15 @@ function draw() {
 // ---- labels on the picture ----
 const sliceAt = (key, t) => { const s = frame.soft.find((x) => x.key === key), b = s.b, i = Math.round(t * (b.S - 1)), M = 32; let m = [0, 0, 0]; for (let j = 0; j < M; j++) m = V.add(m, [s.pos[3 * (i * M + j)], s.pos[3 * (i * M + j) + 1], s.pos[3 * (i * M + j) + 2]]); return V.mul(m, 1 / M); };
 const bone = (b, p) => apply(frame.T[model.bodyOf(b)], p);
+// a point in the tear, on the cut: in the slice at 0.92 of the tendon's length, f of the way up from its underside
+function tearAt(f) {
+  const s = frame.soft.find((x) => x.key === 'supra'), i = Math.round(0.92 * (s.b.S - 1)), n = frame.cut0.n, d = -V.dot(n, frame.cut0.p);
+  const ring = Array.from({ length: 32 }, (_, j) => [s.pos[3 * (i * 32 + j)], s.pos[3 * (i * 32 + j) + 1], s.pos[3 * (i * 32 + j) + 2]]);
+  // the middle of the slice, and its top and bottom faces at the corners nearest the cut
+  const near = (a) => a.reduce((b, q) => (Math.abs(V.dot(n, q) + d) < Math.abs(V.dot(n, b) + d) ? q : b));
+  const top = near(ring.slice(0, 16)), bot = near(ring.slice(16)), mid = (q) => V.sub(q, V.mul(n, V.dot(n, q) + d));
+  return V.add(V.mul(mid(bot), 1 - f), V.mul(mid(top), f));
+}
 // each label names a part (key) and a point on it; its dot goes to the nearest place the part is really seen, and the
 // label is left out when the part is not seen near that point
 const LABELS = [
@@ -150,13 +167,16 @@ const LABELS = [
   { z: [-1, 0.6], key: 'humerus', text: 'Arm bone', sub: 'humerus', at: () => bone('humerus', [-195, 1150, 70]), d: [-0.16, 0.06], side: 'r' },
   { z: [-1, 0.6], key: 'deltM', text: 'Deltoid', sub: 'lifts the arm', at: () => sliceAt('deltM', 0.45), d: [-0.14, -0.12], side: 'r' },
   { z: [0.6, 1.6], key: 'scapula', text: 'Acromion', sub: 'the bony roof of the shoulder', at: () => bone('scapula', V.add(model.marks.AC, [-14, 2, -6])), d: [-0.1, -0.16], side: 'r' },
-  { z: [0.6, 1.6], key: 'supra', text: 'Supraspinatus', at: () => sliceAt('supra', 0.4), d: [0.12, -0.14] },
+  { z: [0.6, 1.6], key: 'supra', text: 'Supraspinatus', at: () => sliceAt('supra', 0.3), d: [0.12, -0.14] },
   { z: [0.6, 1.6], key: 'infra', text: 'Infraspinatus', at: () => sliceAt('infra', 0.4), d: [0.14, 0.04] },
   { z: [0.6, 1.6], key: 'tminor', text: 'Teres minor', at: () => sliceAt('tminor', 0.55), d: [0.12, 0.12] },
   { z: [0.6, 1.6], key: 'subscap', text: 'Subscapularis', sub: 'on the front of the shoulder blade', at: () => sliceAt('subscap', 0.7), d: [0.1, 0.18] },
   { z: [1.6, 9], key: 'scapula', text: 'Acromion', at: () => frame.gapAt.to, d: [-0.1, -0.14], side: 'r' },
   { z: [1.6, 9], key: () => 'bursa' + (BURSA_MM[frame.cond] ?? 0.8), text: 'Bursa', sub: 'a thin sac that lets the tendon slide', at: () => sliceAt('bursa' + (BURSA_MM[frame.cond] ?? 0.8), 0.7), d: [0.14, -0.14] },
-  { z: [1.6, 9], key: 'supra', text: 'Supraspinatus tendon', at: () => sliceAt('supra', 0.86), d: [-0.16, 0.12], side: 'r' },
+  { z: [1.6, 9], key: 'supra', text: 'Supraspinatus tendon', at: () => sliceAt('supra', 0.94), d: [-0.16, 0.12], side: 'r' },
+  // the tears: pointed at where the tendon is torn, on the cut (no check that a part is seen there: a hole is not a part)
+  { z: [1.6, 9], key: null, when: () => frame.cond === 'full', text: 'Hole through the tendon', at: () => tearAt(0.5), d: [0.1, -0.2] },
+  { z: [1.6, 9], key: null, when: () => frame.cond === 'partial', text: 'Torn from below', sub: 'the joint side', at: () => tearAt(0.15), d: [0.1, 0.2] },
   { z: [1.6, 9], key: 'humerus', text: 'Ball', sub: 'head of the arm bone', at: () => V.add(frame.gapAt.from, V.mul(V.norm(V.sub(apply(frame.T.humerus, model.marks.HC), frame.gapAt.from)), 10)), d: [0.12, 0.16] },
 ];
 const NS = 'http://www.w3.org/2000/svg';
@@ -173,8 +193,8 @@ function labels() {
   placed = [];
   for (const L of LABELS) {
     const op = smooth((st.z - L.z[0]) / 0.12) * (1 - smooth((st.z - L.z[1] + 0.12) / 0.12));
-    const p0 = op > 0.02 ? view.project(L.at(), cam.W, cam.H) : null;
-    const pt = p0 && view.nearest(typeof L.key === 'function' ? L.key() : L.key, p0[0], p0[1], 48);
+    const p0 = op > 0.02 && (!L.when || L.when()) ? view.project(L.at(), cam.W, cam.H) : null;
+    const pt = p0 && (L.key === null ? p0 : view.nearest(typeof L.key === 'function' ? L.key() : L.key, p0[0], p0[1], 48));
     const on = !!pt && pt[0] > free.x + 8 && pt[0] < free.x + free.w - 8 && pt[1] > free.y + 8 && pt[1] < free.y + free.h - 8, disp = on ? '' : 'none';
     if (L.el.style.display !== disp) { L.el.style.display = disp; L.line.style.display = L.dot.style.display = disp; }
     if (!on) continue;
@@ -229,11 +249,12 @@ function sync() {
     $('note').textContent = it.note || ''; $('modelNote').textContent = modelNote;
     sources(it);
   }
-  set('gapV', mm(frame.gap)); set('slideV', mm(frame.slide));
+  set('gapV', mm(frame.gap));
   for (const li of $('muscleList').children) {
     const id = li.dataset.id, l = frame.len[id];
     li.querySelector('b').textContent = l ? `${l >= 1 ? '+' : '−'}${Math.abs(Math.round((l - 1) * 100))}%` : '';
-    li.classList.toggle('works', ex && it.works && it.works.includes(id));
+    const on = ex && it.works && it.works.includes(id);
+    li.classList.toggle('works', on); li.classList.toggle('stretch', on && it.role === 'stretch'); li.classList.toggle('relaxed', on && it.role === 'relaxed');
     li.querySelector('button').setAttribute('aria-pressed', String(st.pick === id));
   }
   scaleBar(); writeHash();
@@ -355,7 +376,7 @@ async function start() {
   const sc = near.reduce((a, [, i]) => a + sup.at[i].s, 0) / Math.max(1, near.length);
   TEAR.s0 = clamp(sc - TEAR.half, 0.02, 0.98); TEAR.s1 = clamp(sc + TEAR.half, 0.02, 0.98);
   const maxSlide = Math.max(...Object.values(pj.planes).flat().flatMap((r) => r.glide));
-  modelNote = MODEL_NOTE.replace('real shoulders slide less', `up to ${maxSlide.toFixed(1)} mm here; real shoulders slide less`);
+  modelNote = MODEL_NOTE.replace('between the bones.', `between the bones (up to ${maxSlide.toFixed(1)} mm).`);
   $('loading').hidden = true;
 }
 controls(); makeLabels(); readHash(); measure();

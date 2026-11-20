@@ -1,6 +1,6 @@
 // Shoulder: drawing. One WebGL2 program lights every surface; a cut plane can remove the near side of the
 // model (it fades where it is), and the cut faces of each solid are filled in with the stencil buffer.
-import { program, meshBuffers, normals, perspective, lookAt, mul4, rigid, project } from './gl.js?v=ecd3e6ce';
+import { program, meshBuffers, normals, perspective, lookAt, mul4, rigid, project } from './gl.js?v=7579d653';
 
 const VS = `#version 300 es
 layout(location=0) in vec3 aPos; layout(location=1) in vec3 aNor; layout(location=2) in vec3 aTT;
@@ -157,10 +157,10 @@ export function makeView(gl, model) {
     gl.bindFramebuffer(gl.FRAMEBUFFER, ids.fb); gl.viewport(0, 0, W, H);
     gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT); gl.enable(gl.DEPTH_TEST);
     gl.useProgram(Q.p); gl.uniformMatrix4fv(Q.u.uVP, false, VP); gl.uniform4fv(Q.u.uPlane, cut ? cut.plane : [0, 0, 0, -1]);
-    const seen = cut && cut.amount > 0.5;                  // past half faded, the near side no longer counts as seen
+    const seen = cut && cut.amount > 0.25;                 // once fading, the near side no longer counts as seen
     ids.keys = [null];
     for (const it of items) {
-      if ((it.alpha ?? 1) < 0.5) continue;
+      if ((it.alpha ?? 1) < 0.9) continue;                 // see-through parts are not what is seen there
       const n = ids.keys.push(it.key) - 1;
       gl.uniformMatrix4fv(Q.u.uM, false, it.M); gl.uniform1i(Q.u.uSide, seen ? 1 : 0); gl.uniform4fv(Q.u.uHole, it.hole || [0, 0, 0, 0]);
       gl.uniform3fv(Q.u.uId, [(n & 255) / 255, 0, 1]);
