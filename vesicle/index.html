@@ -165,7 +165,7 @@
       <li data-cat="9" tabindex="0" role="button" aria-pressed="false"><i style="--c:#33b8a8"></i>AMPA receptor</li>
       <li data-cat="10" tabindex="0" role="button" aria-pressed="false"><i style="--c:#db804d"></i>NMDA receptor</li>
     </ul>
-    <p class="note">Shapes follow the stalk-and-pore model of membrane fusion, drawn to scale in nanometres. Every lipid keeps the colour of the membrane it started in. The whole event takes under a millisecond; here you set the pace.</p>
+    <p class="note">Shapes follow the stalk-and-pore model of membrane fusion, drawn to scale in nanometers. Every lipid keeps the color of the membrane it started in. The whole event takes under a millisecond; here you set the pace.</p>
   </div>
 </aside>
 
@@ -180,7 +180,7 @@
         <div class="pipScale"><i id="pipBar"></i><em>1 µm</em></div>
       </div>
       <div class="pipImg">
-        <canvas id="camZoom" width="24" height="24" aria-label="The same image magnified on the vesicle at the centre"></canvas>
+        <canvas id="camZoom" width="24" height="24" aria-label="The same image magnified on the vesicle at the center"></canvas>
         <div class="pipScale"><i id="zoomBar"></i><em>500 nm</em></div>
       </div>
       <div class="pipTrace">
@@ -197,7 +197,7 @@
         <div class="pipScale"><i id="irmBar"></i><em>1 µm</em></div>
       </div>
       <div class="pipImg">
-        <canvas id="irmZoom" width="24" height="24" aria-label="The same reflection image magnified on the vesicle at the centre"></canvas>
+        <canvas id="irmZoom" width="24" height="24" aria-label="The same reflection image magnified on the vesicle at the center"></canvas>
         <div class="pipScale"><i id="irmZoomBar"></i><em>500 nm</em></div>
       </div>
       <div class="pipTrace">
@@ -221,7 +221,7 @@
     <canvas id="fan" aria-label="Brightness over time in the 510 nm and 589 nm bands, with belief and forecast bands"></canvas>
   </div>
   <header><b>Pore width</b><span id="poreInfo"></span></header>
-  <canvas id="pore" aria-label="Believed width of the fusion pore in nanometres against video time"></canvas>
+  <canvas id="pore" aria-label="Believed width of the fusion pore in nanometers against video time"></canvas>
   <header><b>Beliefs</b><span>estimate · 90% range · learned</span></header>
   <canvas id="strips" aria-label="Prior and posterior for each unknown"></canvas>
   <canvas id="pair" aria-label="Joint belief about the two most entangled unknowns"></canvas>
@@ -242,15 +242,15 @@
   <ul id="mathPriors"></ul>
 
   <h3>3. The forward model: from θ to expected photons</h3>
-  <p>A guess is turned into the two images it predicts, one for each band of the camera. The spot is a blurred point, so in either band the pixel at distance <i>r</i> from the centre, at time <i>t</i>, expects</p>
+  <p>A guess is turned into the two images it predicts, one for each band of the camera. The spot is a blurred point, so in either band the pixel at distance <i>r</i> from the center, at time <i>t</i>, expects</p>
   <p class="eq">λ(<i>r</i>, <i>t</i>) = <i>b</i> + <i>A</i>(<i>t</i>) / (2π<i>s</i>²) · exp(−<i>r</i>² / 2<i>s</i>²)</p>
   <p>with background <i>b</i>, total brightness <i>A</i> and blur <i>s</i>:</p>
   <p class="eq"><i>A</i>(<i>t</i>) = <i>N</i> · <i>P</i> · <i>q</i>(<i>t</i>) · <i>E</i>(<i>t</i>)<br><i>s</i>(<i>t</i>)² = σ<sub>PSF</sub>² + footprint + 2<i>D</i>·(<i>t</i> − <i>t</i><sub>f</sub>)</p>
   <p><i>N</i> is the number of tags and <i>P</i> the laser power. <i>q</i> is the only thing that differs between the bands. At the moment of fusion <i>t</i><sub>f</sub>, when the acid escapes, it jumps to 1 from <span data-fill="q"></span> at <span data-fill="em"></span> nm (pHluorin) and from <span data-fill="qO"></span> at <span data-fill="emO"></span> nm (the orange protein, pK<sub>a</sub> <span data-fill="pKa"></span>, in a vesicle at pH <span data-fill="pH"></span>). <i>E</i> is the evanescent intensity at the tags' height, e<sup>−z/d</sup>, the same for both. It steps up at the moment of arrival, when the vesicle comes down to the membrane, and rises again as the vesicle flattens by a fraction 1 − e<sup>−(t − t<sub>f</sub>)/τ</sup> and the tags sink toward the glass. <i>D</i> is how fast they then diffuse apart.</p>
-  <p>So a change in <i>E</i> (position) moves both bands by the same factor, and a change in <i>q</i> (the pore) moves the 510 nm band about <span data-fill="ratio"></span> times more than the 589 nm band. That difference is what lets the two be told apart.</p>
+  <p>So a change in <i>E</i> (position) moves both bands by the same factor, and a change in <i>q</i> (the pore) moves the 510 nm band about <span data-fill="ratio"></span> times more than the 589 nm band. That difference lets the two be told apart.</p>
 
   <h3>4. The likelihood</h3>
-  <p>Photon counts scatter around their expected value by Poisson statistics. For a count <i>k</i> in each pixel of each frame seen so far:</p>
+  <p>Photon counts scatter around the expected value by Poisson statistics. For a count <i>k</i> in each pixel of each frame seen so far:</p>
   <p class="eq">ln p(video | θ) = Σ<sub>bands</sub> Σ<sub>frames</sub> Σ<sub>pixels</sub> ( <i>k</i> ln λ − λ )</p>
   <p>Each band is its own picture with its own noise, so each has a likelihood of its own and the two add. Moving the video-time slider changes which frames are in the sum. The green outlines repeat the whole inference with the 510 nm band only, to show what the orange protein added.</p>
 
@@ -267,12 +267,12 @@
     <li><b>Gold band in the scene:</b> the same percentiles, drawn as membrane shapes.</li>
   </ul>
   <h3>7. A second camera</h3>
-  <p>With the interference reflection camera on, each frame brings a second picture. A guess predicts it too: a spot whose contrast <i>C</i> (its brightness as a fraction of the background) follows from the membrane's shape, so from the vesicle size and how far it has flattened, and not from the tags at all.</p>
+  <p>With the interference reflection camera on, each frame brings a second picture. A guess predicts it too. The picture shows a spot, and its contrast <i>C</i> (its brightness as a fraction of the background) follows from the shape of the membrane. That is, it follows from the vesicle size and how far the vesicle has flattened, and not from the tags at all.</p>
   <p class="eq">ln p(both | θ) = ln p(video | θ) − Σ ( <i>y</i>′ − <i>C</i>′ )² / 2σ²</p>
-  <p>Here <i>y</i> is the recorded contrast in a pixel and σ its shot noise. The primes mean "less this pixel's own average over the frames seen": the cell has a static pattern nobody knows, so only changes count. With this camera on, the green outlines are the inference from both fluorescence bands without this term, to show what the second camera added.</p>
+  <p>Here <i>y</i> is the recorded contrast in a pixel and σ its shot noise. The primes mean "less the average of this pixel over the frames seen". The cell has a static pattern nobody knows, so only changes count. With this camera on, the green outlines are the inference from both fluorescence bands without this term, to show what the second camera added.</p>
   <ul id="mathIrm"></ul>
 
-  <p class="fine">The video here is generated from this same model, so the inference is being tested on its own assumptions. The spot centre, blur, background and field depth are treated as known.</p>
+  <p class="fine">The video here is generated from this same model, so the inference is being tested on its own assumptions. The spot center, blur, background and field depth are treated as known.</p>
 </dialog>
 
 <div class="fail" id="fail" hidden>

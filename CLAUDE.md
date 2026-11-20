@@ -20,9 +20,17 @@ experience is and where its code lives.
 - Physics claims must be true. Numbers shown on screen come from the model in code
   (`js/v2/optics.js` for v2), not from text typed into a caption. Where a picture simplifies or
   exaggerates, say so on screen and in the README.
-- Use wavelength and colour correctly. Wavelength is a property of the light; colour is what we
-  perceive. White light is a mix of many wavelengths, not "every colour at once". Write "short
-  wavelengths, which we see as blue", and "drawn in gold" for a colour that is only the picture's.
+- Use wavelength and color correctly. Wavelength is a property of the light; color is what we
+  perceive. White light is a mix of many wavelengths, not "every color at once". Write "short
+  wavelengths, which we see as blue", and "drawn in gold" for a color that is only the picture's.
+
+## Writing the text
+
+- Write on-screen text, captions, briefs, info cards and README prose with the `prose-lint` skill
+  (`.claude/skills/prose-lint/SKILL.md`). It asks for short, complete sentences, plain words, no
+  metaphor, constraints before objectives, and each fact said once, and it checks the text against what
+  the code draws. Run `.claude/skills/prose-lint/check.sh <files>` on the files you change. Gabe built
+  the rules by picking between rewrites, so add new examples to the skill when he corrects a sentence.
 
 ## Modern Web Guidance
 

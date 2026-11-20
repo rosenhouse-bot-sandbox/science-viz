@@ -21,7 +21,7 @@ const PLAIN = '#9fb4ff', EDGE = '#aab6d6', TURNED = '#ff5d73', INK = '#eaf0ff';
 const CONTROLS = [
   { id: 'eng', stage: 0, label: 'Engine', options: [['own', 'Step by step'], ['real', '']] },
   { id: 'cyc', m: 'layered', stage: 1, label: 'Edges to turn', options: [['greedy', 'Greedy'], ['dfs', 'Depth first'], ['file', 'File order']] },
-  { id: 'grp', m: 'layered', stage: 2, label: 'Groups', options: [['box', 'Boxes'], ['colour', 'Colour only']], only: () => graph && graph.groups.length > 0 },
+  { id: 'grp', m: 'layered', stage: 2, label: 'Groups', options: [['box', 'Boxes'], ['colour', 'Color only']], only: () => graph && graph.groups.length > 0 },
   { id: 'lay', m: 'layered', stage: 2, label: 'Layer for each node', options: [['longest', 'Longest path'], ['tight', 'Short edges'], ['width', 'Width limit']] },
   { id: 'wmax', m: 'layered', stage: 2, label: 'Most nodes in a layer', min: 1, max: 10, only: () => P.lay === 'width' },
   { id: 'sw', m: 'layered', stage: 3, label: 'Sorting passes', min: 0, max: 10 },
@@ -39,7 +39,7 @@ const P = { g: 'topology', m: 'layered', eng: 'own', grp: 'box', cyc: 'greedy', 
 const STAGE_NAME = { input: 'Input', cycles: 'Turn', layers: 'Layers', order: 'Sort', place: 'Align', route: 'Route', boxes: 'Group', search: 'Search', real: 'Result' };
 const NOTE = {
   layered: 'The five steps of ELK Layered, written again for this page. This is not ELK’s own code.',
-  search: 'Not TALA’s code. Real TALA first finds trees, hubs, clusters and layered parts, then places and routes. This simpler search keeps its outline: boxes, seeded tries, the best score, right-angle edges.',
+  search: 'This is not TALA’s code. Real TALA first finds trees, hubs, clusters and layered parts, then places and routes. This simpler search keeps the same outline: boxes, seeded tries, the best score, right-angle edges.',
 };
 
 const REAL_NAME = { layered: 'Real ELK', search: 'Real TALA · 11 MB' };
@@ -165,23 +165,23 @@ function caption(id) {
   const down = P.dir === 'down';
   switch (id) {
     case 'input': {
-      let t = 'The nodes in the order the file lists them. Each arrow is an edge: it points from one node to another.';
+      let t = 'The nodes in the order the file lists them. Each arrow is an edge, and it points from one node to another.';
       if (g.repeats || g.loops.length) t += ' Left out of the count: ' + [g.repeats ? n(g.repeats, 'edge that repeats', 'edges that repeat') + ' an earlier one' : '', g.loops.length ? n(g.loops.length, 'edge', 'edges') + ' from a node to itself' : ''].filter(Boolean).join(', and ') + '.';
       return t;
     }
     case 'cycles': return f.reversed
-      ? 'A cycle is a route along the arrows that comes back to where it began. ' + (f.reversed === 1 ? 'One arrow is' : f.reversed + ' arrows are') + ' turned round, drawn in red, so that no cycle is left.'
+      ? 'A cycle is a route along the arrows that comes back to where it began. ' + (f.reversed === 1 ? 'One arrow is' : f.reversed + ' arrows are') + ' turned around, drawn in red, so that no cycle is left.'
       : 'A cycle is a route along the arrows that comes back to where it began. This graph has none, so no arrow is turned.';
     case 'layers': if (layout.grouped) return 'A layer is one ' + (down ? 'row' : 'column') + '. Inside each group’s box, a node goes in a layer after every node that points to it. The boxes are then put in layers the same way, each as one large node.';
       return 'A layer is one ' + (down ? 'row' : 'column') + '. Each node goes in a layer after every node that points to it. An edge that passes over a layer gets a dot in it' + (f.bends ? ': ' + n(f.bends, 'dot', 'dots') + ' here.' : '; here no edge does.');
     case 'order': { const a = stats(2).crossings, b = stats(3).crossings; return 'Each layer is sorted so that a node sits near the nodes it joins in the next layer. Crossings ' + (a === b ? 'stay at ' + a : 'go from ' + a + ' to ' + b) + '.'; }
-    case 'place': if (layout.grouped) return 'Nodes slide along their layer, and boxes along theirs, keeping their order, until joined ones line up.';
-      return 'Nodes slide along their layer, keeping their order, until joined nodes line up and edges run straight.';
-    case 'route': return (P.lab === 'on' ? 'Each label is put at the middle of its edge; this page’s code does not move it clear of anything. ' : '') + (P.m === 'layered'
-      ? (layout.grouped ? 'Edges inside a box are drawn through their dots. Edges between boxes are routed last, at right angles around the nodes.' : 'Each edge is drawn through its dots.') + (f.reversed ? ' Turned arrows point their true way again, still in red.' : '')
-      : 'Each edge takes the cheapest path of horizontal and vertical runs. A path pays for its length, its bends and any box it cuts through, and may not pass through a node.');
+    case 'place': if (layout.grouped) return 'Nodes slide along the layer they are in, and boxes do the same, keeping their order, until joined ones line up.';
+      return 'Nodes slide along the layer they are in, keeping their order, until joined nodes line up and edges run straight.';
+    case 'route': return (P.lab === 'on' ? 'Each label is put at the middle of its edge. This page’s code does not move it clear of anything. ' : '') + (P.m === 'layered'
+      ? (layout.grouped ? 'Edges inside a box are drawn through the dots. Edges between boxes are routed last, at right angles around the nodes.' : 'Each edge is drawn through its dots.') + (f.reversed ? ' Turned arrows point their true way again, still in red.' : '')
+      : 'An edge is routed using horizontal and vertical runs to avoid intersecting a node. Various routes are considered based on a ‘cost’ that penalizes extra length, too many bends, and other factors. The lowest-cost route is chosen.');
     case 'real': return (P.lab === 'on' ? 'The engine chose where each label goes. ' : '') + (P.m === 'layered'
-      ? 'What ELK itself gives for this graph and these settings.' + (g.groups.length && P.grp === 'box' ? ' Its boxes are laid out together with their contents, in one pass.' : '')
+      ? 'What ELK itself gives for this graph and these settings.' + (g.groups.length && P.grp === 'box' ? ' It lays out the boxes together with what is in them, in one pass.' : '')
       : 'What TALA itself gives: the lowest penalty of ' + n(P.tries, 'seed', 'seeds') + '.');
     case 'boxes': return g.groups.length
       ? 'The file puts each node in a group. Each group gets a box, and boxes and nodes sit on grids in file order.'

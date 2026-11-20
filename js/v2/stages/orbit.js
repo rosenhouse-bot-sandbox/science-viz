@@ -25,13 +25,13 @@ export default {
   },
 
   caption(S) {
-    if (S.focus === 'eye') return { title: 'Your rainbow uses the sunlight near you',
-      body: 'Of all the sunlight falling on the Earth, your rainbow is made by the light arriving right around you. It always appears opposite the Sun, as a circle 42° out from the line that runs from the Sun through your head.' };
+    if (S.focus === 'eye') return { title: 'Only nearby sunlight makes your rainbow',
+      body: 'Sunlight falls all over the Earth, but you see only the light that arrives right around you. The rainbow always appears opposite the Sun, as a circle 42° out from the line from the Sun through your head.' };
     return S.mode === 'wave'
       ? { title: 'Sunlight arrives as flat waves',
-        body: 'The Sun is 150 million kilometres away, so by the time its light reaches us the wave crests are flat sheets, all facing the same way. Because every drop is lit from the same direction, millions of separate drops send light back at the same angle.' }
+        body: 'The Sun is 150 million kilometers away, so by the time the light reaches us the wave crests are flat sheets, all facing the same way. Every drop is lit from the same direction, so millions of separate drops send light back at the same angle.' }
       : { title: 'Sunlight arrives in parallel',
-        body: 'The Sun is 150 million kilometres away, so its light reaches the Earth as parallel rays, all travelling the same way to within half a degree. Every raindrop is lit from exactly the same direction. Lower the Sun and see where you must stand.' };
+        body: 'The Sun is 150 million kilometers away, so its light reaches the Earth as parallel rays, all traveling the same way to within half a degree. Every raindrop is lit from exactly the same direction. Lower the Sun and see where you must stand.' };
   },
   readout(S) {
     return `<dl><dt>Sun above your horizon</dt><dd>${S.sun.toFixed(1)}°</dd>
