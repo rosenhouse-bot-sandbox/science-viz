@@ -17,6 +17,7 @@ const PAGES = {
   'maple': ['maple', 'js/maple', 'css/maple.css'],
   'engine': ['engine', 'js/engine', 'css/engine.css'],
   'shoulder': ['shoulder', 'js/shoulder', 'css/shoulder.css'],
+  'saccade': ['saccade', 'js/saccade', 'css/saccade.css'],
 };
 
 const log = (paths) => execFileSync('git', ['log', '--format=%cI', '--', ...paths], { encoding: 'utf8' })

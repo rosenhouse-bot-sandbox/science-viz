@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self'; connect-src 'self'; base-uri 'none'; object-src 'none'; form-action 'none'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>Overshoot saccades</title>
+<meta name="description" content="Two eyes in 3D follow a moving target on a screen. With poor pursuit they fall behind, and the quick jumps that catch up land past the target.">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#05070F">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..700&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="../css/saccade.css?v=852b0b18">
+</head>
+<body>
+<canvas id="view" role="img" aria-label="Two eyes and their muscles following a target on a screen, at the chosen zoom" aria-describedby="capTitle capBody"></canvas>
+<div class="inset" id="inset" aria-hidden="true"><i id="fovea"></i><span>Right eye's view, 10° across</span></div>
+
+<a class="back" href="../" aria-label="Back to all experiences">
+  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M14.5 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+</a>
+
+<div class="oops" id="oops" role="alert" hidden>
+  <p id="oopsText">The picture could not be drawn. Loading the page again usually fixes it.</p>
+  <button type="button" id="reload">Load again</button>
+</div>
+<p class="loading" id="loading">Loading…</p>
+
+<main class="panel" id="panel">
+  <header class="title">
+    <h1>Overshoot saccades</h1>
+    <span>what happens when the eyes cannot follow smoothly</span>
+  </header>
+
+  <div class="zoom">
+    <div class="lab"><label for="zoom">Zoom</label><b id="zoomV" aria-hidden="true"></b></div>
+    <input id="zoom" type="range" min="0" max="2" step="0.002" value="0">
+    <nav class="stops" id="stops" aria-label="Zoom to a scale"></nav>
+  </div>
+
+  <div class="seg" role="group" aria-label="Pursuit" id="conds"></div>
+
+  <div class="cap" id="cap" aria-live="polite">
+    <h2 id="capTitle"></h2>
+    <p id="capBody"></p>
+  </div>
+
+  <figure class="tracebox">
+    <canvas id="trace" role="img" aria-label="Graph of left and right position over the last 2 seconds: the target and the eyes"></canvas>
+    <figcaption class="fine">Left and right over the last 2 s of the model's time. <span class="k gold">Gold</span>: the target. <span class="k blue">Blue</span>: the eyes. <span class="k orange">Orange dots</span>: where overshoot saccades landed.</figcaption>
+  </figure>
+
+  <div class="transport">
+    <button type="button" class="play" id="play" aria-label="Play" aria-pressed="false">
+      <svg class="i-play" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M7 4.5v15l12-7.5z" fill="currentColor"/></svg>
+      <svg class="i-pause" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6 4.5h4v15H6zM14 4.5h4v15h-4z" fill="currentColor"/></svg>
+    </button>
+    <div class="prog">
+      <div class="lab"><label for="speed">Speed of time</label><b id="speedV" aria-hidden="true"></b></div>
+      <input id="speed" type="range" min="0" max="6" step="1" value="3">
+    </div>
+  </div>
+
+  <div class="target">
+    <div class="lab"><label for="tspeed">Target's top speed</label><b id="tspeedV" aria-hidden="true"></b></div>
+    <input id="tspeed" type="range" min="5" max="40" step="1" value="20">
+    <label class="check"><input type="checkbox" id="auto" checked> The target swings by itself</label>
+    <button type="button" class="ghost" id="jump">Make the target jump</button>
+    <p class="fine">Tap or drag on the screen in the picture to move the target.</p>
+  </div>
+
+  <dl class="nums" id="nums">
+    <div><dd id="gainV"></dd><dt>pursuit gain: eye speed ÷ target speed, last 2 s</dt></div>
+    <div><dd id="overV" class="orange"></dd><dt>saccades in the last 5 s that were overshoot saccades</dt></div>
+    <div><dd id="lastV"></dd><dt>last saccade</dt></div>
+    <div><dd id="peakV"></dd><dt>its top speed</dt></div>
+    <div class="wide"><dd id="landV"></dd><dt>where it landed</dt></div>
+    <div><dd id="lrV"></dd><dt>spikes/s to the right eye's lateral rectus</dt></div>
+    <div><dd id="mrV"></dd><dt>spikes/s to the right eye's medial rectus</dt></div>
+  </dl>
+
+  <details class="each" id="each">
+    <summary>Each muscle</summary>
+    <p class="fine">Six muscles turn each eye. The number is the nerve signal to each muscle of the right eye. A muscle is drawn brighter red when its signal is higher. Point at a name to light that muscle in gold.</p>
+    <ul id="muscleList"></ul>
+  </details>
+  <details class="sources" open><summary>What the clinic's note may mean</summary><div id="note"></div></details>
+  <details class="sources"><summary>How the picture is made</summary><p class="fine" id="insetText"></p><div id="modelNote"></div></details>
+  <p class="fine">Not medical advice: ask your eye doctor what your own results mean.</p>
+  <details class="sources"><summary>Sources for what this page says</summary><ol id="sources"></ol></details>
+</main>
+
+<script type="module" src="../js/saccade/main.js?v=852b0b18"></script>
+</body>
+</html>

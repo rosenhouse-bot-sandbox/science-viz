@@ -13,7 +13,7 @@ experience is and where its code lives.
 - Run it with `python3 -m http.server 8000` from the repository root. ES modules do not load from
   `file://`.
 - Each experience is self-contained: `v2/` (Rainbows), `vesicle/`, `optics/` (Optics workshop),
-  `dag/` (Graph layout), `maple/` (Japanese maple), `engine/` (Engine) and `shoulder/` (Shoulder) have their own page, stylesheet (`css/`) and modules (`js/`). Do not change one while working on
+  `dag/` (Graph layout), `maple/` (Japanese maple), `engine/` (Engine), `shoulder/` (Shoulder) and `saccade/` (Overshoot saccades) have their own page, stylesheet (`css/`) and modules (`js/`). Do not change one while working on
   another.
   The one thing they share is controller support, `js/gamepad/gamepad.js` and `css/gamepad.css`: each
   page gives it a short mapping onto its own camera, zoom and scale functions.
@@ -133,14 +133,20 @@ Before pushing:
   information. Every sentence on screen is in `js/shoulder/facts.js` with its source; numbers come from the
   model; anything drawn larger than life says so under the picture. After changing any file under
   `js/shoulder/`, `css/shoulder.css` or `shoulder/data/`, run `node tests/shoulder/stamp.mjs`.
+- For Overshoot saccades, run `node tests/saccade/model.mjs` (no browser needed) after changing the model: it fails if
+  saccade timing leaves the measured main sequence, a measured gain is not the gain set, a saccade's kind does not fit
+  its definition, a muscle pulls or shortens the wrong way, a muscle enters the eye, or the eyes twist. Then
+  `node tests/saccade/page.mjs` (`--quick` for the desktop only). Numbers on screen come from `js/saccade/model.js`;
+  anything that is the page's own choice, not a measured value, says so in `js/saccade/facts.js`. After changing any
+  file under `js/saccade/` or `css/saccade.css`, run `node tests/saccade/stamp.mjs`.
 - After changing `js/gamepad/`, `css/gamepad.css`, a page's `gamepad({ ... })` mapping, or which
   controls a page has, run `node tests/gamepad/run.mjs` (or with page names: `home`, `rainbows`,
-  `vesicle`, `optics`, `graph`, `maple`, `engine`, `shoulder`, `deck`). It drives each page with a simulated Xbox
+  `vesicle`, `optics`, `graph`, `maple`, `engine`, `shoulder`, `saccade`, `deck`). It drives each page with a simulated Xbox
   controller at 1280 × 800 and fails if the ring cannot reach a control, a stick, trigger or bumper
   does nothing, or the picture of the pad does not list exactly what the page maps. A new page
   needs a mapping, and an entry in `PAGES` there.
 - After changing how a page zooms, or what a finger on its picture does, run `node tests/pinch/run.mjs`
-  (or with page names: `maple`, `engine`, `vesicle`, `rainbows`). It puts two simulated fingers on the
+  (or with page names: `maple`, `engine`, `vesicle`, `rainbows`, `shoulder`, `saccade`). It puts two simulated fingers on the
   picture at a phone size and fails if spreading them does not zoom in, the slider does not move with
   them, the browser zooms the whole page, or the zoom and the time move in the same frame. A pinch
   must go through the same state as the page's Zoom slider. It cannot stand in for a real phone.
