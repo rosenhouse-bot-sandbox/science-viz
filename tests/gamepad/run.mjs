@@ -68,6 +68,11 @@ const PAGES = {
     look: () => window.__shoulder.st.yaw, zoom: () => window.__shoulder.st.z, settle: () => window.__shoulder.settle(), idle: () => !window.__shoulder.busy,
     stage: () => (window.__shoulder.busy ? null : Math.round(window.__shoulder.st.z * 1000) / 1000),
   },
+  saccade: {
+    path: 'saccade/?res=0.3#z=1&c=poor', keys: ALL, ready: () => !!(window.__saccade && window.__saccade.frame), before: () => { window.__saccade.st.play = false; },
+    look: () => window.__saccade.st.yaw, zoom: () => window.__saccade.st.z, settle: () => window.__saccade.settle(), idle: () => !window.__saccade.busy,
+    stage: () => (window.__saccade.busy ? null : Math.round(window.__saccade.st.z * 1000) / 1000),
+  },
 };
 
 let fails = 0;

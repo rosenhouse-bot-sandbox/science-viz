@@ -39,6 +39,7 @@ const PAGES = {
   engine: { url: 'engine/?res=0.2', slider: 'zoom', dir: 1, start: 1, ready: () => !!window.__engine && !!document.getElementById('capTitle').textContent,
     timed: true, same: (v, s) => Math.abs(v - s.z) < 0.004 },   // starts from the Engine scale: at Car the crank turns a whole cycle in one slow frame of this test, and looks still
   shoulder: { url: 'shoulder/?res=0.25', slider: 'zoom', dir: 1, ready: () => !!window.__shoulder && !!window.__shoulder.frame, same: (v, s) => Math.abs(v - s.z) < 0.004 },
+  saccade: { url: 'saccade/?res=0.3', slider: 'zoom', dir: 1, ready: () => !!window.__saccade && !!window.__saccade.frame, timed: true, same: (v, s) => Math.abs(v - s.z) < 0.004 },
   vesicle: { url: 'vesicle/', slider: 'zoom', dir: -1, ready: () => !!document.getElementById('zoomV').textContent },
   rainbows: { url: 'v2/?debug=1', slider: null, dir: -1, wide: 60, ready: () => !!window.__rainbows && !window.__rainbows.busy },       // no Zoom slider here: a pinch moves the camera within the scale
 };
@@ -60,7 +61,7 @@ for (const name of names) {
   const frame = () => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
   // In the page: the zoom the page holds, the slider's own value, and how far the browser has zoomed the whole page.
   const look = () => page.evaluate((slider) => {
-    const m = window.__maple || window.__engine || window.__shoulder, r = window.__rainbows;
+    const m = window.__maple || window.__engine || window.__shoulder || window.__saccade, r = window.__rainbows;
     return { own: m ? { z: m.st.z } : r ? { z: r.cams[r.S.stage].gd } : null, v: slider ? +document.getElementById(slider).value : null, page: window.visualViewport.scale };
   }, P.slider);
   const where = (s) => (P.slider ? s.v : s.own.z);
@@ -85,8 +86,8 @@ for (const name of names) {
   // Time must be running for the check that it waits: every frame drawn from here on is watched for the zoom and the time both having moved.
   if (P.timed) {
     await page.waitForTimeout(2000);                    // these pages press Play themselves a moment after loading: let that happen first
-    if (!(await page.evaluate(() => (window.__maple || window.__engine).st.play))) await page.click('#play');
-    await page.evaluate(() => { const m = window.__maple || window.__engine, get = () => [m.drawn.z, window.__maple ? m.drawn.s : m.drawn.phi]; let [z, t] = get(); window.__both = 0; window.__frames = 0; const tick = () => { const [z1, t1] = get(); if (z1 !== z && t1 !== t) window.__both++; if (t1 !== t) window.__frames++; z = z1; t = t1; requestAnimationFrame(tick); }; requestAnimationFrame(tick); });
+    if (!(await page.evaluate(() => (window.__maple || window.__engine || window.__saccade).st.play))) await page.click('#play');
+    await page.evaluate(() => { const m = window.__maple || window.__engine || window.__saccade, get = () => [m.drawn.z, window.__saccade ? m.drawn.t : window.__maple ? m.drawn.s : m.drawn.phi]; let [z, t] = get(); window.__both = 0; window.__frames = 0; const tick = () => { const [z1, t1] = get(); if (z1 !== z && t1 !== t) window.__both++; if (t1 !== t) window.__frames++; z = z1; t = t1; requestAnimationFrame(tick); }; requestAnimationFrame(tick); });
     await page.waitForFunction(() => window.__frames > 2, null, { timeout: 300000 }).catch(() => fail(`${name}: time did not run before the pinch`));
   }
   const s0 = await look();
