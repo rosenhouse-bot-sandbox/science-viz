@@ -1,8 +1,8 @@
 // Overshoot saccades: the controller. The state is the zoom (0 Screen, 1 Eyes, 2 Muscles), healthy or poor pursuit,
 // how fast time runs, and the target. The simulation in model.js moves the eyes; scene.js draws them.
-import { makeSim, STEP, SCREEN, MUSCLES, PURSUIT, onScreen, gazeOf, eyeGaze, listing, turnOf, rate, musclePath, rot } from './model.js?v=852b0b18';
-import { makeScene, camera } from './scene.js?v=852b0b18';
-import { SRC, CONDITIONS, NOTE, NOTE_SRC, MODEL, MODEL_SRC, INSET } from './facts.js?v=852b0b18';
+import { makeSim, STEP, INSET_DEG, CATCHUP, SCREEN, MUSCLES, PURSUIT, onScreen, gazeOf, eyeGaze, listing, turnOf, rate, musclePath, rot } from './model.js?v=8664a690';
+import { makeScene, camera } from './scene.js?v=8664a690';
+import { SRC, CONDITIONS, SACCADES, CAPTIONS, NOTE, NOTE_SRC, MODEL, MODEL_SRC, INSET } from './facts.js?v=8664a690';
 import { gamepad } from '../gamepad/gamepad.js';
 
 const $ = (id) => document.getElementById(id);
@@ -13,19 +13,19 @@ const cv = $('view'), gl = cv.getContext('webgl2', { antialias: true, alpha: fal
 let scene = null, broken = false;
 
 const STOPS = [
-  { id: 'screen', name: 'Screen', pivot: [0, -10, -320], yaw: 0.103, pitch: 0.2195, dist: 597 },
-  { id: 'eyes', name: 'Eyes', pivot: [0, 0, -2], yaw: Math.PI, pitch: 0.12, dist: 175 },
-  { id: 'muscles', name: 'Muscles', pivot: [24, 0, 12], yaw: 1.75, pitch: 1.22, dist: 120 },
+  { id: 'screen', name: 'Screen', pivot: [0, -30, -280], yaw: 0.14, pitch: 0.42, dist: 660 },
+  { id: 'eyes', name: 'Eyes', pivot: [0, 0, -5], yaw: 2.25, pitch: 0.45, dist: 190 },
+  { id: 'muscles', name: 'Muscles', pivot: [28, 0, 18], yaw: 0.02, pitch: 1.2, dist: 175 },
 ];
 const LAST = STOPS.length - 1;
-const SIDE = [0, -20, -440];                          // pulls the path between Screen and Eyes out to the side, halfway between them
+const SIDE = [0, -20, 72];                          // pulls the path between Screen and Eyes out to the side, halfway between them
 const SPEEDS = [[0.01, '1/100'], [0.02, '1/50'], [0.05, '1/20'], [0.1, '1/10'], [0.2, '1/5'], [0.5, '1/2'], [1, '1']];
-const st = { z: 0, cond: 'poor', sp: 3, tspeed: 20, auto: true, play: !reduced, yaw: 0, pitch: 0, pick: null };
+const st = { z: 0, cond: 'poor', sacc: 'overshoot', sp: 2, until: -1, tspeed: 20, auto: true, play: !reduced, yaw: 0, pitch: 0, pick: null };
 const free = { x: 0, y: 0, w: 1, h: 1 }, view = { W: 1, H: 1, dpr: 1 };
 const FOV = 34 * Math.PI / 180;
-let sim = makeSim({ cond: st.cond, speed: st.tspeed, auto: st.auto });
+let sim = makeSim({ cond: st.cond, sacc: st.sacc, speed: st.tspeed, auto: st.auto });
 const drawn = { z: 0, t: 0 };                          // what the last picture showed (for the tests)
-let dirty = true, raf = 0, last = 0, fly = null, acc = 0, zoomAt = -1e9, held = null, frame = null, jumpSide = 1;
+let dirty = true, raf = 0, last = 0, fly = null, acc = 0, zoomAt = -1e9, held = null, frame = null;
 
 // ---- what the eyes and muscles are doing now ----
 function compute() {
@@ -36,10 +36,12 @@ function compute() {
     return { side, R, dir, drive, rates, pick: st.pick };
   });
   // the last 0.4 s of where the eyes looked, for the trail on the screen
+  // where overshoot saccades landed in the last 1 s of the model's time
+  const landed = s.events.filter((e) => e.kind === 'overshoot' && e.t1 > s.t - 1).map((e) => ({ p: e.E1, age: s.t - e.t1 }));
   const trail = [], B = sim.B;
   for (let j = s.k - 400; j <= s.k; j += 4) if (j > 0) { const J = sim.at(j); trail.push([B.eh[J], B.ev[J]]); }
   const c = cam();
-  frame = { eyes, P, T: s.T.slice(), E: s.E.slice(), trail, pupil: 0.3, beams: 0.5, beamW: 0.35 + c.dist * 0.0022, cam: c };
+  frame = { eyes, P, landed, T: s.T.slice(), E: s.E.slice(), trail, pupil: 0.3, beams: 0.5, beamW: 0.35 + c.dist * 0.0022, cam: c };
 }
 
 // ---- the camera ----
@@ -48,8 +50,8 @@ function cam() {
   // between Screen and Eyes the camera swings round the side, and stands back so that the eyes and the screen stay in view
   const M = i === 0 ? SIDE : a.pivot.map((x, k) => (x + b.pivot[k]) / 2);
   const pivot = a.pivot.map((x, k) => (1 - f) * (1 - f) * x + 2 * f * (1 - f) * M[k] + f * f * b.pivot[k]);
-  const dist = a.dist * Math.pow(b.dist / a.dist, f) * (1 + (i === 0 ? 2.1 : 0) * Math.sin(Math.PI * f));
-  const yaw = a.yaw + (b.yaw - a.yaw) * f + st.yaw, pitch = clamp(a.pitch + (b.pitch - a.pitch) * f + (i === 0 ? 0.35 * Math.sin(Math.PI * f) : 0) + st.pitch, -1.2, 1.35);
+  const dist = a.dist * Math.pow(b.dist / a.dist, f) * (1 + (i === 0 ? 0.3 : 0) * Math.sin(Math.PI * f));
+  const yaw = a.yaw + (b.yaw - a.yaw) * f + st.yaw, pitch = clamp(a.pitch + (b.pitch - a.pitch) * f + (i === 0 ? 0.25 * Math.sin(Math.PI * f) : 0) + st.pitch, -1.2, 1.35);
   const pos = [pivot[0] + dist * Math.cos(pitch) * Math.sin(yaw), pivot[1] + dist * Math.sin(pitch), pivot[2] + dist * Math.cos(pitch) * Math.cos(yaw)];
   return { pos, at: pivot, dist };
 }
@@ -63,10 +65,9 @@ function mainCam(c) {
 }
 // the inset: what the right eye sees, from its center along its line of sight
 function insetBox() {
-  const w = Math.round(clamp(free.w * 0.36, 132, 300)), h = Math.round(w * 0.62);
+  const w = Math.round(clamp(free.w * (free.w < 600 ? 0.3 : 0.34), 112, 300)), h = Math.round(w * 0.62);
   return { x: free.x + free.w - w - 14, y: free.y + 14, w, h };
 }
-const INSET_DEG = 10;
 function eyeCam(box) {
   const e = frame.eyes[0], c = [31.5, 0, 0], up = rot(e.R, [0, 1, 0]), at = c.map((x, i) => x + e.dir[i] * 100);
   const fovy = 2 * Math.atan(Math.tan(INSET_DEG / 2 * Math.PI / 180) * box.h / box.w);
@@ -85,22 +86,33 @@ function draw() {
   $('fovea').style.width = $('fovea').style.height = (b.w * 2 / INSET_DEG) + 'px';
 }
 
-// ---- the trace: left and right over the last 2 s ----
-const TRACE_S = 2, TRACE_DEG = 16;
+// ---- the trace: how far the eyes are ahead of the target (up) or behind it (down), over the last 2 s ----
+const TRACE_S = 2, TRACE_DEG = 3;
 function trace() {
   const c = $('trace'), r = c.getBoundingClientRect(), d = Math.min(2, devicePixelRatio || 1);
   if (!r.width) return;
   if (c.width !== Math.round(r.width * d)) { c.width = Math.round(r.width * d); c.height = Math.round(r.height * d); }
   const x = c.getContext('2d'), W = c.width, H = c.height, s = sim.s, B = sim.B;
   x.clearRect(0, 0, W, H);
-  const X = (t) => W - (s.t - t) / TRACE_S * W, Y = (deg) => H / 2 - deg / TRACE_DEG * (H / 2 - 4 * d);
-  x.strokeStyle = 'rgba(234,240,255,.12)'; x.lineWidth = d;
-  for (const g of [-10, 0, 10]) { x.beginPath(); x.moveTo(0, Y(g)); x.lineTo(W, Y(g)); x.stroke(); }
+  const X = (t) => W - (s.t - t) / TRACE_S * W, Y = (deg) => H / 2 - clamp(deg, -TRACE_DEG, TRACE_DEG) / TRACE_DEG * (H / 2 - 3 * d);
+  x.fillStyle = 'rgba(255,154,77,.07)'; x.fillRect(0, 0, W, H / 2);                // ahead of the target
+  x.strokeStyle = 'rgba(255,215,115,.7)'; x.lineWidth = 1.5 * d; x.beginPath(); x.moveTo(0, Y(0)); x.lineTo(W, Y(0)); x.stroke();
+  x.font = `${11 * d}px 'Source Sans 3', sans-serif`; x.fillStyle = 'rgba(234,240,255,.55)'; x.textBaseline = 'top'; x.fillText('ahead', 6 * d, 4 * d);
+  x.textBaseline = 'bottom'; x.fillText('behind', 6 * d, H - 4 * d);
+  x.fillStyle = '#ffd773'; x.textBaseline = 'bottom'; x.textAlign = 'right'; x.fillText('target', W - 6 * d, Y(0) - 2 * d); x.textAlign = 'left';
   const n = Math.min(s.k, Math.round(TRACE_S / STEP));
-  const line = (arr, col, w) => { x.strokeStyle = col; x.lineWidth = w * d; x.lineJoin = 'round'; x.beginPath(); for (let j = s.k - n, f = true; j <= s.k; j += 2) { const J = sim.at(j), t = s.t - (s.k - j) * STEP; f ? x.moveTo(X(t), Y(arr[J])) : x.lineTo(X(t), Y(arr[J])); f = false; } x.stroke(); };
-  line(B.th, '#ffd773', 2); line(B.eh, '#7fd6ff', 1.6);
+  // along the way the target moves (kept through a moment when it stands still)
+  let u = [1, 0];
+  { const J = sim.at(s.k - n), v = [B.vth[J], B.vtv[J]], l = Math.hypot(...v); if (l > 1) u = [v[0] / l, v[1] / l]; }
+  x.strokeStyle = '#7fd6ff'; x.lineWidth = 1.8 * d; x.lineJoin = 'round'; x.beginPath();
+  for (let j = s.k - n, f = true; j <= s.k; j += 2) {
+    const J = sim.at(j), v = [B.vth[J], B.vtv[J]], l = Math.hypot(...v); if (l > 1) u = [v[0] / l, v[1] / l];
+    const e = (B.eh[J] - B.th[J]) * u[0] + (B.ev[J] - B.tv[J]) * u[1], t = s.t - (s.k - j) * STEP;
+    f ? x.moveTo(X(t), Y(e)) : x.lineTo(X(t), Y(e)); f = false;
+  }
+  x.stroke();
   x.fillStyle = '#ff9a4d';
-  for (const e of s.events) if (e.kind === 'overshoot' && e.t1 > s.t - TRACE_S) { x.beginPath(); x.arc(X(e.t1), Y(e.E1[0]), 3.2 * d, 0, 7); x.fill(); }
+  for (const e of s.events) if (e.kind === 'overshoot' && e.t1 > s.t - TRACE_S) { x.beginPath(); x.arc(X(e.t1), Y(e.ahead), 3.2 * d, 0, 7); x.fill(); }
 }
 
 // ---- the panel ----
@@ -109,9 +121,10 @@ const set = (id, text) => { if (shown[id] !== text) { shown[id] = text; $(id).te
 function sync() {
   const zi = $('zoom'), lvl = Math.round(st.z);
   if (Math.abs(zi.value - st.z) > 0.0015) zi.value = st.z;
-  zi.style.setProperty('--v', (st.z / LAST * 100) + '%'); zi.setAttribute('aria-valuetext', STOPS[lvl].name); set('zoomV', STOPS[lvl].name);
+  zi.style.setProperty('--v', (st.z / LAST * 100) + '%'); zi.setAttribute('aria-valuetext', STOPS[lvl].name); 
   for (const b of $('stops').children) b.setAttribute('aria-current', String(+b.dataset.i === lvl));
   for (const b of $('conds').children) b.setAttribute('aria-pressed', String(b.dataset.id === st.cond));
+  for (const b of $('saccs').children) b.setAttribute('aria-pressed', String(b.dataset.id === st.sacc));
   const sp = $('speed'); if (+sp.value !== st.sp) sp.value = st.sp;
   const spt = SPEEDS[st.sp][0] === 1 ? 'Real speed' : `${SPEEDS[st.sp][1]} of real speed`;
   sp.style.setProperty('--v', (st.sp / (SPEEDS.length - 1) * 100) + '%'); sp.setAttribute('aria-valuetext', spt); set('speedV', spt);
@@ -120,44 +133,43 @@ function sync() {
   $('auto').checked = st.auto;
   const pl = st.play ? 'Pause' : 'Play';
   if (shown.play !== pl) { shown.play = pl; $('play').setAttribute('aria-pressed', String(st.play)); $('play').setAttribute('aria-label', pl); }
-  const it = CONDITIONS.find((c) => c.id === st.cond);
-  if (shown.cap !== it.id) { shown.cap = it.id; $('capTitle').textContent = it.title; $('capBody').textContent = it.body; sources(); }
+  const key = `${st.cond} ${st.sacc}`, it = CAPTIONS[key];
+  if (shown.cap !== key) { shown.cap = key; $('capTitle').textContent = it.title; $('capBody').textContent = it.body; sources(); }
   // numbers, from the simulation
   const g = sim.gain(), ev = sim.recent(5), moving = ev.filter((e) => !['past', 'short', 'on'].includes(e.kind)), over = moving.filter((e) => e.kind === 'overshoot').length;
   set('gainV', g === null ? '–' : g.toFixed(2));
   set('overV', `${over} of ${ev.length}`);
   const le = sim.s.events[sim.s.events.length - 1];
-  set('lastV', le ? `${le.amp.toFixed(1)}° in ${Math.round(le.D * 1000)} ms` : '–');
-  set('peakV', le ? `${Math.round(le.peak)}°/s` : '–');
+  set('lastV', le ? `${le.amp.toFixed(1)}° in ${Math.round(le.D * 1000)} ms, top speed ${Math.round(le.peak)}°/s` : '–');
   set('landV', le ? landText(le) : '–');
   const r = frame.eyes[0].rates;
-  set('lrV', `${Math.round(r.lr)}`); set('mrV', `${Math.round(r.mr)}`);
   for (const li of $('muscleList').children) li.querySelector('b').textContent = `${Math.round(r[li.dataset.id])} spikes/s`;
   for (const li of $('muscleList').children) li.querySelector('button').setAttribute('aria-pressed', String(st.pick === li.dataset.id));
   writeHash();
 }
 function landText(e) {
   const a = Math.abs(e.ahead).toFixed(1);
-  return { overshoot: `${a}° ahead of the target`, catchup: 'on the target', anticipatory: `${a}° ahead of the target`, backup: 'back toward the target', past: `${a}° past the target`, short: `${a}° short of the target`, on: 'on the target', other: 'on the target' }[e.kind];
+  return { overshoot: `${a}° ahead of the target`, catchup: Math.abs(e.ahead) <= CATCHUP.onTarget ? 'on the target' : `${a}° short of the target`, anticipatory: `${a}° ahead of the target`, backup: 'back toward the target', past: `${a}° past the target`, short: `${a}° short of the target`, on: 'on the target', other: Math.abs(e.ahead) <= CATCHUP.onTarget ? 'on the target' : `${a}° ${e.ahead > 0 ? 'ahead of' : 'short of'} the target` }[e.kind];
 }
 function sources() {
   const ol = $('sources'); ol.replaceChildren();
-  const it = CONDITIONS.find((c) => c.id === st.cond);
+  const it = CAPTIONS[`${st.cond} ${st.sacc}`];
   for (const k of [...new Set([...it.src, ...NOTE_SRC, ...MODEL_SRC])]) { const li = document.createElement('li'), a = document.createElement('a'); a.href = SRC[k].url; a.textContent = SRC[k].name; a.rel = 'noopener'; li.append(a); ol.append(li); }
 }
 let hashTimer = 0;
 function writeHash() {
   clearTimeout(hashTimer);
-  hashTimer = setTimeout(() => history.replaceState(null, '', '#' + new URLSearchParams({ z: st.z.toFixed(2), c: st.cond, sp: st.sp, ts: st.tspeed, auto: st.auto ? 1 : 0 })), 400);
+  hashTimer = setTimeout(() => history.replaceState(null, '', '#' + new URLSearchParams({ z: st.z.toFixed(2), c: st.cond, s: st.sacc, sp: st.sp, ts: st.tspeed, auto: st.auto ? 1 : 0 })), 400);
 }
 function readHash() {
   const q = new URLSearchParams(location.hash.slice(1));
   if (q.has('z')) st.z = clamp(parseFloat(q.get('z')) || 0, 0, LAST);
   if (CONDITIONS.some((c) => c.id === q.get('c'))) st.cond = q.get('c');
+  if (SACCADES.some((c) => c.id === q.get('s'))) st.sacc = q.get('s');
   if (q.has('sp')) st.sp = clamp(Math.round(+q.get('sp')) || 0, 0, SPEEDS.length - 1);
   if (q.has('ts')) st.tspeed = clamp(Math.round(+q.get('ts')) || 20, 5, 40);
   if (q.has('auto')) st.auto = q.get('auto') !== '0';
-  sim.set({ cond: st.cond, speed: st.tspeed, auto: st.auto });
+  sim.set({ cond: st.cond, sacc: st.sacc, speed: st.tspeed, auto: st.auto });
   return q.has('z');
 }
 
@@ -177,7 +189,11 @@ function tick(now) {
   if (st.play && !zooming) {
     acc += Math.min(dt, 0.05) * SPEEDS[st.sp][0];
     const n = Math.floor(acc / STEP + 1e-9); acc -= n * STEP;
-    if (n) { sim.advance(n * STEP, held); dirty = true; }
+    if (n && st.until >= 0) {
+      // "Stop at the next saccade": step until one lands, then pause on it
+      for (let i = 0; i < n; i++) { sim.advance(STEP, held); if (sim.s.events.length > st.until) { st.until = -1; st.play = false; acc = 0; break; } }
+      dirty = true;
+    } else if (n) { sim.advance(n * STEP, held); dirty = true; }
   }
   if (dirty) { dirty = false; try { compute(); draw(); trace(); sync(); drawn.z = st.z; drawn.t = sim.s.t; } catch (e) { oops(e); } }
   if (st.play || fly || zooming) kick(); else last = 0;
@@ -191,8 +207,8 @@ let res = +(new URLSearchParams(location.search).get('res')) || 1;
 function capHeight() {
   const cap = $('cap'), h2 = $('capTitle'), p = $('capBody'), keep = [h2.textContent, p.textContent];
   cap.removeAttribute('aria-live'); cap.style.minHeight = ''; let m = 0;
-  for (const c of CONDITIONS) { h2.textContent = c.title; p.textContent = c.body; m = Math.max(m, cap.offsetHeight); }
-  [h2.textContent, p.textContent] = keep; cap.style.minHeight = m + 'px'; cap.setAttribute('aria-live', 'polite');
+  for (const c of Object.values(CAPTIONS)) { h2.textContent = c.title; p.textContent = c.body; m = Math.max(m, cap.getBoundingClientRect().height); }
+  [h2.textContent, p.textContent] = keep; cap.style.minHeight = Math.ceil(m) + 'px'; cap.setAttribute('aria-live', 'polite');
 }
 function measure() {
   capHeight();
@@ -221,6 +237,7 @@ function setAuto(on) { st.auto = on; sim.set({ auto: on }); touch(); }
 function controls() {
   STOPS.forEach((s, i) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = s.name; b.dataset.i = i; b.style.left = (i / LAST * 100) + '%'; b.addEventListener('click', () => zoomTo(i)); $('stops').append(b); });
   CONDITIONS.forEach((c) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = c.name; b.dataset.id = c.id; b.addEventListener('click', () => { st.cond = c.id; sim.set({ cond: c.id }); touch(); }); $('conds').append(b); });
+  SACCADES.forEach((c) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = c.name; b.dataset.id = c.id; b.addEventListener('click', () => { st.sacc = c.id; sim.set({ sacc: c.id }); touch(); }); $('saccs').append(b); });
   $('zoom').addEventListener('input', (e) => zoomBy(+e.target.value));
   $('zoom').addEventListener('keydown', (e) => {
     const d = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 }[e.key]; if (!d) return;
@@ -229,8 +246,8 @@ function controls() {
   $('speed').addEventListener('input', (e) => { st.sp = +e.target.value; touch(); });
   $('tspeed').addEventListener('input', (e) => { st.tspeed = +e.target.value; sim.set({ speed: st.tspeed }); touch(); });
   $('auto').addEventListener('change', (e) => setAuto(e.target.checked));
-  $('play').addEventListener('click', () => { st.play = !st.play; touch(); });
-  $('jump').addEventListener('click', () => { jumpSide = -Math.sign(sim.s.T[0] || jumpSide) || 1; st.auto = false; sim.place([jumpSide * 10, 0]); if (!st.play) st.play = true; touch(); });
+  $('play').addEventListener('click', () => { st.play = !st.play; st.until = -1; touch(); });
+  $('next').addEventListener('click', () => { st.until = sim.s.events.length; st.play = true; touch(); });
   for (const m of MUSCLES) {
     const li = document.createElement('li'), b = document.createElement('button'), name = document.createElement('span'), v = document.createElement('b'), sm = document.createElement('small');
     li.dataset.id = m.id; b.type = 'button'; name.textContent = m.name; sm.textContent = m.short; b.append(name, v, sm); li.append(b); $('muscleList').append(li);
@@ -239,6 +256,7 @@ function controls() {
   }
   for (const [k, list] of [['note', NOTE], ['modelNote', MODEL]]) for (const t of list) { const p = document.createElement('p'); p.className = 'fine'; p.textContent = t; $(k).append(p); }
   $('insetText').textContent = INSET;
+  $('insetLabel').textContent = `Right eye's view, ${INSET_DEG}° across`;
   // a finger or mouse on the picture: on the screen it moves the target; elsewhere it turns the view. Two fingers zoom.
   const fingers = new Map(); let drag = null, span = 0;
   const spanOf = () => { const [a, b] = [...fingers.values()]; return Math.hypot(a[0] - b[0], a[1] - b[1]); };

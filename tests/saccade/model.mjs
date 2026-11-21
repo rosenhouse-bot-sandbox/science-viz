@@ -28,18 +28,22 @@ for (const [a, d0, d1, v0, v1] of [[1, 20, 35, 50, 120], [5, 30, 45, 200, 350], 
 }
 
 // ---- pursuit and the saccades it needs
+// With the measured sizing rule, saccades land on the target or a little short of it [amplitude]. Only the page's
+// "overshoot" setting makes them land ahead, and poor pursuit then shows more of them, because it needs more saccades.
 const runs = {};
-for (const cond of ['healthy', 'poor']) for (const speed of [10, 20, 30]) {
-  const m = makeSim({ cond, speed }); m.advance(12);
-  const ev = m.recent(10), g = m.gain(), kinds = {};
+for (const sacc of ['accurate', 'overshoot']) for (const cond of ['healthy', 'poor']) for (const speed of [10, 20, 30]) {
+  const m = makeSim({ cond, sacc, speed }); m.advance(12);
+  const ev = m.recent(10), g = m.gain(), kinds = {}, key = `${cond} ${sacc} ${speed}`;
   for (const e of ev) kinds[e.kind] = (kinds[e.kind] || 0) + 1;
-  runs[cond + speed] = { ev, g, kinds };
-  if (g === null || !near(g, PURSUIT.gain[cond], cond === 'poor' ? 0.05 : 0.04)) fail(`${cond} pursuit at ${speed}°/s measures a gain of ${g?.toFixed(3)}, set to ${PURSUIT.gain[cond]}`);
+  runs[key] = { ev, g, kinds };
+  if (g === null || !near(g, PURSUIT.gain[cond], cond === 'poor' ? 0.05 : 0.04)) fail(`${key}: pursuit measures a gain of ${g?.toFixed(3)}, set to ${PURSUIT.gain[cond]}`);
   const over = (kinds.overshoot || 0) / Math.max(1, ev.length);
-  if (cond === 'healthy' && over > 0.3) fail(`healthy pursuit at ${speed}°/s: ${(over * 100).toFixed(0)}% of saccades overshoot`);
-  if (cond === 'poor' && speed >= 20 && over < 0.5) fail(`poor pursuit at ${speed}°/s: only ${(over * 100).toFixed(0)}% of saccades overshoot`);
-  if (cond === 'poor' && (kinds.overshoot || 0) <= (runs['healthy' + speed].kinds.overshoot || 0)) fail(`poor pursuit at ${speed}°/s makes no more overshoot saccades than healthy pursuit`);
-  if (cond === 'poor' && ev.length <= runs['healthy' + speed].ev.length) fail(`poor pursuit at ${speed}°/s makes no more saccades than healthy pursuit`);
+  if (sacc === 'accurate' && over > 0.05) fail(`${key}: ${(over * 100).toFixed(0)}% of saccades overshoot with the measured sizing rule`);
+  if (cond === 'healthy' && over > 0.3) fail(`${key}: ${(over * 100).toFixed(0)}% of saccades overshoot`);
+  if (cond === 'poor' && sacc === 'overshoot' && speed >= 20 && over < 0.4) fail(`${key}: only ${(over * 100).toFixed(0)}% of saccades overshoot`);
+  const h = runs[`healthy ${sacc} ${speed}`];
+  if (cond === 'poor' && ev.length <= h.ev.length) fail(`${key}: poor pursuit makes no more saccades than healthy pursuit`);
+  if (cond === 'poor' && sacc === 'overshoot' && speed >= 20 && (kinds.overshoot || 0) <= (h.kinds.overshoot || 0)) fail(`${key}: no more overshoot saccades than healthy pursuit`);
   // each kind fits its definition
   for (const e of m.s.events) {
     if (!['overshoot', 'catchup', 'anticipatory', 'backup'].includes(e.kind)) continue;
@@ -50,20 +54,30 @@ for (const cond of ['healthy', 'poor']) for (const speed of [10, 20, 30]) {
     if (!near(e.t1 - e.t0, e.D, 2 * STEP)) fail(`a saccade lasted ${((e.t1 - e.t0) * 1000).toFixed(1)} ms, not its ${(e.D * 1000).toFixed(1)} ms`);
   }
 }
-console.log('pursuit:', Object.entries(runs).map(([k, r]) => `${k} gain ${r.g.toFixed(2)} ${JSON.stringify(r.kinds)}`).join('; '));
+console.log('pursuit:\n ' + Object.entries(runs).map(([k, r]) => `${k}: gain ${r.g.toFixed(2)} ${JSON.stringify(r.kinds)}`).join('\n '));
 
-// ---- a jump of the target, as in a clinic's saccade test
-{
-  const m = makeSim({ cond: 'healthy', auto: false }); m.advance(0.5); const t0 = m.s.t;
-  m.place([10, 0]); m.advance(1);
-  const e = m.s.events.find((x) => x.t0 > t0);
-  if (!e) fail('no saccade to a target that jumped');
-  else {
-    const lat = (e.t0 - t0) * 1000;
-    if (lat < 180 || lat > 260) fail(`a saccade to a still target started ${lat.toFixed(0)} ms after it jumped`);
-    if (Math.abs(m.s.E[0] - 10) > CATCHUP.onTarget) fail(`after a jump to 10°, the eyes ended at ${m.s.E[0].toFixed(2)}°`);
-    if (e.kind !== 'on') fail(`a saccade to a still target was "${e.kind}"`);
-  }
+// ---- a jump of the target, as in a clinic's saccade test: the first saccade starts about 200 ms later. With the
+// measured rule it lands a little short [leigh]; with the overshoot setting it goes past (hypermetria). A second,
+// smaller saccade then brings the eyes onto the target.
+for (const [sacc, first] of [['accurate', 'short'], ['overshoot', 'past']]) {
+  const m = makeSim({ cond: 'healthy', sacc, auto: false }); m.advance(0.5); const t0 = m.s.t;
+  m.place([10, 0]); m.advance(1.5);
+  const ev = m.s.events.filter((x) => x.t0 > t0), e = ev[0];
+  if (!e) { fail(`${sacc}: no saccade to a target that jumped`); continue; }
+  const lat = (e.t0 - t0) * 1000;
+  if (lat < 180 || lat > 260) fail(`${sacc}: a saccade to a still target started ${lat.toFixed(0)} ms after it jumped`);
+  if (e.kind !== first) fail(`${sacc}: the first saccade to a still target was "${e.kind}", not "${first}"`);
+  if (ev.length < 2) fail(`${sacc}: no second saccade corrected the first`);
+  if (Math.abs(m.s.E[0] - 10) > CATCHUP.onTarget + 1e-6) fail(`${sacc}: after a jump to 10°, the eyes ended at ${m.s.E[0].toFixed(2)}°`);
+}
+// a tap while the target is moving is also a jump to a still target. A saccade already planned before the tap may still
+// go, but no new one starts within 180 ms of it, and the eyes reach the tapped spot.
+for (const at of [2.9, 3, 3.1, 3.2]) {
+  const m = makeSim({ cond: 'poor', speed: 20 }); m.advance(at); const t0 = m.s.t, planned = m.s.pending || m.s.sac ? 1 : 0;
+  m.place([0, 5]); m.advance(1);
+  const early = m.s.events.filter((x) => x.t0 > t0 && x.t0 < t0 + 0.18);
+  if (early.length > planned) fail(`a saccade started ${((early[early.length - 1].t0 - t0) * 1000).toFixed(0)} ms after a tap on the moving target`);
+  if (Math.hypot(m.s.E[0], m.s.E[1] - 5) > CATCHUP.onTarget + 1e-6) fail(`1 s after a tap, the eyes are at ${m.s.E.map((x) => x.toFixed(2))}, not on the tapped spot`);
 }
 
 // ---- the muscles

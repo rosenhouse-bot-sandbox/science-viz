@@ -934,44 +934,54 @@ presses every control and sweeps every slider looking for jumps. After changing 
 A page at `saccade/`: two eyes in 3D follow a target on a screen, to show what a clinic note of
 "overshoot saccade due to poor pursuits" means. Pursuit is the smooth movement that follows a moving
 object. A saccade is a quick jump. An overshoot saccade starts behind a moving target and lands ahead of
-it (the definition used in Sanz, Aivar and Tejedor, IOVS 2026). The page also says that overshoot can
-mean hypermetria (jumps to a still target that go too far), which it does not show.
+it (the definition used in Sanz, Aivar and Tejedor, IOVS 2026). Overshoot can also mean hypermetria:
+jumps to a still target that go too far. A tap on the screen makes the target jump, to show that.
+
+Studies have not shown that poor pursuit by itself makes saccades go too far. With saccades sized as
+measured, the model's saccades land on the target or a little short of it, even with poor pursuit. So the
+page has two separate settings: healthy or poor pursuit, and accurate or overshoot saccades. Poor pursuit
+needs many more saccades, so when saccades go too far, many more land ahead of the target. The page says
+this in "What the clinic's note may mean". It opens on poor pursuit with overshoot saccades.
 
 - **One world, three stops**: Screen (the eyes and the screen 60 cm away, with a line of sight from each
   eye), Eyes (seen from in front) and Muscles (the right eye's six muscles from above). The eyes,
-  muscles and screen are to scale; muscle widths and thicknesses are rounded. The skull, eyelids and fat
-  are left out. Between Screen and Eyes the camera swings round the side and stands back, so that both
-  stay in view. Time stands still while the view zooms.
-- **The screen** shows a grid (1° and 5°), the target in gold, and in light blue a ring and a 0.4 s trail
-  where the eyes look, as an eye tracker would. A box in the corner shows what the right eye sees, 10°
-  across, with a ring for the central 2°. The page says that during a saccade the brain turns vision down.
-- **Controls**: healthy or poor pursuit, the speed of time (1/100 of real speed to real speed), the
-  target's top speed (5 to 40°/s), whether the target swings by itself, a button that makes it jump 10°
-  to the other side, and a tap or drag on the screen in the picture to move it there.
+  muscles and screen are to scale; muscle widths and thicknesses are the page's estimates. The skull,
+  eyelids and fat are left out. Between Screen and Eyes the camera swings around the side and stands
+  back, so that both stay in view. Time stands still while the view zooms.
+- **The screen** shows a grid (1° and 5°), the target in gold, orange ticks where overshoot saccades
+  landed in the last second, and in light blue a ring and a 0.4 s trail where the eyes look, as an eye
+  tracker would. A box in the corner shows what the right eye sees, 5° across, with a ring for the central
+  2°. The page says that during a saccade the brain turns vision down.
+- **Controls**: healthy or poor pursuit, accurate or overshoot saccades, Play, the speed of time (1/100 of
+  real speed to real speed), "Stop at the next saccade", the target's top speed (5 to 40°/s), whether the
+  target swings by itself, and a tap or drag on the screen in the picture to move the target there.
 - **The model** (`js/saccade/model.js`, stepped 1 ms at a time, the same every run):
   - Pursuit: eye speed moves toward gain × target speed, with the gain 0.95 (healthy) or 0.5 (poor, an
-    example value) and a 100 ms latency. A target that swings regularly is predictable, so after 1 s the
-    latency is no longer applied (Barnes 2008).
-  - Saccades start when the eyes will not cross the target within 40 to 180 ms at present speeds (de
-    Brouwer et al. 2002), and not within 0.5° of it. They begin 125 ms later (200 ms for a still target).
-  - Size: the position error plus the retinal slip × 0.2 s, both as seen 90 ms before the saccade, the
-    slip capped at 15°/s (de Brouwer et al. 2002 show both count). The 0.2 s is this page's choice, and
-    the page says so: with poor pursuit the slip is large, so the saccades land ahead of the target.
+    example value) at every speed, and a 100 ms latency. A target that swings regularly is predictable
+    (Barnes 2008), so after one full swing (the page's choice) the latency is no longer applied.
+  - A saccade starts when the eyes, at present speeds, would reach the target in under 40 ms, over
+    180 ms, or never (de Brouwer et al. 2002), and not within 0.5° of it (the page's choice). It begins
+    125 ms later (200 ms for a still target).
+  - Size, as measured by de Brouwer et al. (2002): 0.9 × the position error plus 0.109 s × the retinal
+    slip, with slip above 15°/s counting at 0.09 s, both as seen 90 ms before the saccade. The
+    "overshoot" setting makes each saccade 4/3 of that size. The 4/3 is the page's example, and the page
+    says so. The page counts every saccade; studies count only those of 1° or more, and the page says so.
   - Duration 23 ms + 2.7 ms per degree (Collewijn et al. 1988), with a smooth minimum-jerk speed
     profile, so a 10° saccade takes 50 ms and peaks at 375°/s.
   - Each saccade is sorted as catch-up, overshoot, anticipatory or back-up (Sanz et al.), with "on the
-    target" meaning within the drawn target's radius, 0.4°.
+    target" meaning within the drawn target's radius, 0.4°. A saccade to a still target is past, short
+    or on it.
   - The eyes obey Listing's law and both aim at the same point on the screen. Muscle paths run straight
-    from their origins to the eye and round it (no pulleys; the page says so). Rectus insertions follow
+    from their origins to the eye and around it (no pulleys; the page says so). Rectus insertions follow
     Apt and Call (1982). Nerve signals are 100 + 4 × position + 0.95 × speed spikes/s along each
     muscle's pull (Robinson 1970, monkeys), never below zero, so the opposing muscle falls silent
     during a saccade. Muscles are drawn brighter red with a higher signal.
-- **Panel**: a trace of left and right position over the last 2 s (target gold, eyes blue, orange dots
-  where overshoot saccades landed), the measured gain, how many of the last 5 s's saccades overshot, the
-  last saccade's size, duration, top speed and landing, and the signals to the right eye's lateral and
-  medial rectus. "Each muscle" lists all six; pointing at one lights it in gold.
+- **Panel**: a trace of how far the eyes are ahead of the target or behind it over the last 2 s (orange
+  dots where overshoot saccades landed), where the last saccade landed, the measured gain, how many of the
+  last 5 s's saccades overshot, and the last saccade's size, duration and top speed. "Each muscle" lists
+  all six with their nerve signals; pointing at one lights it in gold.
 - **Tests**: `node tests/saccade/model.mjs` (no browser) checks the main sequence, gains, how often each
-  kind of saccade happens, the definitions, a jump to a still target, each muscle's pull and length
+  kind of saccade happens with each setting, the definitions, a jump to a still target, each muscle's pull and length
   change, Listing's law, Hering's law and the nerve burst and pause. `node tests/saccade/page.mjs`
   (`--quick` for the desktop only) presses every control at a desktop and a phone size. After changing
   any file under `js/saccade/` or `css/saccade.css`, run `node tests/saccade/stamp.mjs`.

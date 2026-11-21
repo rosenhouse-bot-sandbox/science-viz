@@ -1,8 +1,8 @@
 // Overshoot saccades: the 3D picture. Two eyes with their six muscles and optic nerves, and the screen they
 // watch, all at true size in mm. The screen's picture (grid, target, where the eyes land) is drawn on a 2D canvas
 // and shown on the screen as a texture. Nothing here decides anything: it draws what model.js computes.
-import { program, meshBuffers, normals, perspective, lookAt, mul4 } from './gl.js?v=852b0b18';
-import { EYE_R, MUSCLES, OPTIC, SCREEN, musclePath, eyeCenter, rot, onScreen } from './model.js?v=852b0b18';
+import { program, meshBuffers, normals, perspective, lookAt, mul4 } from './gl.js?v=8664a690';
+import { EYE_R, MUSCLES, OPTIC, SCREEN, musclePath, eyeCenter, rot, onScreen } from './model.js?v=8664a690';
 
 const VS = `#version 300 es
 layout(location=0) in vec3 aPos; layout(location=1) in vec3 aNor; layout(location=2) in vec3 aT;
@@ -11,19 +11,20 @@ void main(){ vec4 w = uM * vec4(aPos, 1.); vW = w.xyz; vN = mat3(uM) * aNor; vT 
 const FS = `#version 300 es
 precision highp float;
 in vec3 vW, vN, vT, vL; out vec4 o;
-uniform vec3 uCol, uCam; uniform int uKind; uniform float uAlpha, uPupil; uniform sampler2D uTex;
+uniform vec3 uCol, uCam; uniform mat4 uM; uniform int uKind; uniform float uAlpha, uPupil; uniform sampler2D uTex;
 float hash(float n){ return fract(sin(n) * 43758.5453); }
 float noise(float x){ float i = floor(x), f = fract(x); return mix(hash(i), hash(i + 1.), f * f * (3. - 2. * f)); }
 float gRim = 1.;
+vec3 gRimCol = vec3(0.6, 0.75, 1.0);
 vec3 lit(vec3 base, vec3 n, float spec, float shine){
   vec3 v = normalize(uCam - vW);
   vec3 L1 = normalize(vec3(0.45, 0.85, -0.55)), L2 = normalize(vec3(-0.7, 0.2, 0.4));
-  float d1 = max(dot(n, L1), 0.), d2 = max(dot(n, L2), 0.);
+  float d1 = max(dot(n, L1), 0.), d2 = max(dot(n, L2), 0.), d3 = max(dot(n, v), 0.);
   float hemi = 0.5 + 0.5 * n.y;
-  vec3 c = base * (0.16 + 0.12 * hemi + 0.78 * d1 + 0.22 * d2 * vec3(0.75, 0.85, 1.1));
+  vec3 c = base * (0.14 + 0.1 * hemi + 0.62 * d1 + 0.18 * d2 * vec3(0.75, 0.85, 1.1) + 0.3 * d3);   // the last light comes from the camera
   float s = pow(max(dot(n, normalize(L1 + v)), 0.), shine) * spec;
   float rim = pow(1. - max(dot(n, v), 0.), 3.) * 0.18 * gRim;
-  return c + vec3(s) + rim * vec3(0.6, 0.75, 1.0);
+  return c + vec3(s) + rim * gRimCol;
 }
 void main(){
   vec3 n = normalize(vN); if (!gl_FrontFacing) n = -n;
@@ -40,10 +41,11 @@ void main(){
   }
   if (uKind == 1) {                    // the white of the eye; the inside, seen past the iris, is dark
     if (!gl_FrontFacing) { o = vec4(0.05, 0.02, 0.02, 1.); return; }
+    n = normalize(mat3(uM) * vT);                            // the exact sphere's normal, so the shading has no bands
     float back = smoothstep(-0.2, 0.9, vT.z);
-    vec3 base = mix(vec3(0.95, 0.93, 0.9), vec3(0.92, 0.78, 0.74), back);
-    base *= 1. - 0.05 * noise(vT.x * 40. + vT.y * 23.);
-    o = vec4(lit(base, n, 0.25, 40.), 1.); return;
+    vec3 base = mix(vec3(0.96, 0.93, 0.88), vec3(0.93, 0.8, 0.75), back);
+    gRim = 0.5; gRimCol = vec3(1.0, 0.9, 0.85);
+    o = vec4(lit(base, n, 0.12, 30.), 1.); return;
   }
   if (uKind == 3) {                    // the iris and pupil (vT.x: 0 at the center, 1 at the edge; vT.y: angle)
     float r = vT.x, a = vT.y;
@@ -64,12 +66,12 @@ void main(){
     o = vec4(vec3(1.) * a, a); return;
   }
   if (uKind == 5) {                    // a muscle (vT.x: mm from the insertion, vT.y: how hard it is driven, vT.z: tendon length)
-    float tendon = 1. - smoothstep(vT.z - 1.5, vT.z + 1.5, vT.x);
-    vec3 m = mix(vec3(0.5, 0.11, 0.11), vec3(1.0, 0.3, 0.24), clamp(vT.y, 0., 1.));
+    float tendon = 1. - smoothstep(vT.z - 4., vT.z + 4., vT.x);
+    vec3 m = mix(vec3(0.62, 0.2, 0.18), vec3(1.0, 0.32, 0.25), clamp(vT.y, 0., 1.));
     if (vT.y < -0.5) m = vec3(1.0, 0.78, 0.3);              // the muscle picked in the panel, drawn in gold
-    vec3 base = mix(m, vec3(0.9, 0.88, 0.82), tendon);
-    gRim = mix(0.25, 1., tendon);
-    vec3 c = lit(base, n, mix(0.12, 0.45, tendon), mix(18., 60., tendon)) + base * 0.14 * tendon;
+    vec3 base = mix(m, vec3(0.95, 0.92, 0.86), tendon);
+    gRim = 0.25 * (1. - tendon); gRimCol = vec3(1.0, 0.85, 0.8);
+    vec3 c = lit(base, n, mix(0.12, 0.15, tendon), mix(18., 30., tendon)) + base * 0.1 * tendon;
     c += vec3(1.0, 0.35, 0.2) * 0.35 * clamp(vT.y - 0.6, 0., 1.) * (1. - tendon);
     if (vT.y < -0.5) c += vec3(0.25, 0.18, 0.05);   // a muscle driven hard is drawn brighter
     o = vec4(c, 1.); return;
@@ -147,13 +149,13 @@ function profile(m, s, e) {
     // fans out flat on its way to the eye
     if (e > m.tendon + 10) return [1.0 + 1.3 * smooth(s / 10), 1.0 + 1.1 * smooth(s / 10)];
     if (e > m.tendon) { const f = smooth((e - m.tendon) / 10); return [1.0 + 1.3 * f, 0.9 + 1.2 * f]; }
-    const f = smooth(1 - e / m.tendon * 1.25); return [1.1 + (tw - 1.1) * f, 1.0 - 0.6 * f];
+    const f = smooth(1 - e / m.tendon * 1.25); return [1.1 + (tw - 1.1) * f, 1.0 - 0.84 * f];
   }
   const belly = m.id === 'io' ? [4.3, 1.8] : [4.6, 2.0];
   const w0 = 1.4 + (belly[0] - 1.4) * smooth((s - 2) / 12), h0 = 1.0 + (belly[1] - 1.0) * smooth((s - 2) / 12);
   const toT = smooth((e - m.tendon) / 7);                 // 1 on the belly, 0 at the start of the tendon
   const w = m.id === 'io' ? w0 + (tw - w0) * (1 - toT) : w0 * toT + (tw * (0.85 + 0.15 * (1 - e / Math.max(1, m.tendon)))) * (1 - toT);
-  const h = h0 * toT + 0.32 * (1 - toT);
+  const h = h0 * toT + 0.16 * (1 - toT);
   return [w, h];
 }
 
@@ -173,7 +175,6 @@ export function makeScene(gl) {
   const scr = { pos: new Float32Array([-S.w / 2, -S.h / 2, z + 0.5, S.w / 2, -S.h / 2, z + 0.5, S.w / 2, S.h / 2, z + 0.5, -S.w / 2, S.h / 2, z + 0.5]), nor: new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1]), tt: new Float32Array([0, 1, 0, 1, 1, 0, 1, 0, 0, 0, 0, 0]), idx: new Uint16Array([0, 1, 2, 0, 2, 3]) };
   const screen = mk(scr);
   const back = mk({ pos: new Float32Array([-1, -1, 0.9999, 1, -1, 0.9999, 1, 1, 0.9999, -1, 1, 0.9999]), nor: new Float32Array(12), tt: new Float32Array(12), idx: new Uint16Array([0, 1, 2, 0, 2, 3]) });
-  const ring = mk(torus(4.5, 0.9, 32, 10));                 // the tendon ring at the back of the orbit
   const loop = mk(torus(1.9, 0.55, 20, 8));                 // the trochlea: the loop the superior oblique runs through
   // the muscles and optic nerves change shape every frame
   const tIdx = tubeIndex(NS, NA), tubes = [];
@@ -226,24 +227,27 @@ export function makeScene(gl) {
       if (Math.abs(d) <= 14) { ctx.beginPath(); for (let h = -24; h <= 24; h += 2) { const q = px(h, d); h === -24 ? ctx.moveTo(...q) : ctx.lineTo(...q); } ctx.stroke(); }
     }
     const deg = px(1, 0)[0] - px(0, 0)[0];
-    // the target, drawn in gold: 0.8° across
+    // the target, drawn in gold: 0.8° across, with a faint halo no wider than itself
     const T = px(...f.T);
-    const tg = ctx.createRadialGradient(T[0], T[1], 0, T[0], T[1], deg * 1.4); tg.addColorStop(0, 'rgba(255,215,115,0.55)'); tg.addColorStop(1, 'rgba(255,215,115,0)');
-    ctx.fillStyle = tg; ctx.beginPath(); ctx.arc(T[0], T[1], deg * 1.4, 0, 7); ctx.fill();
+    const tg = ctx.createRadialGradient(T[0], T[1], deg * 0.3, T[0], T[1], deg * 0.65); tg.addColorStop(0, 'rgba(255,215,115,0.4)'); tg.addColorStop(1, 'rgba(255,215,115,0)');
+    ctx.fillStyle = tg; ctx.beginPath(); ctx.arc(T[0], T[1], deg * 0.65, 0, 7); ctx.fill();
     ctx.fillStyle = '#ffd773'; ctx.beginPath(); ctx.arc(T[0], T[1], deg * 0.4, 0, 7); ctx.fill();
-    ctx.fillStyle = '#fff6dc'; ctx.beginPath(); ctx.arc(T[0], T[1], deg * 0.13, 0, 7); ctx.fill();
+    ctx.fillStyle = '#fff6dc'; ctx.beginPath(); ctx.arc(T[0], T[1], deg * 0.12, 0, 7); ctx.fill();
     if (withGaze) {
+      // where overshoot saccades landed in the last 1 s, drawn as small orange ticks, as on the trace in the panel
+      for (const L of f.landed) { const q = px(...L.p), a = 1 - L.age; ctx.strokeStyle = `rgba(255,154,77,${(0.95 * a).toFixed(3)})`; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(q[0], q[1] - deg * 0.7); ctx.lineTo(q[0], q[1] + deg * 0.7); ctx.stroke(); }
       // where the eyes have looked over the last 0.4 s, then where they look now, drawn in light blue
       const tr = f.trail;
       ctx.lineCap = 'round'; ctx.lineJoin = 'round';
       for (let i = 1; i < tr.length; i++) {
         const a = px(tr[i - 1][0], tr[i - 1][1]), b = px(tr[i][0], tr[i][1]);
-        ctx.strokeStyle = `rgba(127,214,255,${(0.75 * i / tr.length).toFixed(3)})`; ctx.lineWidth = 3;
+        ctx.strokeStyle = `rgba(127,214,255,${(0.75 * i / tr.length).toFixed(3)})`; ctx.lineWidth = 2.5;
         ctx.beginPath(); ctx.moveTo(...a); ctx.lineTo(...b); ctx.stroke();
       }
       const E = px(...f.E);
-      ctx.strokeStyle = '#7fd6ff'; ctx.lineWidth = 3.5; ctx.beginPath(); ctx.arc(E[0], E[1], deg * 0.6, 0, 7); ctx.stroke();
-      ctx.fillStyle = '#7fd6ff'; ctx.beginPath(); ctx.arc(E[0], E[1], 3, 0, 7); ctx.fill();
+      ctx.strokeStyle = 'rgba(5,8,16,0.85)'; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(E[0], E[1], deg * 0.25, 0, 7); ctx.stroke();
+      ctx.strokeStyle = '#7fd6ff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(E[0], E[1], deg * 0.25, 0, 7); ctx.stroke();
+      ctx.fillStyle = '#7fd6ff'; ctx.beginPath(); ctx.arc(E[0], E[1], 2.5, 0, 7); ctx.fill();
     }
   }
   function upload(t) { gl.bindTexture(gl.TEXTURE_2D, t); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, pic); gl.generateMipmap(gl.TEXTURE_2D); }
@@ -303,7 +307,6 @@ export function makeScene(gl) {
       tubes.slice(0, f.eyes.length * (MUSCLES.length + 1)).forEach((T, i) => { gl.uniform1i(u.uKind, i % (MUSCLES.length + 1) === MUSCLES.length ? 0 : 5); T.b.draw(); });
       for (const e of f.eyes) {
         const ctr = eyeCenter(e.side), mir = (p) => [e.side * p[0], p[1], p[2]];
-        one(ring, 0, facing([e.side * -0.35, 0, 1], add(ctr, mir(OPTIC.apex))), [0.86, 0.82, 0.74]);
         const so = MUSCLES.find((m) => m.id === 'so');
         one(loop, 0, facing([e.side * 0.2, 0.3, -1], add(ctr, mir(so.troch))), [0.9, 0.88, 0.8]);
       }

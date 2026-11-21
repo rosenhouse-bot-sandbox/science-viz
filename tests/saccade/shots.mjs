@@ -30,6 +30,7 @@ for (const [tag, w, h, dsf] of [['desktop', 1280, 800, 1], ['phone', 390, 844, 2
   const go = (o) => page.evaluate((o) => {
     const s = window.__saccade; s.st.play = false; s.settle();
     if (o.cond) { s.st.cond = o.cond; s.sim.set({ cond: o.cond }); }
+    if (o.sacc) { s.st.sacc = o.sacc; s.sim.set({ sacc: o.sacc }); }
     if (o.z !== undefined) s.st.z = o.z;
     if (o.run) s.sim.advance(o.run);
     // stop just after an overshoot saccade lands (or, with o.mid, halfway through a saccade)
@@ -37,9 +38,10 @@ for (const [tag, w, h, dsf] of [['desktop', 1280, 800, 1], ['phone', 390, 844, 2
     s.redraw();
   }, o);
   const shot = async (name, o) => { await go(o); await page.waitForTimeout(200); await page.screenshot({ path: path.join(out, `${tag}-${name}.png`) }); };
-  await shot('1-screen-poor-overshoot', { cond: 'poor', z: 0, run: 2, after: 'overshoot' });
-  await shot('2-screen-healthy', { cond: 'healthy', z: 0, run: 2 });
-  await shot('3-eyes-poor', { cond: 'poor', z: 1, after: 'overshoot' });
+  await shot('1-screen-poor-overshoot', { cond: 'poor', sacc: 'overshoot', z: 0, run: 2, after: 'overshoot' });
+  await shot('2-screen-poor-accurate', { cond: 'poor', sacc: 'accurate', z: 0, run: 2 });
+  await shot('2b-screen-healthy', { cond: 'healthy', sacc: 'accurate', z: 0, run: 2 });
+  await shot('3-eyes-poor', { cond: 'poor', sacc: 'overshoot', z: 1, after: 'overshoot' });
   await shot('4-muscles-mid-saccade', { cond: 'poor', z: 2, mid: true });
   if (tag === 'desktop') for (const z of [0.25, 0.5, 0.75, 1.25, 1.5, 1.75]) await shot(`5-between-${z}`, { z });
   console.log(tag, 'errors', JSON.stringify(errs));

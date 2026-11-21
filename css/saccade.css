@@ -40,6 +40,7 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family
 .stops button[aria-current="true"]{color:var(--ink);font-weight:600}
 
 .transport{display:grid;grid-template-columns:46px 1fr;gap:12px;align-items:center}
+.segs{display:grid;gap:6px;min-width:0}
 .play{width:46px;height:46px;border-radius:50%;border:1px solid var(--line);background:rgba(234,240,255,.09);color:var(--ink);display:grid;place-items:center;cursor:pointer;padding:0}
 .play:hover{background:rgba(234,240,255,.18)}
 .play .i-pause{display:none}.play[aria-pressed="true"] .i-play{display:none}.play[aria-pressed="true"] .i-pause{display:block}
@@ -130,3 +131,10 @@ input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;bac
 .inset i{display:block;border-radius:50%;border:1.5px dashed rgba(234,240,255,.7)}
 .inset span{position:absolute;top:calc(100% + 6px);right:0;font-size:0.75rem;color:var(--ink2);white-space:nowrap;text-shadow:0 1px 3px rgba(3,5,12,.95)}
 @media (pointer:coarse){.ghost{min-block-size:44px}}
+.transport{grid-template-columns:46px 1fr}
+.transport .seg{align-self:center}
+.speedrow{display:grid;gap:2px}
+.speedrow .ghost{margin-top:4px}
+.check{justify-content:flex-start}
+.nums .big dd{font-size:1.125rem;color:#ffb27a}
+.tracebox figcaption b{color:var(--ink2);font-weight:600}

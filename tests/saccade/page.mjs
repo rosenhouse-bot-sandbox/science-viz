@@ -58,7 +58,7 @@ for (const [name, width, height, motion] of quick ? SIZES.slice(0, 1) : SIZES) {
   const settle = async () => { await page.evaluate(() => window.__saccade.settle()); await frame(); };
   const put = async (id, v) => { await page.$eval('#' + id, (el, v) => { el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); }, v); await frame(); };
   const fits = async (when) => { const w = await page.evaluate(() => [document.documentElement.scrollWidth, document.getElementById('panel').scrollWidth, document.getElementById('panel').clientWidth]); if (w[0] > width || w[1] > w[2]) fail(`${name}: something is wider than the screen ${when} (${w.join(', ')})`); };
-  const IDS = ['zoom', 'conds', 'play', 'speed', 'tspeed', 'auto', 'jump', 'trace', 'gainV', 'overV', 'lastV', 'peakV', 'landV', 'lrV', 'mrV', 'each'];
+  const IDS = ['zoom', 'conds', 'saccs', 'play', 'speed', 'next', 'tspeed', 'auto', 'trace', 'gainV', 'overV', 'lastV', 'landV', 'each'];
   const boxes = () => page.evaluate((ids) => { const sc = document.getElementById('panel').scrollTop; return ids.map((id) => { const r = document.getElementById(id).getBoundingClientRect(); return [r.x, r.y + sc, r.width, r.height].map((v) => Math.round(v)).join(','); }).join(' | '); }, IDS);   // in the panel's own frame, so that scrolling it is not a move
   const moved = (a, b) => { const A = a.split(' | '), B = b.split(' | '); return IDS.filter((_, i) => A[i] !== B[i]).map((id) => `${id} ${A[IDS.indexOf(id)]} -> ${B[IDS.indexOf(id)]}`).join('; '); };
   async function sweep(id, from, to, steps, when, pic = true) {
@@ -86,6 +86,11 @@ for (const [name, width, height, motion] of quick ? SIZES.slice(0, 1) : SIZES) {
     }
   }
   { const a = await boxes(); await page.click('#conds button[data-id="healthy"]'); await frame(); const b = await boxes(); if (a !== b) fail(`${name}: switching the pursuit moved a control: ${moved(a, b)}`); }
+  for (const id of ['accurate', 'overshoot']) {
+    const a = await boxes(); await page.click(`#saccs button[data-id="${id}"]`); await frame(); const b = await boxes();
+    if (a !== b) fail(`${name}: switching to ${id} saccades moved a control: ${moved(a, b)}`);
+    const got = await page.evaluate(() => window.__saccade.sim.s.sacc); if (got !== id) fail(`${name}: the ${id} button set the model to ${got}`);
+  }
   // the zoom, end to end, with time stopped: one camera move, no jumps
   for (const c of ['healthy', 'poor']) { await page.click(`#conds button[data-id="${c}"]`); await frame(); await sweep('zoom', 0, 2, n, `(${c})`); }
   await sweep('speed', 0, 6, 6, '', false); await sweep('tspeed', 5, 40, 7, '', false);
@@ -102,20 +107,24 @@ for (const [name, width, height, motion] of quick ? SIZES.slice(0, 1) : SIZES) {
   const ev = await page.evaluate(() => window.__saccade.sim.s.events.length);
   if (!ev) fail(`${name}: no saccades were made`);
   await page.click('#play'); await frame(); if (await playing()) fail(`${name}: Play did not pause`);
-  // a tap on the screen in the picture moves the target there, and the eyes follow with a saccade
+  // a tap on the screen in the picture moves the target there, and the eyes follow with a saccade (with overshoot
+  // saccades, the first goes past it and smaller ones come back, so allow 1.2 s)
   const box = await page.evaluate(() => { const s = window.__saccade, f = window.__saccade.frame; for (let y = 120; y < innerHeight - 50; y += 20) for (let x = 0; x < innerWidth; x += 20) { const g = s.pick(x, y); if (g && Math.abs(g[0] - 8) < 1.5 && Math.abs(g[1]) < 3) return [x, y, g]; } return null; });
   if (!box) fail(`${name}: no point of the picture lands on the screen near 8° right`);
   else {
     await page.evaluate(() => { window.__saccade.sim.place([-8, 0]); window.__saccade.sim.advance(1); });
     await page.mouse.click(box[0], box[1]); await frame();
-    const r = await page.evaluate(() => { const s = window.__saccade; s.st.play = false; s.sim.advance(0.6); return { T: s.sim.s.T, E: s.sim.s.E, auto: s.st.auto }; });
+    const r = await page.evaluate(() => { const s = window.__saccade; s.st.play = false; s.sim.advance(1.2); return { T: s.sim.s.T, E: s.sim.s.E, auto: s.st.auto }; });
     if (r.auto) fail(`${name}: a tap on the screen left the target swinging by itself`);
     if (Math.abs(r.T[0] - box[2][0]) > 0.6) fail(`${name}: a tap at ${box[2][0].toFixed(1)}° put the target at ${r.T[0].toFixed(1)}°`);
     if (Math.abs(r.E[0] - r.T[0]) > 0.6) fail(`${name}: the eyes did not reach the target after a tap (${r.E[0].toFixed(1)}° against ${r.T[0].toFixed(1)}°)`);
   }
-  await page.click('#jump'); await frame();
-  { const r = await page.evaluate(() => { const s = window.__saccade; s.st.play = false; s.sim.advance(0.6); return [s.sim.s.T[0], s.sim.s.E[0]]; }); if (Math.abs(Math.abs(r[0]) - 10) > 1e-6 || Math.abs(r[1] - r[0]) > 0.6) fail(`${name}: Make the target jump: target ${r[0]}°, eyes ${r[1]}°`); }
   await page.click('#auto'); await frame(); if (!(await page.evaluate(() => window.__saccade.st.auto))) fail(`${name}: the tick box did not set the target swinging`);
+  // Stop at the next saccade: time runs until one lands, then stops on it
+  { const n0 = await page.evaluate(() => window.__saccade.sim.s.events.length); await put('speed', 6); await page.click('#next');
+    const ok = await page.waitForFunction((n0) => !window.__saccade.st.play && window.__saccade.sim.s.events.length === n0 + 1, n0, { timeout: 60000 }).then(() => true, () => false);
+    if (!ok) fail(`${name}: Stop at the next saccade did not stop on the next saccade`);
+    const t = await page.evaluate(() => { const s = window.__saccade.sim.s; return s.t - s.events[s.events.length - 1].t1; }); if (t > 0.002) fail(`${name}: Stop at the next saccade stopped ${(t * 1000).toFixed(0)} ms after it landed`); }
   await page.click('#each summary'); await page.hover('#muscleList li[data-id="so"] button'); await frame();
   if ((await page.evaluate(() => window.__saccade.st.pick)) !== 'so') fail(`${name}: pointing at a muscle's name did not pick it`);
   await fits('at the end');

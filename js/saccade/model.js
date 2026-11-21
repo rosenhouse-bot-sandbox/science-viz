@@ -5,6 +5,7 @@
 // look down -z at a screen 600 mm away. Each eye's center is the origin of its own frame.
 
 export const STEP = 0.001;                       // the simulation steps 1 ms at a time
+export const INSET_DEG = 5;                     // the inset shows this much of what the right eye sees, side to side
 
 // ---- sizes ----
 export const EYE_R = 12;                         // radius of the eyeball (axial length about 24 mm)
@@ -26,9 +27,11 @@ export const CATCHUP = {
   still: 0.2,                                    // to a target that is standing still it takes about 200 ms [leigh]
   txe: [0.04, 0.18],                             // no jump while the eye will reach the target in 40 to 180 ms [trigger]
   peMin: 0.5,                                    // and none while the eye is within 0.5° of the target (model's choice)
-  sample: 0.09,                                  // the jump is sized from what the eye saw 90 ms before it starts [amplitude]
-  slipMax: 15,                                   // the slip that counts toward the size stops growing at 15°/s [amplitude]
-  lead: 0.2,                                     // the slip is multiplied by this time and added (model's choice, see facts.js)
+  sample: 0.09,                                  // the jump is sized from what the eye saw 90 ms before it starts [trigger]
+  pe: 0.9,                                       // measured size: 0.9 × the distance to the target [amplitude]
+  rs: 0.109,                                     // plus 0.109 s × the slip, for slip up to 15°/s [amplitude]
+  rsKnee: 15, rsFast: 0.09,                      // and 0.09 s × each °/s of slip above 15 [amplitude]
+  over: { accurate: 1, overshoot: 4 / 3 },       // the "overshoot" setting makes each jump 4/3 of that size (this page's example)
   onTarget: 0.4,                                 // a jump "lands on the target" within this distance: the drawn target's radius
 };
 
@@ -45,9 +48,10 @@ export const peakSpeed = (amp) => MJ_PEAK * Math.abs(amp) / duration(amp);
 export const NEURON = { r0: 100, k: 4, r: 0.95, max: 800 };
 
 // ---- the target ----
-export const TARGET = { amp: 12, still: 1, learn: 1 };  // swings 12° either side of center; "still" below 1°/s
-// A target that swings back and forth in a regular way is predictable. After about a second of it, pursuit no longer
-// lags by its latency: the brain moves the eye with the target, not 100 ms behind it [barnes].
+export const TARGET = { amp: 12, still: 1 };    // swings 12° either side of center; "still" below 1°/s
+// A target that swings back and forth in a regular way is predictable. After one full swing, pursuit no longer
+// lags by its latency: the brain moves the eye with the target, not 100 ms behind it [barnes]. One swing is this page's choice.
+export const learnTime = (speed, A = TARGET.amp) => 2 * Math.PI * A / Math.max(1, speed);
 
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const len2 = (x, y) => Math.hypot(x, y);
@@ -58,11 +62,11 @@ export const unswing = (x, A = TARGET.amp) => Math.asin(clamp(x / A, -1, 1));
 
 // ---- the simulation ----
 // cond: 'healthy' or 'poor'. speed: the target's speed in °/s. auto: the target moves by itself.
-export function makeSim({ cond = 'healthy', speed = 20, auto = true } = {}) {
+export function makeSim({ cond = 'healthy', sacc = 'accurate', speed = 20, auto = true } = {}) {
   const N = 4096;                                // 4 s of history, one sample per ms
   const B = { th: new Float32Array(N), tv: new Float32Array(N), eh: new Float32Array(N), ev: new Float32Array(N),
     vth: new Float32Array(N), vtv: new Float32Array(N), ph: new Float32Array(N), pv: new Float32Array(N), sac: new Uint8Array(N) };
-  const s = { t: 0, k: 0, cond, speed, auto, ph: 0, autoSince: 0, T: [0, 0], Tv: [0, 0], E: [0, 0], Ve: [0, 0], Vp: [0, 0], sac: null, pending: null,
+  const s = { t: 0, k: 0, cond, sacc, speed, auto, ph: 0, autoSince: 0, T: [0, 0], Tv: [0, 0], E: [0, 0], Ve: [0, 0], Vp: [0, 0], sac: null, pending: null,
     events: [], lastEnd: -1, from: null, to: null };
   const at = (j) => ((j % N) + N) % N;
   // the target's velocity, averaged over the 20 ms before step j (one sample is jittery when a finger drags it)
@@ -79,7 +83,7 @@ export function makeSim({ cond = 'healthy', speed = 20, auto = true } = {}) {
     s.Tv = jump ? [0, 0] : [(s.T[0] - T0[0]) / STEP, (s.T[1] - T0[1]) / STEP];
     B.th[i] = s.T[0]; B.tv[i] = s.T[1]; B.vth[i] = s.Tv[0]; B.vtv[i] = s.Tv[1];
     // pursuit: the eye's smooth speed heads for gain × the target's speed as it was a latency ago
-    const learned = s.auto && s.t - s.autoSince >= TARGET.learn;
+    const learned = s.auto && s.t - s.autoSince >= learnTime(s.speed);
     const g = PURSUIT.gain[s.cond], vt = tvel(k - (learned ? 0 : Math.round(PURSUIT.latency / STEP)));
     let dh = g * vt[0], dv = g * vt[1]; const m = len2(dh, dv); if (m > PURSUIT.max) { dh *= PURSUIT.max / m; dv *= PURSUIT.max / m; }
     s.Vp[0] += (dh - s.Vp[0]) * STEP / PURSUIT.tau; s.Vp[1] += (dv - s.Vp[1]) * STEP / PURSUIT.tau;
@@ -100,7 +104,7 @@ export function makeSim({ cond = 'healthy', speed = 20, auto = true } = {}) {
       if (d > CATCHUP.peMin) {
         const v = tvel(k), u = [pe[0] / d, pe[1] / d], rs = (v[0] - s.Vp[0]) * u[0] + (v[1] - s.Vp[1]) * u[1];
         const txe = rs >= 0 ? Infinity : d / -rs;                     // when the eye will cross the target, at today's speeds
-        if (txe < CATCHUP.txe[0] || txe > CATCHUP.txe[1]) s.pending = { at: s.t + (len2(v[0], v[1]) < TARGET.still ? CATCHUP.still : CATCHUP.latency), decided: s.t };
+        if (txe < CATCHUP.txe[0] || txe > CATCHUP.txe[1]) s.pending = { at: s.t + (len2(s.Tv[0], s.Tv[1]) < TARGET.still ? CATCHUP.still : CATCHUP.latency), decided: s.t };
       }
     }
   }
@@ -108,8 +112,10 @@ export function makeSim({ cond = 'healthy', speed = 20, auto = true } = {}) {
     s.pending = null;
     const j = s.k - Math.round(CATCHUP.sample / STEP), J = at(j), v = tvel(j);
     const pe = [B.th[J] - B.eh[J], B.tv[J] - B.ev[J]];
-    let rs = [v[0] - B.ph[J], v[1] - B.pv[J]]; const m = len2(rs[0], rs[1]); if (m > CATCHUP.slipMax) rs = rs.map((x) => x * CATCHUP.slipMax / m);
-    const A = [pe[0] + rs[0] * CATCHUP.lead, pe[1] + rs[1] * CATCHUP.lead], a = len2(A[0], A[1]);
+    const rs = [v[0] - B.ph[J], v[1] - B.pv[J]], m = len2(rs[0], rs[1]);
+    const w = m <= CATCHUP.rsKnee ? CATCHUP.rs : (CATCHUP.rs * CATCHUP.rsKnee + CATCHUP.rsFast * (m - CATCHUP.rsKnee)) / m;  // seconds
+    const f = CATCHUP.over[s.sacc];
+    const A = [f * (CATCHUP.pe * pe[0] + w * rs[0]), f * (CATCHUP.pe * pe[1] + w * rs[1])], a = len2(A[0], A[1]);
     if (a < 0.1) return;
     s.sac = { t0: s.t, D: duration(a), A, amp: a, E0: s.E.slice(), T0: s.T.slice(), Tv0: tvel(s.k) };
   }
@@ -144,6 +150,7 @@ export function makeSim({ cond = 'healthy', speed = 20, auto = true } = {}) {
     },
     set(o) {
       if (o.cond) s.cond = o.cond;
+      if (o.sacc) s.sacc = o.sacc;
       if (o.speed !== undefined && o.speed !== s.speed) { const x = s.T[0] / TARGET.amp, c = Math.cos(s.ph); s.speed = o.speed; if (s.auto) s.ph = Math.atan2(x, c); }
       if (o.auto !== undefined && o.auto !== s.auto) { s.auto = o.auto; if (s.auto) { s.ph = unswing(s.T[0]); s.autoSince = s.t; } s.to = null; }
     },
@@ -213,7 +220,7 @@ export const MUSCLES = [
   { id: 'so', name: 'Superior oblique', short: 'runs through a loop at the front of the orbit; turns the eye down and twists it', ins: unitAt([0.38, 0.55, 0.74]), org: [APEX[0] - 3, 6, APEX[2] - 2], troch: [-15, 14, -7], width: 8, tendon: 26 },
   { id: 'io', name: 'Inferior oblique', short: 'runs under the eye from the front; turns the eye up and twists it', ins: unitAt([0.6, -0.25, 0.76]), org: [-11, -14, -9], width: 9, tendon: 1.5 },
 ];
-export const OPTIC = { exit: unitAt([-0.25, -0.08, 0.96]), apex: APEX };
+export const OPTIC = { exit: unitAt([-0.25, 0.03, 0.96]), apex: APEX };
 
 // the straight run from a fixed point O to the eye, then the arc round the eye to the insertion I (both in the eye's
 // frame, I already turned with the eye). Returns the points along it and its length. r: radius it wraps at.
