@@ -46,6 +46,14 @@ for (const [name, width, height, motion] of [['desktop', 1280, 800, 'no-preferen
       await page.$eval('#' + id, (i, e) => { i.value = i[e]; i.dispatchEvent(new Event('input', { bubbles: true })); }, end);
       await page.waitForTimeout(40);
     }
+    if (m === 'search') {   // each try's picture can be pressed, and the one pressed is the one drawn
+      const n = await page.$$eval('#tries button', (bs) => bs.length);
+      for (let i = n - 1; i >= 0; i--) {
+        await page.click(`#tries button:nth-child(${i + 1})`); await page.waitForTimeout(30);
+        const on = await page.$$eval('#tries button', (bs) => bs.map((b) => b.getAttribute('aria-pressed') === 'true'));
+        if (!on[i] || on.filter(Boolean).length !== 1) fail(`${name}: pressing try ${i + 1} with ${g} did not draw it`);
+      }
+    }
     await fits(`with ${g}, ${m}`);
     if (await inked() < 20) fail(`${name}: nothing drawn with ${g}, ${m}`);
   }

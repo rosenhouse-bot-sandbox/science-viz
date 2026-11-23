@@ -119,7 +119,9 @@ export function gridSearch(g, o) {
     return { pos, boxes };
   };
   const straight = (pos) => E.map(([s, t]) => ({ pts: [pos[s], pos[t]], kind: 'line', turned: false, mark: false }));
-  const pos0 = inputGrid(N, o), start = picture(fileOrder()), end = picture(tries[best].st);
+  // The page may ask to see another try than the lowest; that one is drawn and routed instead.
+  const chosen = Number.isInteger(o.pick) && o.pick >= 0 && o.pick < tries.length ? o.pick : best;
+  const pos0 = inputGrid(N, o), start = picture(fileOrder()), end = picture(tries[chosen].st);
   const routes = routeOrtho(g, end.pos, end.boxes, o);
   const snaps = [
     { pos: pos0, edges: straight(pos0), boxes: [] },
@@ -128,5 +130,5 @@ export function gridSearch(g, o) {
     { pos: end.pos, edges: routes.map((pts) => ({ pts, kind: 'ortho', turned: false, mark: false })), boxes: end.boxes },
   ];
   for (const s of snaps) { s.bands = []; s.dots = false; s.bbox = bounds(s.pos, o, s.boxes); }
-  return { stages: SEARCH_STAGES, snaps, facts: { tries: tries.map((t) => Math.round(t.score)), best, firstScore: Math.round(score(fileOrder(), true)) }, thumbs: tries.map((t) => picture(t.st).pos) };
+  return { stages: SEARCH_STAGES, snaps, facts: { tries: tries.map((t) => Math.round(t.score)), best, chosen, firstScore: Math.round(score(fileOrder(), true)) }, thumbs: tries.map((t) => picture(t.st).pos) };
 }
