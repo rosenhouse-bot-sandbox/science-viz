@@ -77,11 +77,12 @@ input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;bac
 
 /* one small picture per try of the search; the kept one is outlined */
 .tries{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
-.tries figure{margin:0;display:grid;gap:2px;justify-items:center;padding:4px 2px 3px;border-radius:9px;border:1px solid var(--line);background:rgba(234,240,255,.04);min-width:0}
-.tries figure.best{border-color:var(--good);background:rgba(111,227,161,.08)}
+.tries button{margin:0;display:grid;gap:2px;justify-items:center;padding:4px 2px 3px;border-radius:9px;border:1px solid var(--line);background:rgba(234,240,255,.04);min-width:0;font:inherit;color:inherit;cursor:pointer}
+.tries button:hover{border-color:var(--ink2)}
+.tries button[aria-pressed="true"]{border-color:var(--good);background:rgba(111,227,161,.08)}
 .tries canvas{width:100%;aspect-ratio:4/3;display:block}
-.tries figcaption{font-family:var(--mono);font-size:0.6562rem;color:var(--ink2);font-variant-numeric:tabular-nums}
-.tries figure.best figcaption{color:var(--good)}
+.tries span{font-family:var(--mono);font-size:0.6562rem;color:var(--ink2);font-variant-numeric:tabular-nums}
+.tries button.best span{color:var(--good)}
 
 /* One bar at the foot of the panel, always in view. */
 .step{display:grid;grid-template-columns:1fr 1.6fr 1fr;gap:8px}
@@ -93,7 +94,7 @@ input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;bac
 .btn[aria-disabled="true"]{opacity:.35;cursor:default}
 
 .visually-hidden{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
-@media (forced-colors:active){.seg button[aria-pressed="true"]{outline:2px solid Highlight;outline-offset:-2px}.stages button[aria-current="step"] i{background:Highlight}.tries figure.best{outline:2px solid Highlight}}
+@media (forced-colors:active){.seg button[aria-pressed="true"]{outline:2px solid Highlight;outline-offset:-2px}.stages button[aria-current="step"] i{background:Highlight}.tries button[aria-pressed="true"]{outline:2px solid Highlight}}
 @media (pointer:coarse){.back{width:44px;height:44px}.btn,.seg button,select{min-block-size:44px}input[type=range]{height:44px}.stages button{min-block-size:44px}}
 
 @media (min-width:900px){

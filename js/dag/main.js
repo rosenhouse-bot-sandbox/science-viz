@@ -47,6 +47,7 @@ const REAL_NOTE = {
   layered: 'This is the real ELK: elkjs 0.12.1, loaded from jsDelivr. It gives the finished layout only, not the steps.',
   search: 'This is the real TALA, inside D2’s WebAssembly build (@d2lang/d2 0.1.34), loaded from jsDelivr. It gives the finished layout only.',
 };
+let pickTry = -1;   // the try the visitor chose from the strip, or -1 for the lowest score
 let failed = '', perSeed = 0, toEnd = false, job = 0, working = '', workT = 0, workTimer = 0, tookS = 0, wait = 0;
 let graph = null, layout = null, stage = 0, q = 0, mix = 1, from = null, shown = null;
 let playing = false, dwell = 0, hot = -1, dirty = false, raf = 0, lastT = 0, view = { s: 1, tx: 0, ty: 0 }, lastAspect = 0;
@@ -63,11 +64,13 @@ function readHash() {
     if (c.options) { if (c.options.some((o) => o[0] === v)) P[c.id] = v; }
     else if (/^\d+$/.test(v)) P[c.id] = Math.min(c.max, Math.max(c.min, Number(v)));
   }
+  pickTry = P.m === 'search' && /^\d{1,2}$/.test(h.get('try') || '') ? Number(h.get('try')) - 1 : -1;
   return /^\d$/.test(h.get('st') || '') ? Number(h.get('st')) : -1;
 }
 function writeHash() {
   const h = new URLSearchParams({ g: P.g, m: P.m, st: String(stage) });
   for (const c of CONTROLS) if (!c.m || c.m === P.m) h.set(c.id, String(P[c.id]));
+  if (P.m === 'search' && layout && layout.facts.chosen !== undefined && layout.facts.chosen !== layout.facts.best) h.set('try', String(layout.facts.chosen + 1));
   history.replaceState(null, '', '#' + h.toString());
 }
 
@@ -81,7 +84,7 @@ function compute(glide) {
   const a = area();
   lastAspect = Math.round(a.w / a.h * 8) / 8;
   const longest = Math.max(...graph.labels.map((s) => s.length));
-  const o = { ...P, sweeps: P.sw, nodeW: Math.max(44, longest * 8 + 22), nodeH: NODE_H, aspect: Math.min(3, Math.max(0.4, lastAspect)) };
+  const o = { ...P, pick: pickTry, sweeps: P.sw, nodeW: Math.max(44, longest * 8 + 22), nodeH: NODE_H, aspect: Math.min(3, Math.max(0.4, lastAspect)) };
   if (P.lab === 'on') {   // each edge's label, with the room its text takes
     ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.font = LABEL_FONT;
     o.labels = graph.edges.map(([s, t]) => { const text = graph.labels[s] + ' to ' + graph.labels[t]; return { text, w: Math.ceil(ctx.measureText(text).width) + 6, h: 14 }; });
@@ -137,6 +140,7 @@ async function ask(o) {
 const stats = (i) => layout.stats[i] || (layout.stats[i] = { ...measure(layout.snaps[i].edges), covered: labelsCovered(layout.snaps[i].labels, layout.snaps[i].pos, layout.o) });
 
 function setGraph(id, keepStage) {
+  if (graph && P.g !== id) pickTry = -1;
   P.g = id; $('graph').value = id; hot = -1; failed = '';
   const take = (g) => { if (P.g !== id) return; graph = g; shown = null; compute(false); if (!keepStage && P.eng === 'own') go(layout.snaps.length - 1, true); panel(); };
   const s = SAMPLES.find((x) => x.id === id);
@@ -224,7 +228,7 @@ function panel() {
   else meter(1, 'Edge length', Math.round(st.length / layout.o.nodeW));
   if (layout.real) meter(2, 'Seconds', working || stage === 0 ? '…' : tookS.toFixed(1));
   else if (P.m === 'layered') meter(2, 'Turned edges', stage >= 1 ? f.reversed : 0, stage >= 1 && f.reversed > 0);
-  else meter(2, 'Score', stage >= 2 ? f.tries[f.best] : f.firstScore);
+  else meter(2, 'Score', stage >= 2 ? f.tries[f.chosen] : f.firstScore);
   for (const c of CONTROLS) {
     const row = $('ctl-' + c.id);
     row.hidden = !!(c.m && c.m !== P.m) || !!(c.only && !c.only()) || !!(c.own && P.eng === 'real');
@@ -252,17 +256,25 @@ function pick() {
   }
   $('pick').textContent = t;
 }
-// One small picture per try of the search, with its score; the kept one is outlined.
+// One small picture per try of the search, with its score. The one drawn is outlined; the lowest
+// score is in green. Pressing a picture draws that try instead.
 function thumbs() {
   const box = $('tries'), on = P.m === 'search' && layout.thumbs;
   box.hidden = !on;
   if (!on) return;
   const T = layout.thumbs, f = layout.facts;
   while (box.children.length > T.length) box.lastChild.remove();
-  while (box.children.length < T.length) { const fig = document.createElement('figure'); fig.append(document.createElement('canvas'), document.createElement('figcaption')); box.append(fig); }
+  while (box.children.length < T.length) {
+    const fig = document.createElement('button'), i = box.children.length; fig.type = 'button';
+    fig.append(document.createElement('canvas'), document.createElement('span'));
+    fig.addEventListener('click', () => choose(i));
+    box.append(fig);
+  }
   T.forEach((pos, i) => {
     const fig = box.children[i], c = fig.firstChild, k = c.getContext('2d');
     fig.classList.toggle('best', i === f.best);
+    fig.setAttribute('aria-pressed', String(i === f.chosen));
+    fig.setAttribute('aria-label', 'Try ' + (i + 1) + ', score ' + f.tries[i] + (i === f.best ? ', the lowest' : ''));
     fig.lastChild.textContent = String(f.tries[i]);
     c.width = 120; c.height = 90;
     let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
@@ -275,6 +287,14 @@ function thumbs() {
     pos.forEach((p, v) => { k.fillStyle = colour(v); k.beginPath(); k.arc(X(p), Y(p), r, 0, 7); k.fill(); });
   });
 }
+function choose(i) {
+  if (!layout || !layout.facts || i === layout.facts.chosen) return;
+  setPlaying(false);
+  pickTry = i === layout.facts.best ? -1 : i;
+  compute(true);
+  if (stage < 2) go(layout.snaps.length - 1);
+  $('status').textContent = 'Showing try ' + (i + 1) + ', score ' + layout.facts.tries[i] + '.';
+}
 const colour = (v) => (graph.group[v] >= 0 ? GROUP[graph.group[v] % GROUP.length] : PLAIN);
 
 function buildControls() {
@@ -283,7 +303,7 @@ function buildControls() {
   sel.addEventListener('change', () => { setPlaying(false); setGraph(sel.value); });
   for (const b of $('method').children) b.addEventListener('click', () => {
     if (P.m === b.dataset.v) return;
-    setPlaying(false); failed = ''; P.m = b.dataset.v; P.eng = 'own'; stage = 99; compute(true); q = stage; panel();
+    setPlaying(false); failed = ''; pickTry = -1; P.m = b.dataset.v; P.eng = 'own'; stage = 99; compute(true); q = stage; panel();
   });
   const box = $('controls');
   for (const c of CONTROLS) {
@@ -291,7 +311,7 @@ function buildControls() {
     const lab = document.createElement('div'); lab.className = 'lab';
     const changed = () => {
       const s = typeof c.stage === 'object' ? c.stage[P.m] : c.stage;
-      setPlaying(false);
+      setPlaying(false); pickTry = -1;
       if (c.id === 'eng') toEnd = true;
       else if (P.eng === 'own' && stage < s) go(s);   // show the step this setting acts on
       dirty = true; panel(); kick();
