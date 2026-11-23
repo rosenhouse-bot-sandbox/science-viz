@@ -377,7 +377,7 @@ every push to `main`. In the repository settings, set Pages → Source to
 - `maple/index.html`, `css/maple.css`, `js/maple/*.js`: Japanese maple (see its section below).
 - `engine/index.html`, `css/engine.css`, `js/engine/*.js`: Engine (see its section below).
 - `shoulder/index.html`, `css/shoulder.css`, `js/shoulder/*.js`, `shoulder/data/`: Shoulder (see its section below).
-- `gears/index.html`, `css/gears.css`, `js/gears/*.js`: Gear cube and octahedron (see its section below).
+- `gears/index.html`, `css/gears.css`, `js/gears/*.js`: Gear fidget (see its section below).
 - `js/gamepad/`, `css/gamepad.css`: controller support, shared by every page (see Controller above).
 - `drafts/`: review boards from each design round.
 - `tests/vesicle/placement.mjs`: steps Vesicle fusion through every frame without a GPU and fails if a
@@ -993,7 +993,7 @@ this in "What the clinic's note may mean". It opens on poor pursuit with oversho
   any file under `js/saccade/` or `css/saccade.css`, run `node tests/saccade/stamp.mjs`.
   `node tests/saccade/shots.mjs <dir>` writes screenshots for a reviewer.
 
-## Gear cube and octahedron
+## Gear fidget
 
 A page at `gears/` that answers one question: can gears cover the faces of a regular octahedron, meshing and
 turning together like the brass fidget cube with gears on four of its six faces? Yes. The page shows the cube with

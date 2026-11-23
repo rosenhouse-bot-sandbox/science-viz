@@ -13,7 +13,7 @@ experience is and where its code lives.
 - Run it with `python3 -m http.server 8000` from the repository root. ES modules do not load from
   `file://`.
 - Each experience is self-contained: `v2/` (Rainbows), `vesicle/`, `optics/` (Optics workshop),
-  `dag/` (Graph layout), `maple/` (Japanese maple), `engine/` (Engine), `shoulder/` (Shoulder), `saccade/` (Overshoot saccades) and `gears/` (Gear cube and octahedron) have their own page, stylesheet (`css/`) and modules (`js/`). Do not change one while working on
+  `dag/` (Graph layout), `maple/` (Japanese maple), `engine/` (Engine), `shoulder/` (Shoulder), `saccade/` (Overshoot saccades) and `gears/` (Gear fidget) have their own page, stylesheet (`css/`) and modules (`js/`). Do not change one while working on
   another.
   The one thing they share is controller support, `js/gamepad/gamepad.js` and `css/gamepad.css`: each
   page gives it a short mapping onto its own camera, zoom and scale functions.
@@ -139,7 +139,7 @@ Before pushing:
   `node tests/saccade/page.mjs` (`--quick` for the desktop only). Numbers on screen come from `js/saccade/model.js`;
   anything that is the page's own choice, not a measured value, says so in `js/saccade/facts.js`. After changing any
   file under `js/saccade/` or `css/saccade.css`, run `node tests/saccade/stamp.mjs`.
-- For Gear cube and octahedron, run `node tests/gears/model.mjs` (no browser needed) after changing the solids, the tooth
+- For Gear fidget, run `node tests/gears/model.mjs` (no browser needed) after changing the solids, the tooth
   shape or how the gears are set: it turns every meshing pair and fails if a tooth enters another, if the teeth do
   not engage, if the cube with six gears can turn or another set cannot, or if the body touches a gear. Then
   `node tests/gears/page.mjs` (`--quick` for the desktop only). Numbers and sentences on screen come from
