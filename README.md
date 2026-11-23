@@ -341,6 +341,25 @@ ring by where the controls are on screen, and draws the picture. Each page hands
 `css/gamepad.css` is loaded only once a pad connects. `node tests/gamepad/run.mjs` drives every page
 with a simulated pad at 1280 × 800.
 
+## On an iPad, with no network
+
+The site can be added to the Home Screen and then opens with no network. In Safari, open the site,
+tap Share, then Add to Home Screen. Open it once from the icon while online. After that every page
+works offline.
+
+- `js/pwa.js`, loaded by every page, registers `sw.js`. The service worker keeps a copy of every file
+  of the site, and of the web fonts.
+- Online, every file still comes from the network, so a deploy shows at once. The copy is used only
+  when the network fails, or gives nothing for 4 seconds.
+- The list of files and the version are written into `sw.js` at deploy time by `.github/sw.mjs`.
+  A deploy that changes any file changes the version. The browser then fetches a complete new copy
+  before it drops the old one.
+- Graph layout's real ELK and TALA come from a CDN, and only when asked for. They work offline
+  only after one use online.
+- On `localhost` the service worker is not registered, so a local server always shows the files on
+  disk. `node tests/pwa/run.mjs` serves on 127.0.0.1, opens every page online and then with the
+  server stopped, and fails if a page loads a file that is not kept or does not work offline.
+
 ## Developing
 
 `CLAUDE.md` holds the working rules for this repository. The main one: before changing any HTML,
@@ -379,6 +398,8 @@ every push to `main`. In the repository settings, set Pages → Source to
 - `shoulder/index.html`, `css/shoulder.css`, `js/shoulder/*.js`, `shoulder/data/`: Shoulder (see its section below).
 - `gears/index.html`, `css/gears.css`, `js/gears/*.js`: Gear fidget (see its section below).
 - `js/gamepad/`, `css/gamepad.css`: controller support, shared by every page (see Controller above).
+- `manifest.webmanifest`, `sw.js`, `js/pwa.js`, `img/app/`, `.github/sw.mjs`: the Home Screen app
+  and its offline copy, shared by every page (see On an iPad above).
 - `drafts/`: review boards from each design round.
 - `tests/vesicle/placement.mjs`: steps Vesicle fusion through every frame without a GPU and fails if a
   protein is on the wrong side of a membrane or pushed into one.

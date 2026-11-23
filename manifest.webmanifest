@@ -1,0 +1,16 @@
+{
+  "name": "Science visualizations",
+  "short_name": "Science viz",
+  "description": "Interactive explorations of light, cells, engines, the body and gears.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#05070F",
+  "theme_color": "#05070F",
+  "icons": [
+    { "src": "img/app/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "img/app/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "img/app/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

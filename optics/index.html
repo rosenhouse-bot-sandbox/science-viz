@@ -3,12 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self'; base-uri 'none'; object-src 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self'; base-uri 'none'; object-src 'none'; manifest-src 'self'; form-action 'none'">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <title>Optics workshop</title>
 <meta name="description" content="An optical engineering game: build a burning glass, a pair of glasses, a camera lens and a solar tower on a bench where every ray is really traced.">
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#05070F">
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="apple-touch-icon" href="../img/app/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Science viz">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="text-scale" content="scale">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -65,5 +71,6 @@
 </main>
 
 <script type="module" src="../js/optics/main.js"></script>
+<script type="module" src="../js/pwa.js"></script>
 </body>
 </html>
