@@ -1,9 +1,9 @@
 // Gears on a cube and an octahedron: the controller. The state is which solid, how far the gears have turned, and
 // the camera. Dragging a gear turns it about its own axis, and every gear it meshes with follows.
-import { SHAPES, angles, dot, cross, norm, R_IN, R_OUT } from './model.js?v=4f4725d3';
-import { makeScene } from './scene.js?v=4f4725d3';
-import { ANSWER, KEY, HOW } from './facts.js?v=4f4725d3';
-import { perspective, lookAt, mul4 } from './gl.js?v=4f4725d3';
+import { SHAPES, angles, dot, cross, norm, R_IN, R_OUT } from './model.js?v=c2329040';
+import { makeScene } from './scene.js?v=c2329040';
+import { KEY } from './facts.js?v=c2329040';
+import { perspective, lookAt, mul4 } from './gl.js?v=c2329040';
 import { gamepad } from '../gamepad/gamepad.js';
 
 const $ = (id) => document.getElementById(id);
@@ -150,10 +150,7 @@ function measure() {
 function turnBy(a) { if (st.e > 0) return; st.t += a; touch(); }   // (not wrapped: the slider shows it modulo a turn)
 function orbit(dx, dy) { st.yaw = (st.yaw + dx) % TAU; st.pitch = clamp(st.pitch + dy, -1.35, 1.35); touch(); }
 function controls() {
-  const ans = $('answer');
-  ans.querySelector('h2').textContent = ANSWER.title; ans.querySelector('p').textContent = ANSWER.body;
   for (const s of SHOWN) { const b = document.createElement('button'); b.type = 'button'; b.textContent = s.name; b.dataset.id = s.id; b.addEventListener('click', () => choose(s.id)); $('shapes').append(b); }
-  for (const t of HOW) { const p = document.createElement('p'); p.className = 'fine'; p.textContent = t; $('how').append(p); }
   $('turn').addEventListener('input', (e) => { st.play = false; st.t = +e.target.value * D; touch(); });
   $('play').addEventListener('click', () => { st.play = !st.play; touch(); });
   $('apart').addEventListener('input', (e) => { st.e = clamp(+e.target.value, 0, 1); st.held = -1; touch(); });

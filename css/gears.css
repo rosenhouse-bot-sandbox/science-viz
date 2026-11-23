@@ -100,3 +100,4 @@ input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;bac
 #key:empty{display:block}
 @media (max-width:899px){.panel{height:auto;max-height:47%}}
 @media (min-width:900px){.panel{bottom:auto}}
+@media (min-width:900px){.title h1{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}.panel{top:calc(64px + env(safe-area-inset-top))}}

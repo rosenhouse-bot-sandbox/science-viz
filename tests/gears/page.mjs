@@ -51,7 +51,7 @@ for (const [name, width, height, motion] of quick ? SIZES.slice(0, 1) : SIZES) {
   page.on('console', (m) => { if (m.type() === 'error') fail(`${name}: console: ${m.text()}`); });
   page.on('pageerror', (e) => fail(`${name}: ${e.message}`));
   await page.goto(base + '?res=0.5');
-  await page.waitForFunction(() => window.__gears?.drawn.shape && document.querySelector('#answer h2').textContent, null, { timeout: 120000 });
+  await page.waitForFunction(() => window.__gears?.drawn.shape && document.querySelector('#shapes button'), null, { timeout: 120000 });
   if (!(await page.$eval('#oops', (e) => e.hidden))) { fail(`${name}: the picture could not start`); await page.close(); continue; }
   const frame = () => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
   const playing = () => page.evaluate(() => window.__gears.busy);
@@ -59,7 +59,7 @@ for (const [name, width, height, motion] of quick ? SIZES.slice(0, 1) : SIZES) {
   const settle = async () => { await page.evaluate(() => window.__gears.settle()); await frame(); };
   const put = async (id, v) => { await page.$eval('#' + id, (el, v) => { el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); }, v); await frame(); };
   const fits = async (when) => { const w = await page.evaluate(() => [document.documentElement.scrollWidth, document.getElementById('panel').scrollWidth, document.getElementById('panel').clientWidth]); if (w[0] > width || w[1] > w[2]) fail(`${name}: something is wider than the screen ${when} (${w.join(', ')})`); };
-  const IDS = ['answer', 'shapes', 'play', 'turn', 'turnV', 'apart', 'color', 'key'];
+  const IDS = ['shapes', 'play', 'turn', 'turnV', 'apart', 'color', 'key'];
   const boxes = () => page.evaluate((ids) => { const sc = document.getElementById('panel').scrollTop; return ids.map((id) => { const r = document.getElementById(id).getBoundingClientRect(); return [r.x, r.y + sc, r.width, r.height].map((v) => Math.round(v)).join(','); }).join(' | '); }, IDS);
   const moved = (a, b) => { const A = a.split(' | '), B = b.split(' | '); return IDS.filter((_, i) => A[i] !== B[i]).map((id) => `${id} ${A[IDS.indexOf(id)]} -> ${B[IDS.indexOf(id)]}`).join('; '); };
   const t = () => page.evaluate(() => window.__gears.st.t);
