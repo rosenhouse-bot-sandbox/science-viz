@@ -1,12 +1,12 @@
 // Shoulder: the controller. The state is the zoom (0 Shoulder, 1 Joint, 2 Tendon), a condition or an exercise,
 // and the arm's lift and turn. Everything drawn and every number shown comes from model.js.
-import { unpack, makeModel, MUSCLES, clamp, smooth, apply, turn as turnDir } from './model.js?v=96d17a8d';
-import { V } from './geom.js?v=96d17a8d';
-import { makeView, COL } from './view.js?v=96d17a8d';
-import { SRC, DOES, CONDITIONS, EXERCISES, MODEL_NOTE, MODEL_SRC } from './facts.js?v=96d17a8d';
+import { unpack, makeModel, MUSCLES, clamp, smooth, apply, turn as turnDir } from './model.js?v=5c9274c6';
+import { V } from './geom.js?v=5c9274c6';
+import { makeView, COL } from './view.js?v=5c9274c6';
+import { SRC, DOES, CONDITIONS, EXERCISES, MODEL_NOTE, MODEL_SRC } from './facts.js?v=5c9274c6';
 import { gamepad } from '../gamepad/gamepad.js';
 
-const STAMP = '96d17a8d';                                        // written by tests/shoulder/stamp.mjs: the data files' version
+const STAMP = '5c9274c6';                                        // written by tests/shoulder/stamp.mjs: the data files' version
 const $ = (id) => document.getElementById(id);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const cv = $('view'), gl = cv.getContext('webgl2', { antialias: true, alpha: false, stencil: true, powerPreference: 'high-performance' });
@@ -35,31 +35,36 @@ const RIDE_UP = 3;                                       // mm the ball rides up
 // ---- exercises: the pose through one round, p from 0 to 1 ----
 const wave = (p) => (1 - Math.cos(2 * Math.PI * p)) / 2;   // 0 at the start, 1 halfway, back to 0
 const EX_POSE = {
-  pendulum: (p) => ({ elev: 90 + 12 * Math.sin(2 * Math.PI * p), plane: 90, rot: 0, elbow: 0, swing: 12 * Math.cos(2 * Math.PI * p) }),
+  // one swing forward and back, one side to side, then one circle (growing and shrinking, so that one part runs into
+  // the next)
+  pendulum: (p) => {
+    const part = Math.min(2, Math.floor(p * 3)), u = p * 3 - part, th = 2 * Math.PI * u, A = 12;
+    if (part === 0) return { elev: 90 + A * Math.sin(th), plane: 90, rot: 0, elbow: 0 };
+    if (part === 1) return { elev: 90, plane: 90 + A * Math.sin(th), rot: 0, elbow: 0 };
+    const r = A * Math.sin(Math.PI * u); return { elev: 90 + r * Math.sin(th), plane: 90 + r * Math.cos(th), rot: 0, elbow: 0 };
+  },
   sleeper: (p) => ({ elev: 90, plane: 90, rot: -60 * wave(p), elbow: 90 }),
   external: (p) => ({ elev: 0, plane: 30, rot: 60 * wave(p), elbow: 90 }),
   internal: (p) => ({ elev: 0, plane: 30, rot: -60 * wave(p), elbow: 90 }),
   external90: (p) => ({ elev: 90, plane: 0, rot: 90 * wave(p), elbow: 90 }),
 };
-const EX_SECONDS = 6;
+// seconds for one round. The pendulum swings as a hanging arm does by its own weight: about 1.4 s a swing (a straight
+// arm about 0.75 m long, as a rod swinging from one end: 2π √(2L / 3g)), three swings.
+const EX_SECONDS = { pendulum: 3 * 2 * Math.PI * Math.sqrt(2 * 0.75 / (3 * 9.81)) };
+const exSeconds = () => EX_SECONDS[st.ex] || 6;
 
 function poseNow() {
   if (st.mode === 'exercise') {
-    const e = EX_POSE[st.ex](st.phase), P = { elev: e.elev, plane: e.plane, rot: e.rot, elbow: e.elbow };
-    if (e.swing !== undefined) P.plane = 90 + e.swing;     // the pendulum's circle: forward and back, and out and in
-    P.plane = clamp(P.plane, 0, 90); return P;
+    const e = EX_POSE[st.ex](st.phase); return { elev: e.elev, plane: e.plane, rot: e.rot, elbow: e.elbow };
   }
   return { elev: st.lift, plane: 30, rot: st.turn, elbow: 90, up: st.cond === 'full' ? RIDE_UP : 0 };
 }
-// the pose's plane is one of those the stored table has, or between two of them: the model interpolates only by lift,
-// so a plane between is drawn as the nearer of the two
-const snapPlane = (pl) => (pl < 15 ? 0 : pl < 60 ? 30 : 90);
 
 // ---- the scene ----
 let frame = null;
 const hidden = new Set();                                // for tests: parts left out of the picture
 function compute() {
-  const P = poseNow(); P.plane = snapPlane(P.plane);
+  const P = poseNow();
   const T = model.pose(P), cond = st.mode === 'explore' ? st.cond : 'healthy';
   const soft = [], len = {};
   const deltFade = 1 - smooth((st.z - 0.3) / 0.55);      // the deltoid fades away where it is as the view goes in
@@ -75,9 +80,10 @@ function compute() {
       hole: b.id === 'supra' && cond === 'full' ? [TEAR.from, 1.01, TEAR.s0, TEAR.s1] : null, capCol: col.map((x) => x * 0.85), capCol2: COL.tendonCut, alpha: delt ? deltFade : 1,
       warm: b.id === 'supra' ? warmFor(b, m, cond) : null });
   }
-  // the supraspinatus's cut turns from muscle to tendon along it, as its surface does
+  // the supraspinatus's cut turns from muscle to tendon along it, as its surface does: each point of the cut takes the
+  // color of the nearest point of the muscle's middle line, so that it follows the muscle however it bends
   const su = soft.find((x) => x.key === 'supra');
-  if (su) { const ctr = (t) => { const i = Math.round(t * (su.b.S - 1)); let m = [0, 0, 0]; for (let j = 0; j < 32; j++) m = V.add(m, [su.pos[3 * (i * 32 + j)], su.pos[3 * (i * 32 + j) + 1], su.pos[3 * (i * 32 + j) + 2]]); return V.mul(m, 1 / 32); }; su.capG = [ctr(0.74), ctr(0.88)]; }
+  if (su) { const ctr = (t) => { const i = Math.round(t * (su.b.S - 1)); let m = [0, 0, 0]; for (let j = 0; j < 32; j++) m = V.add(m, [su.pos[3 * (i * 32 + j)], su.pos[3 * (i * 32 + j) + 1], su.pos[3 * (i * 32 + j) + 2]]); return V.mul(m, 1 / 32); }; const pts = []; for (let i = 0; i < 17; i++) pts.push(...ctr(0.6 + 0.4 * i / 16)); su.capG = { pts: new Float32Array(pts), t: [0.6, 1, 0.74, 0.88] }; }
   // the cut goes through the tendon where it is now: through the middle of its slice at 0.86 of its length, square
   // to the tendon's width, so that whatever the pose it shows the tendon along its length
   let cut0 = CUT0 && { p: apply(T.scapula, CUT0.p), n: V.norm(turnDir(T.scapula, CUT0.n)) }, view0 = null;
@@ -93,7 +99,8 @@ function compute() {
     for (let i = 0; i < su.warm.length && pts.length < 144; i++) if (su.warm[i] > 0 && Math.abs(V.dot(c.n, [su.pos[3 * i], su.pos[3 * i + 1], su.pos[3 * i + 2]]) + c.d) < 2.5) pts.push(su.pos[3 * i], su.pos[3 * i + 1], su.pos[3 * i + 2]);
     su.capWarm = new Float32Array(pts);
   }
-  const bu = model.bursa(BURSA_MM[cond] ?? BURSA_MM.healthy), bm = model.muscle(bu, T);
+  // the bursa lies on the tendon as it is drawn at this pose (without the tendon, in a test, it moves by itself)
+  const bu = model.bursa(BURSA_MM[cond] ?? BURSA_MM.healthy), bm = su ? model.bursaOn(bu, su.pos) : model.muscle(bu, T);
   soft.push({ key: 'bursa' + (BURSA_MM[cond] ?? 0.8), b: bu, pos: bm.pos, col: COL.bursa, capCol: COL.bursaCut, glow: st.pick === 'bursa' ? 0.35 : 0,
     alpha: 0.55 + 0.45 * smooth((st.z - 1.2) / 0.5) });   // see-through until the cut, so that the tendon under it shows
   const g = model.gap(T);
@@ -289,7 +296,7 @@ function tick(now) {
   raf = 0;
   if (broken || !model) return;
   const dt = Math.min(0.05, last ? (now - last) / 1000 : 0.016); last = now;
-  if (st.play) { st.phase = (st.phase + dt / EX_SECONDS) % 1; dirty = true; }
+  if (st.play) { st.phase = (st.phase + dt / exSeconds()) % 1; dirty = true; }
   if (fly) {
     const d = fly.to - st.z, step = Math.sign(d) * Math.min(Math.abs(d), dt * (0.6 + 3 * Math.abs(d)));
     st.z += step; if (Math.abs(fly.to - st.z) < 0.002) { st.z = fly.to; fly = null; } dirty = true;
