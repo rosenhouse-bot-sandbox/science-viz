@@ -906,10 +906,15 @@ wrong with it, and what the common physical therapy exercises do to it.
   where that is needed to keep it off the ribs (worked out ahead, `shoulder/data/pose.json`). In this
   scan the acromion sits low, so the ball slides down in its socket just enough to keep 2 mm between the
   bones (up to about 5 mm); real shoulders slide less, and the page says so.
-- **Exercises**, from the AAOS conditioning program: pendulum, sleeper stretch, turning out and in with a
-  band, and turning out with the arm up. Each plays once round in 6 seconds, with Play and a slider; the
-  muscles the program says each one works are lit. The body is not drawn leaning or lying down: the arm
-  is posed as it is relative to the body, and the page says so.
+- **Exercises**: five from the AAOS conditioning program (pendulum, sleeper stretch, turning out and in with
+  a band, and turning out with the arm up), and nine more from a physical therapy program (windshield wiper,
+  the PNF D2 diagonal lift, bent-over raise, arm back with a band, high row, arms out on a ball, foam roll
+  for the upper back, plank and side plank). Each moving one plays once round, with Play and a slider; the
+  three held poses have neither. The muscles of this model that each one works are lit: for the AAOS ones
+  those the program lists, for the rest those a source says make one of its movements. Where the main
+  muscles are not in the model (the trunk in a plank, the latissimus dorsi in pulling the arm back), the
+  page says so. The poses are in `js/shoulder/exercises.js`. The body is not drawn leaning or lying down:
+  the arm is posed as it is relative to the body, and the page says so.
 - **Each muscle** (in the panel) gives each muscle's length against its length at rest, from the model.
   The numbers under the picture (the narrowest gap between arm bone and acromion, and the ball's slide)
   are from the model too. Every sentence on the page has a source, listed under it (`js/shoulder/facts.js`).

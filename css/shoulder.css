@@ -47,6 +47,8 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family
 .play:hover{background:rgba(234,240,255,.18)}
 .play .i-pause{display:none}.play[aria-pressed="true"] .i-play{display:none}.play[aria-pressed="true"] .i-pause{display:block}
 .prog{display:grid;gap:0;min-width:0}
+.prog .lab{display:grid;gap:2px}   /* the pose under the label, on two lines that never wrap, so nothing below it moves */
+.prog .lab b{text-align:left;white-space:pre}
 .ticks{position:relative;height:9px;margin:0 11px}
 .ticks i{position:absolute;top:0;width:1px;height:6px;background:rgba(234,240,255,.4)}
 .ticks i.on{background:var(--ink);height:9px}
@@ -117,6 +119,7 @@ input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;bac
 .each li.works b::before{content:'working · ';color:var(--gold);font-family:var(--body)}
 .each li.works.stretch b::before{content:'stretched · '}
 .each li.works.relaxed b::before{content:'targeted, relaxed · '}
+.each li.works.holds b::before{content:'holding · '}
 .credit a{color:var(--ink2)}
 .sources{border-top:1px solid var(--line);padding-top:10px}
 .sources summary{cursor:pointer;font-size:0.8125rem;color:var(--ink2)}

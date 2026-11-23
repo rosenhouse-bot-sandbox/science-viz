@@ -1,12 +1,13 @@
 // Shoulder: the controller. The state is the zoom (0 Shoulder, 1 Joint, 2 Tendon), a condition or an exercise,
 // and the arm's lift and turn. Everything drawn and every number shown comes from model.js.
-import { unpack, makeModel, MUSCLES, clamp, smooth, apply, turn as turnDir } from './model.js?v=27139963';
-import { V } from './geom.js?v=27139963';
-import { makeView, COL } from './view.js?v=27139963';
-import { SRC, DOES, CONDITIONS, EXERCISES, MODEL_NOTE, MODEL_SRC } from './facts.js?v=27139963';
+import { unpack, makeModel, MUSCLES, clamp, smooth, apply, turn as turnDir } from './model.js?v=d5629277';
+import { V } from './geom.js?v=d5629277';
+import { makeView, COL } from './view.js?v=d5629277';
+import { SRC, DOES, CONDITIONS, EXERCISES, MODEL_NOTE, MODEL_SRC } from './facts.js?v=d5629277';
+import { EX_POSE, EX_STILL, EX_SECONDS } from './exercises.js?v=d5629277';
 import { gamepad } from '../gamepad/gamepad.js';
 
-const STAMP = '27139963';                                        // written by tests/shoulder/stamp.mjs: the data files' version
+const STAMP = 'd5629277';                                        // written by tests/shoulder/stamp.mjs: the data files' version
 const $ = (id) => document.getElementById(id);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const cv = $('view'), gl = cv.getContext('webgl2', { antialias: true, alpha: false, stencil: true, powerPreference: 'high-performance' });
@@ -32,24 +33,6 @@ const SHAPE = {
 const BURSA_MM = { healthy: 0.8, bursitis: 3 };
 const RIDE_UP = 3;                                       // mm the ball rides up with a large full-thickness tear (drawn)
 
-// ---- exercises: the pose through one round, p from 0 to 1 ----
-const wave = (p) => (1 - Math.cos(2 * Math.PI * p)) / 2;   // 0 at the start, 1 halfway, back to 0
-const EX_POSE = {
-  // one swing forward and back, one side to side, then one circle. Each grows from rest and dies back to it, so that
-  // one part runs into the next without a change of direction at speed.
-  pendulum: (p) => {
-    const part = Math.min(2, Math.floor(p * 3)), u = p * 3 - part, th = 2 * Math.PI * u, r = 12 * Math.sin(Math.PI * u) ** 2;
-    const fwd = part === 1 ? 0 : r * Math.sin(th), side = part === 0 ? 0 : part === 1 ? r * Math.sin(th) : r * Math.cos(th) - r;
-    return { elev: 90 + fwd, plane: 90 + side, rot: 0, elbow: 0 };
-  },
-  sleeper: (p) => ({ elev: 90, plane: 90, rot: -60 * wave(p), elbow: 90 }),
-  external: (p) => ({ elev: 0, plane: 30, rot: 60 * wave(p), elbow: 90 }),
-  internal: (p) => ({ elev: 0, plane: 30, rot: -60 * wave(p), elbow: 90 }),
-  external90: (p) => ({ elev: 90, plane: 0, rot: 90 * wave(p), elbow: 90 }),
-};
-// seconds for one round. The pendulum swings as a hanging arm does by its own weight: about 1.4 s a swing (a straight
-// arm about 0.75 m long, as a rod swinging from one end: 2π √(2L / 3g)), three swings.
-const EX_SECONDS = { pendulum: 3 * 2 * Math.PI * Math.sqrt(2 * 0.75 / (3 * 9.81)) };
 const exSeconds = () => EX_SECONDS[st.ex] || 6;
 
 function poseNow() {
@@ -121,7 +104,10 @@ function aimAt(z) {
   const M = model.marks, T = frame.T, ball = apply(T.humerus, M.HC), up = turnDir(T.scapula, [0, 1, 0]);
   const blade = apply(T.scapula, [-115, 1265, 40]);
   const views = [
-    { at: V.mul(V.add(V.add(ball, blade), [0, -40, 0]), 0.5), size: 300, dir: V.norm([-1, 0.45, -0.4]) },
+    // in the exercises the view stands back far enough to show the elbow, wherever the arm is, so that the arm's
+    // movement can be seen; it does not follow the arm
+    st.mode === 'exercise' ? { at: V.mul(V.add(V.add(ball, blade), [0, -40, 0]), 0.5), size: 520, dir: V.norm([-1, 0.45, -0.4]) }
+      : { at: V.mul(V.add(V.add(ball, blade), [0, -40, 0]), 0.5), size: 300, dir: V.norm([-1, 0.45, -0.4]) },
     { at: V.add(V.mul(V.add(ball, blade), 0.5), [0, 10, 0]), size: 170, dir: V.norm([-1, 0.6, -0.45]) },
     { at: frame.view0 || V.add(ball, V.mul(up, 22)), size: 60, dir: cutN() },
   ];
@@ -239,7 +225,9 @@ function sync() {
   for (const b of $('conds').children) b.setAttribute('aria-pressed', String(b.dataset.id === st.cond));
   for (const b of $('exs').children) b.setAttribute('aria-pressed', String(b.dataset.id === st.ex));
   const ex = st.mode === 'exercise';
-  if (shown.mode !== st.mode) { shown.mode = st.mode; $('condCtl').hidden = ex; $('armCtl').hidden = ex; $('exCtl').hidden = !ex; $('exPlay').hidden = !ex; }
+  if (shown.mode !== st.mode) { shown.mode = st.mode; $('condCtl').hidden = ex; $('armCtl').hidden = ex; $('exCtl').hidden = !ex; }
+  const moves = ex && !EX_STILL.has(st.ex);              // a held pose has nothing to play
+  if (shown.moves !== moves) { shown.moves = moves; $('exPlay').hidden = !moves; }
   const P = frame.P;
   for (const [id, v, txt] of [['lift', st.lift, `${Math.round(st.lift)}°`], ['turn', st.turn, st.turn === 0 ? '0°' : `${Math.abs(Math.round(st.turn))}° ${st.turn > 0 ? 'out' : 'in'}`]]) {
     const el = $(id); if (+el.value !== v) el.value = v;
@@ -247,7 +235,7 @@ function sync() {
   }
   const ph = $('phase'); if (Math.abs(ph.value - st.phase * 1000) > 1) ph.value = Math.round(st.phase * 1000);
   ph.style.setProperty('--v', (st.phase * 100) + '%');
-  const ptxt = `lifted ${Math.round(P.elev)}°, turned ${Math.abs(Math.round(P.rot))}° ${P.rot >= 0 ? 'out' : 'in'}`; ph.setAttribute('aria-valuetext', ptxt); set('phaseV', ptxt);
+  const ptxt = `lifted ${Math.round(P.elev)}°${Math.round(P.elev) ? ' ' + toward(P.plane) : ''}\nturned ${Math.abs(Math.round(P.rot))}° ${P.rot >= 0 ? 'out' : 'in'}`; ph.setAttribute('aria-valuetext', ptxt.replace('\n', ', ')); set('phaseV', ptxt);
   const pl = st.play ? 'Pause' : 'Play the exercise';
   if (shown.play !== pl) { shown.play = pl; $('play').setAttribute('aria-pressed', String(st.play)); $('play').setAttribute('aria-label', pl); }
   const it = item(), key = st.mode + it.id;
@@ -262,11 +250,13 @@ function sync() {
     const id = li.dataset.id, l = frame.len[id];
     li.querySelector('b').textContent = l ? `${l >= 1 ? '+' : '−'}${Math.abs(Math.round((l - 1) * 100))}%` : '';
     const on = ex && it.works && it.works.includes(id);
-    li.classList.toggle('works', on); li.classList.toggle('stretch', on && it.role === 'stretch'); li.classList.toggle('relaxed', on && it.role === 'relaxed');
+    li.classList.toggle('works', on); li.classList.toggle('stretch', on && it.role === 'stretch'); li.classList.toggle('relaxed', on && it.role === 'relaxed'); li.classList.toggle('holds', on && it.role === 'holds');
     li.querySelector('button').setAttribute('aria-pressed', String(st.pick === id));
   }
   scaleBar(); writeHash();
 }
+// which way the arm is lifted, in words, for the readout
+const toward = (pl) => (pl > 120 ? 'across the body' : pl > 60 ? 'forward' : pl > 20 ? 'forward and out' : pl > -20 ? 'out to the side' : pl > -60 ? 'out and back' : 'back');
 let modelNote = '';
 function sources(it) {
   const ol = $('sources'); ol.replaceChildren();
@@ -321,8 +311,8 @@ function controls() {
   STOPS.forEach((s, i) => { const t = document.createElement('i'); t.style.left = (i / LAST * 100) + '%'; $('zticks').append(t); });
   const chip = (list, box, pick) => list.forEach((c) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = c.name; b.dataset.id = c.id; b.addEventListener('click', () => pick(c.id)); $(box).append(b); });
   chip(CONDITIONS, 'conds', (id) => { st.cond = id; touch(); });
-  chip(EXERCISES, 'exs', (id) => { st.ex = id; st.phase = 0; st.play = !reduced; touch(); });
-  for (const b of document.querySelectorAll('[data-mode]')) b.addEventListener('click', () => { st.mode = b.dataset.mode; st.play = st.mode === 'exercise' && !reduced; if (st.mode === 'explore') st.phase = 0; touch(); });
+  chip(EXERCISES, 'exs', (id) => { st.ex = id; st.phase = 0; st.play = !reduced && !EX_STILL.has(id); touch(); });
+  for (const b of document.querySelectorAll('[data-mode]')) b.addEventListener('click', () => { st.mode = b.dataset.mode; st.play = st.mode === 'exercise' && !reduced && !EX_STILL.has(st.ex); if (st.mode === 'explore') st.phase = 0; touch(); });
   $('zoom').addEventListener('input', (e) => { fly = null; st.z = clamp(+e.target.value, 0, LAST); touch(); });
   $('lift').addEventListener('input', (e) => { st.lift = +e.target.value; touch(); });
   $('turn').addEventListener('input', (e) => { st.turn = +e.target.value; touch(); });
