@@ -1,36 +1,24 @@
 // Gears on a cube and an octahedron: every sentence on the page. Numbers are put in from model.js.
-import { SHAPES, PRESSURE } from './model.js?v=5a90a021';
+import { SHAPES } from './model.js?v=5019cb4a';
 
 const by = Object.fromEntries(SHAPES.map((s) => [s.id, s]));
-const deg = (r, d = 1) => `${(r * 180 / Math.PI).toFixed(d).replace(/\.0$/, '')}°`;
-const cube = by.cube4, octa = by.octa;
+const deg = (r) => `${(r * 180 / Math.PI).toFixed(1).replace(/\.0$/, '')}°`;
 
-// the answer to the question, always on screen
 export const ANSWER = {
-  title: 'Can gears cover an octahedron? Yes.',
-  body: 'Two meshing gears turn opposite ways. So a loop of meshing gears can turn only if it has an even count. '
-    + 'Around each corner of an octahedron, four gears make a loop. Around each corner of a cube, three do. '
-    + 'So an octahedron can carry eight gears, and a cube only a ring of four.',
+  title: 'Can you do it with an octahedron? Yes.',
+  body: 'Gears that touch spin opposite ways. Go around any corner and you need an even number of gears, or two of them end up fighting. '
+    + 'An octahedron has four faces at every corner, so all eight gears turn. A cube has three. That\'s why the toy only has gears on four sides.',
 };
 
-// what each choice shows
 export const CAPTIONS = {
-  cube4: { title: 'Four gears on a cube',
-    body: `Each gear meshes with the two beside it. Their axes meet at the center at ${deg(cube.shaft)}. The top and bottom faces have no gears. Drag a gear to turn it.` },
-  cube6: { title: 'Six gears on a cube jam',
-    body: 'All six gears fit together, each tooth in a gap. But the top gear meshes with all four gears of the ring. Two of those turn one way and two turn the other way. The top gear cannot do both, so no gear can turn. The top and bottom gears are drawn in red.' },
-  octa: { title: 'Eight gears on an octahedron',
-    body: `Each gear meshes with three others. Their axes meet at the center at ${deg(octa.shaft)}, which is 180° less the angle between two faces. Drag a gear to turn it.` },
+  cube4: { title: 'The cube', body: `Four gears in a ring, like the toy. Neighbors meet at ${deg(by.cube4.shaft)}. Drag a gear to spin them all.` },
+  octa: { title: 'The octahedron', body: `Eight gears, each touching three others. Neighbors meet at ${deg(by.octa.shaft)}, so the teeth are cut to that angle. Drag a gear to spin them all.` },
 };
 
-export const KEY = 'Gold and blue gears turn opposite ways.';
-export const KEY_JAM = 'Gold and blue gears turn opposite ways. A red gear would have to turn both ways.';
+export const KEY = 'Gold and blue gears spin opposite ways.';
 
-// how the gears are made
 export const HOW = [
-  `These are bevel gears. Each gear's teeth lie on a cone with its tip at the center. Two meshing cones touch along the line from the center through the middle of the shared edge. So each cone's half-angle is half the angle between the axes: ${deg(cube.alpha)} on the cube and ${deg(octa.alpha)} on the octahedron.`,
-  `The teeth are cut the way gear-cutting machines cut bevel gears. Each gear is rolled against a flat crown gear whose teeth have straight sides at ${deg(PRESSURE)}. Two gears cut by the same crown gear mesh with each other at any angle between their axes.`,
-  'Each tooth is thinned by 5% of the tooth spacing so that meshing teeth do not bind. The page\'s tests turn every meshing pair and check that no tooth enters another.',
-  `At every contact, a tooth of one gear must face a gap of the other. Each gear is turned to the angle that does this, one gear after another. Around each corner of the octahedron, and around the cube's ring, the angles agree whatever the tooth count. Here the cube's gears have ${cube.profile.N} teeth and the octahedron's ${octa.profile.N}. With ${cube.profile.N}, all six gears on the cube can also sit together.`,
-  'The gray body in the middle stands for what holds the axles. It is drawn small enough to touch no gear.',
+  'Each gear is a bevel gear. Its teeth all point at the center of the shape, which lets it mesh with a neighbor at any angle.',
+  'The tooth shapes are worked out the way a gear-cutting machine makes them. A test spins every pair and checks that the teeth never hit each other.',
+  'Each gear turns on a ball bearing, held to a brass core by a flanged screw. A thick washer lifts it far enough that the teeth clear the core.',
 ];

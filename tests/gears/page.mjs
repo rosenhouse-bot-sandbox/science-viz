@@ -1,9 +1,9 @@
 // Opens the gears page at a desktop and a phone size (the phone with reduced motion), then:
 //  - checks that the gears turn by themselves, except with reduced motion;
-//  - presses each solid, and checks the caption, the numbers, and that the cube with six gears cannot turn;
+//  - presses each shape, and checks the caption;
 //  - drags a gear round its axis with the mouse: the gears turn, and the dragged one follows the pointer's way round;
 //  - drags off the gears: the view turns and the gears do not;
-//  - sweeps the Turn slider end to end, comparing each picture with the one before: a step that changes the
+//  - sweeps the Spin and Take apart sliders, comparing each picture with the one before: a step that changes the
 //    picture far more than the steps either side of it is reported as a jump;
 //  - plays for a while, and presses the color tick box, checking that no control moves or changes size.
 // Fails on a console error, a jump, a control that moved, a blank picture, or a panel wider than the screen.
@@ -44,7 +44,7 @@ const SNAP = () => { const c = document.getElementById('view'), s = window.__sna
 const diff = (a, b) => { let s = 0; for (let i = 0; i < a.length; i += 4) s += Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]); return s / (a.length / 4) / 3; };
 const spread = (a) => { let lo = 765, hi = 0; for (let i = 0; i < a.length; i += 4) { const v = a[i] + a[i + 1] + a[i + 2]; lo = Math.min(lo, v); hi = Math.max(hi, v); } return hi - lo; };
 const SIZES = [['desktop', 1280, 800, 'no-preference'], ['phone, reduced motion', 390, 844, 'reduce']];
-const WANT = { cube4: { shaft: '90°', per: '2', jam: false }, cube6: { shaft: '90°', per: '4', jam: true }, octa: { shaft: '70.5°', per: '3', jam: false } };
+const WANT = { cube4: { title: 'The cube', jam: false }, octa: { title: 'The octahedron', jam: false } };
 
 for (const [name, width, height, motion] of quick ? SIZES.slice(0, 1) : SIZES) {
   const page = await browser.newPage({ viewport: { width, height }, reducedMotion: motion, hasTouch: width < 600 });
@@ -59,7 +59,7 @@ for (const [name, width, height, motion] of quick ? SIZES.slice(0, 1) : SIZES) {
   const settle = async () => { await page.evaluate(() => window.__gears.settle()); await frame(); };
   const put = async (id, v) => { await page.$eval('#' + id, (el, v) => { el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); }, v); await frame(); };
   const fits = async (when) => { const w = await page.evaluate(() => [document.documentElement.scrollWidth, document.getElementById('panel').scrollWidth, document.getElementById('panel').clientWidth]); if (w[0] > width || w[1] > w[2]) fail(`${name}: something is wider than the screen ${when} (${w.join(', ')})`); };
-  const IDS = ['answer', 'shapes', 'cap', 'play', 'turn', 'turnV', 'color', 'key', 'shaftV', 'perV', 'coneV', 'teethV'];
+  const IDS = ['answer', 'shapes', 'cap', 'play', 'turn', 'turnV', 'apart', 'color', 'key'];
   const boxes = () => page.evaluate((ids) => { const sc = document.getElementById('panel').scrollTop; return ids.map((id) => { const r = document.getElementById(id).getBoundingClientRect(); return [r.x, r.y + sc, r.width, r.height].map((v) => Math.round(v)).join(','); }).join(' | '); }, IDS);
   const moved = (a, b) => { const A = a.split(' | '), B = b.split(' | '); return IDS.filter((_, i) => A[i] !== B[i]).map((id) => `${id} ${A[IDS.indexOf(id)]} -> ${B[IDS.indexOf(id)]}`).join('; '); };
   const t = () => page.evaluate(() => window.__gears.st.t);
@@ -67,11 +67,11 @@ for (const [name, width, height, motion] of quick ? SIZES.slice(0, 1) : SIZES) {
 
   // each solid
   const b0 = await boxes();
-  for (const id of ['cube4', 'cube6', 'octa']) {
+  for (const id of ['cube4', 'octa']) {
     await page.click(`#shapes button[data-id="${id}"]`); await frame();
-    const got = await page.evaluate(() => ({ s: window.__gears.st.shape, shaft: document.getElementById('shaftV').textContent, per: document.getElementById('perV').textContent, dis: document.getElementById('turn').disabled, cap: document.getElementById('capTitle').textContent }));
+    const got = await page.evaluate(() => ({ s: window.__gears.st.shape, dis: document.getElementById('turn').disabled, cap: document.getElementById('capTitle').textContent }));
     if (got.s !== id) fail(`${name}: the ${id} button chose ${got.s}`);
-    if (got.shaft !== WANT[id].shaft || got.per !== WANT[id].per) fail(`${name}: ${id} shows axes at ${got.shaft} and ${got.per} neighbors`);
+    if (got.cap !== WANT[id].title) fail(`${name}: ${id} has the caption ${got.cap}`);
     if (got.dis !== WANT[id].jam) fail(`${name}: ${id}: the Turn slider is ${got.dis ? '' : 'not '}disabled`);
     const s = await page.evaluate(SNAP); if (spread(s) < 60) fail(`${name}: the picture of ${id} is blank`);
     { const b = await boxes(); if (b !== b0) fail(`${name}: choosing ${id} moved a control: ${moved(b0, b)}`); }
@@ -104,19 +104,25 @@ for (const [name, width, height, motion] of quick ? SIZES.slice(0, 1) : SIZES) {
     await page.mouse.dblclick(corner[0], corner[1]); await settle();
   }
 
-  // the Turn slider, end to end: no jumps, nothing in the panel moves
-  for (const id of ['cube4', 'octa']) {
+  // the Spin slider and the Take apart slider: no jumps, nothing in the panel moves
+  for (const [id, ctl, to] of [['cube4', 'turn', 45], ['octa', 'turn', 45], ['cube4', 'apart', 1], ['octa', 'apart', 1]]) {
     await page.click(`#shapes button[data-id="${id}"]`); await settle();
-    const n = quick ? 24 : 60, ds = []; let prev = null; const bA = await boxes();
+    const n = quick ? 24 : 50, ds = []; let prev = null; const bA = await boxes();
     for (let k = 0; k <= n; k++) {
-      await put('turn', Math.round(k / n * 45)); const s = await page.evaluate(SNAP);
+      await put(ctl, ctl === 'turn' ? Math.round(k / n * to) : (k / n * to).toFixed(2)); const s = await page.evaluate(SNAP);
       if (prev) ds.push(diff(prev, s)); prev = s;
     }
     ds.forEach((d, k) => {
       const near = ds.filter((_, j) => j !== k && Math.abs(j - k) <= 3).sort((a, b) => a - b), med = near[near.length >> 1] ?? 0;
-      if (d > Math.max(4, 3 * med)) fail(`${name}: ${id}: a jump turning the gears, at step ${k + 1} of ${n} (${d.toFixed(1)} against ${med.toFixed(1)} either side)`);
+      if (d > Math.max(4, 3 * med)) fail(`${name}: ${id}: a jump moving ${ctl}, at step ${k + 1} of ${n} (${d.toFixed(1)} against ${med.toFixed(1)} either side)`);
     });
-    { const b = await boxes(); if (b !== bA) fail(`${name}: ${id}: a control moved while turning: ${moved(bA, b)}`); }
+    { const b = await boxes(); if (b !== bA) fail(`${name}: ${id}: a control moved while moving ${ctl}: ${moved(bA, b)}`); }
+    if (ctl === 'apart') {
+      // taken apart, the gears do not mesh, so they cannot be turned
+      if (!(await page.$eval('#turn', (e) => e.disabled))) fail(`${name}: ${id}: the Spin slider still works with the parts apart`);
+      await put('apart', 0);
+      if (await page.$eval('#turn', (e) => e.disabled)) fail(`${name}: ${id}: the Spin slider stays off once put back together`);
+    }
   }
 
   // Play turns the gears, Pause stops them, and nothing moves meanwhile
@@ -124,7 +130,7 @@ for (const [name, width, height, motion] of quick ? SIZES.slice(0, 1) : SIZES) {
     await page.click('#play'); if (!(await playing())) fail(`${name}: the Play button did not play`);
     await page.waitForTimeout(1500); if (!((await t()) !== t0)) fail(`${name}: the gears did not turn while playing`);
     await page.click('#play'); await frame(); if (await playing()) fail(`${name}: Play did not pause`);
-    await page.click('#color'); await frame(); if (await page.evaluate(() => window.__gears.st.color)) fail(`${name}: the tick box did not turn the colors off`);
+    await page.click('#color'); await frame(); if (!(await page.evaluate(() => window.__gears.st.color))) fail(`${name}: the tick box did not turn the colors on`);
     await page.click('#color'); await frame();
     const b = await boxes(); if (b !== bA) fail(`${name}: a control moved while playing or coloring: ${moved(bA, b)}`); }
   await fits('at the end');

@@ -997,34 +997,37 @@ this in "What the clinic's note may mean". It opens on poor pursuit with oversho
 
 A page at `gears/` that answers one question: can gears cover the faces of a regular octahedron, meshing and
 turning together like the brass fidget cube with gears on four of its six faces? Yes. The page shows the cube with
-four gears, the cube with six, and the octahedron with eight, in 3D. Drag a gear and the rest turn with it.
+four gears and the octahedron with eight, in 3D, built from the same kinds of parts as the toy. Drag a gear and
+the rest turn with it. A Take apart slider spreads the parts out along each gear's axis.
 
-- **The answer, on screen**: two meshing gears turn opposite ways. So a loop of meshing gears can turn only if it
-  has an even count. Around each corner of an octahedron, four gears make a loop. Around each corner of a cube,
-  three do. So an octahedron can carry eight gears, and a cube only a ring of four. With a fifth or sixth gear on
-  the cube, the top gear meshes with all four ring gears, two turning each way, and nothing can turn.
-- **The gears** (`js/gears/model.js`): each is a bevel gear with its axis from the solid's center through the
-  middle of its face. Two meshing gears' axes meet at the center, at 90° on the cube and 70.53° on the octahedron
-  (180° less the 109.47° angle between two faces). Their pitch cones touch along the line through the middle of the
-  shared edge, so each cone's half-angle is half that: 45° and 35.26°. All gears are the same size, so all turn at
-  the same speed.
+- **The answer, on screen**: gears that touch spin opposite ways, so a loop of meshing gears turns only if its
+  count is even. Four faces meet at each corner of an octahedron, three at each corner of a cube. So an
+  octahedron carries eight gears, and a cube only a ring of four. The page no longer shows the cube with six
+  gears (Gabe's choice); `tests/gears/model.mjs` still checks that it jams.
+- **The gears** (`js/gears/model.js`): bevel gears with their axes from the solid's center through the middle of
+  each face. Neighbors' axes meet at 90° on the cube and 70.53° on the octahedron (180° less the 109.47° angle
+  between two faces). Their pitch cones touch along the line through the middle of the shared edge, so each cone's
+  half-angle is half that: 45° and 35.26°. All gears are the same size, so all turn at the same speed.
 - **The teeth** are cut as bevel-gear machines cut them: the blank is rolled against a flat crown gear with straight
-  20° tooth sides, which is computed when the page loads. Two gears cut by the same crown gear mesh at any angle
-  between their axes. Each tooth is thinned by 5% of the tooth spacing. The cube's gears have 18 teeth and the
-  octahedron's 15 (15 is enough to avoid undercut at that cone angle). With 18, all six gears on the cube also sit
-  together at rest with every tooth in a gap, so the jam is drawn without teeth passing through each other (the test
-  checks this; with the ring set as here, tooth counts of 10, 14, 18 and 22 allow it, and the others from 8 to 24 do not). Each gear is turned so that a tooth faces a
-  gap at each of its contacts, gear by gear outward from the first. Around every corner these turns agree for any
-  tooth count; the test tries counts from 9 to 23.
-- **What is drawn**: the gears, their polished caps and a gray body in the middle that stands for what holds the
-  axles. The body is drawn small enough to touch no gear. Gold and blue gears turn opposite ways; on the cube with
-  six gears, red gears would have to turn both ways. The colors are a tick box.
-- **Controls**: the solid, Play (off with reduced motion), a Turn slider, and the color tick box. Dragging off the
-  gears, or the arrow keys on the picture, turns the view; a double click puts it back. A controller's right stick
-  turns the view, the triggers turn the gears, and the bumpers change the solid.
+  20° tooth sides, computed when the page loads. Two gears cut by the same crown gear mesh at any angle between
+  their axes. Each tooth is thinned by 5% of the tooth spacing. The cube's gears have 14 teeth and the
+  octahedron's 13. Each gear is turned so that a tooth faces a gap at each of its contacts. Around every corner
+  these turns agree for any tooth count; the test tries counts from 9 to 23. With 14 teeth (any count of 2 more
+  than a multiple of 4, with the ring set as here) all six gears on a cube would also sit together at rest.
+- **The parts** (`parts()` in model.js, drawn by `js/gears/scene.js`), as in the toy: a brass core, and on each face
+  a washer, a gear with a ball bearing pressed into it, and a flanged screw through the bearing into the core. The
+  teeth's inner ends reach below the gear's flat back, so the core's faces sit lower and the washer is thick; the
+  core's edges are cut back. The test checks that the core touches no gear. The toy's own gears are flat; these are
+  bevel gears so that they also mesh at 70.5°. The bearings' balls go round at 0.62 of the gear's speed, as balls
+  do with the outer ring turning and the inner ring held. Taking the parts apart is a slider the visitor moves; it
+  never plays by itself, and the gears cannot be turned while the parts are apart.
+- **Controls**: the shape, Play (off with reduced motion), a Spin slider, Take apart, and a tick box that colors
+  the gears by the way they spin (gold and blue). Dragging off the gears, or the arrow keys on the picture, turns
+  the view; a double click puts it back. A controller's right stick turns the view, the triggers turn the gears,
+  and the bumpers change the shape.
 - **Tests**: `node tests/gears/model.mjs` (no browser) checks which sets can turn against an independent search for
   a loop with an odd count, turns every meshing pair through two tooth spacings and fails if a tooth enters
-  another, checks that a gear held still lets its neighbor turn no more than the backlash, and checks the body and
+  another, checks that a gear held still lets its neighbor turn no more than the backlash, and checks the core and
   the gears that do not mesh. `node tests/gears/page.mjs` (`--quick` for the desktop only) presses every control at
-  a desktop and a phone size and drags a gear. After changing any file under `js/gears/` or `css/gears.css`, run
-  `node tests/gears/stamp.mjs`.
+  a desktop and a phone size, drags a gear, and sweeps Spin and Take apart. After changing any file under
+  `js/gears/` or `css/gears.css`, run `node tests/gears/stamp.mjs`.

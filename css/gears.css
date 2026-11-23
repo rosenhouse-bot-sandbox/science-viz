@@ -72,7 +72,7 @@ input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;bac
   .panel{left:calc(16px + env(safe-area-inset-left));right:auto;top:calc(64px + env(safe-area-inset-top));bottom:max(16px,env(safe-area-inset-bottom));width:372px;height:auto;padding:18px 18px 16px;border:1px solid var(--line);border-radius:18px;gap:14px}
   .title{display:grid;gap:2px}
   .title h1,.title span{position:static;width:auto;height:auto;margin:0;overflow:visible;clip-path:none;white-space:normal}
-  .cap{min-height:8.2em}
+
   .cap h2{font-size:1.375rem}
   .cap p{font-size:0.9062rem}
 }
@@ -83,10 +83,6 @@ input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;bac
 @media (prefers-reduced-motion:reduce){.cap{transition:none}}
 
 .loading{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);margin:0;color:var(--ink3);font-size:0.9rem;z-index:1}
-.nums{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0;padding-top:10px;border-top:1px solid var(--line)}
-.nums div{display:flex;flex-direction:column;gap:2px}
-.nums dd{margin:0;font-family:var(--mono);font-weight:500;font-size:0.9375rem;color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap}
-.nums dt{font-size:0.7188rem;color:var(--ink3);line-height:1.25;order:2}
 .credit a{color:var(--ink2)}
 .sources{border-top:1px solid var(--line);padding-top:10px}
 .sources summary{cursor:pointer;font-size:0.8125rem;color:var(--ink2)}
@@ -94,7 +90,6 @@ input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;bac
 .sources a{color:var(--ink2)}
 .sources > div{display:grid;gap:6px;margin-top:6px}
 .sources .fine{color:var(--ink2)}
-.nums{grid-template-columns:1fr 1fr}
 
 #view{cursor:grab}
 #view.over{cursor:grab}
@@ -103,10 +98,10 @@ input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;bac
 .answer h2{font-family:var(--display);font-weight:600;font-size:1.125rem;letter-spacing:-.015em;line-height:1.2;margin:0;color:var(--gold)}
 .answer p{margin:0;font-size:0.875rem;line-height:1.42;color:var(--ink)}
 .cap h3{font-family:var(--display);font-weight:600;font-size:1.0625rem;letter-spacing:-.01em;line-height:1.2;margin:0}
-.shapes{grid-auto-flow:row;grid-template-columns:repeat(3,1fr)}
+.shapes{grid-auto-flow:row;grid-template-columns:repeat(2,1fr)}
 .shapes button{padding:8px 4px;line-height:1.2}
 .play:disabled,input[type=range]:disabled{opacity:.4;cursor:not-allowed}
-.nums dd{font-size:1.0625rem}
 @media (min-width:900px){.answer h2{font-size:1.25rem}.answer p{font-size:0.9062rem}}
 .check{justify-content:flex-start}
 #turnV{min-width:7ch}
+#key:empty{display:block}

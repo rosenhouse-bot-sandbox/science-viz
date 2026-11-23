@@ -1,9 +1,9 @@
 // Gears on a cube and an octahedron: the controller. The state is which solid, how far the gears have turned, and
 // the camera. Dragging a gear turns it about its own axis, and every gear it meshes with follows.
-import { SHAPES, angles, dot, cross, norm, R_IN, R_OUT } from './model.js?v=5a90a021';
-import { makeScene } from './scene.js?v=5a90a021';
-import { ANSWER, CAPTIONS, KEY, KEY_JAM, HOW } from './facts.js?v=5a90a021';
-import { perspective, lookAt, mul4 } from './gl.js?v=5a90a021';
+import { SHAPES, angles, dot, cross, norm, R_IN, R_OUT } from './model.js?v=5019cb4a';
+import { makeScene } from './scene.js?v=5019cb4a';
+import { ANSWER, CAPTIONS, KEY, HOW } from './facts.js?v=5019cb4a';
+import { perspective, lookAt, mul4 } from './gl.js?v=5019cb4a';
 import { gamepad } from '../gamepad/gamepad.js';
 
 const $ = (id) => document.getElementById(id);
@@ -12,21 +12,23 @@ const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const TAU = 2 * Math.PI, D = Math.PI / 180;
 const cv = $('view'), gl = cv.getContext('webgl2', { antialias: true, alpha: false, powerPreference: 'high-performance' });
 const by = Object.fromEntries(SHAPES.map((s) => [s.id, s]));
+const SHOWN = [by.cube4, by.octa];                     // (the cube with six gears jams; the tests still check that)
+const CAGE = (1 + 0.064 / 0.276) / 2;                  // a bearing's balls go round at this share of the gear's speed (outer ring turning, inner held)
 const SPEED = 24 * D;                                  // how fast Play turns the gears, radians a second
 const VIEW = { yaw: 0.35, pitch: 0.85 };                // the camera at the start, and after a double click
-const st = { shape: 'octa', t: 0, play: !reduced, color: true, yaw: VIEW.yaw, pitch: VIEW.pitch, hi: -1, held: -1 };
+const st = { shape: 'octa', t: 0, e: 0, play: !reduced, color: false, yaw: VIEW.yaw, pitch: VIEW.pitch, hi: -1, held: -1 };
 const free = { x: 0, y: 0, w: 1, h: 1 }, view = { W: 1, H: 1, dpr: 1 };
 const FOV = 26 * D, DIST = 6.2;
-const GOLD = [1.0, 0.76, 0.36], BLUE = [0.5, 0.66, 0.95], RED = [0.95, 0.32, 0.26], BRASS = [1.0, 0.8, 0.45];
+const GOLD = [1.0, 0.72, 0.3], BLUE = [0.5, 0.64, 0.92], BRASS = [0.95, 0.74, 0.4];
 let scene = null, broken = false, dirty = true, raf = 0, last = 0, cam = null;
 const drawn = { t: 0, shape: '' };                     // what the last picture showed (for the tests)
 
 const shape = () => by[st.shape];
 // ---- the camera: it circles the solid's center ----
 function camera() {
-  const p = st.pitch, y = st.yaw, pos = [DIST * Math.cos(p) * Math.sin(y), DIST * Math.sin(p), DIST * Math.cos(p) * Math.cos(y)];
+  const p = st.pitch, y = st.yaw, R = DIST * (1 + 0.85 * st.e), pos = [R * Math.cos(p) * Math.sin(y), R * Math.sin(p), R * Math.cos(p) * Math.cos(y)];
   const fov = 2 * Math.atan(Math.tan(FOV / 2) * view.H / free.h);
-  const vp = mul4(perspective(fov, view.W / view.H, 0.5, 30), lookAt(pos, [0, 0, 0], [0, 1, 0]));
+  const vp = mul4(perspective(fov, view.W / view.H, 0.5, 40), lookAt(pos, [0, 0, 0], [0, 1, 0]));
   // the picture is centered in the part of the screen the panel leaves free
   const ox = (free.x + free.w / 2) / view.W * 2 - 1, oy = 1 - (free.y + free.h / 2) / view.H * 2;
   for (let c = 0; c < 4; c++) { vp[c * 4] += ox * vp[c * 4 + 3]; vp[c * 4 + 1] += oy * vp[c * 4 + 3]; }
@@ -73,8 +75,9 @@ function angleAbout(i, X, Y) {
 
 function frameOf() {
   const sh = shape(), ang = angles(sh, st.t);
-  const tint = sh.sign.map((s) => (!st.color ? BRASS : s > 0 ? GOLD : s < 0 ? BLUE : RED));
-  return { sh, ang, tint, hi: st.held >= 0 ? st.held : st.hi };
+  const tint = sh.sign.map((s) => (!st.color ? BRASS : s > 0 ? GOLD : BLUE));
+  const cage = ang.map((a, i) => (a - sh.phase[i]) * CAGE);
+  return { sh, ang, tint, cage, e: st.e, hi: st.held >= 0 ? st.held : st.hi };
 }
 function draw() {
   cam = camera();
@@ -91,17 +94,17 @@ function sync() {
   const tv = $('turn'), td = Math.round(((st.t / D) % 360 + 360) % 360) % 360;
   if (+tv.value !== td) tv.value = td;
   tv.style.setProperty('--v', (td / 359 * 100) + '%'); tv.setAttribute('aria-valuetext', `${td} degrees`);
-  set('turnV', sh.jammed ? 'jammed' : `${td}°`);
-  tv.disabled = sh.jammed; $('play').disabled = sh.jammed;
-  const pl = st.play && !sh.jammed ? 'Pause' : 'Play';
+  const apart = st.e > 0;
+  set('turnV', apart ? 'apart' : `${td}°`);
+  tv.disabled = apart; $('play').disabled = apart;
+  const ev = $('apart'), ep = Math.round(st.e * 100);
+  if (Math.abs(+ev.value - st.e) > 1e-6) ev.value = st.e;
+  ev.style.setProperty('--v', ep + '%'); ev.setAttribute('aria-valuetext', ep ? `${ep}% apart` : 'put together');
+  const pl = st.play && !apart ? 'Pause' : 'Play';
   if (shown.play !== pl) { shown.play = pl; $('play').setAttribute('aria-pressed', String(pl === 'Pause')); $('play').setAttribute('aria-label', pl); }
   $('color').checked = st.color;
-  set('key', st.color ? (sh.jammed ? KEY_JAM : KEY) : '');
+  set('key', st.color ? KEY : '');
   if (shown.cap !== st.shape) { shown.cap = st.shape; $('capTitle').textContent = CAPTIONS[st.shape].title; $('capBody').textContent = CAPTIONS[st.shape].body; }
-  set('shaftV', deg(sh.shaft));
-  set('perV', String(sh.per[0]));
-  set('teethV', String(sh.profile.N));
-  set('coneV', deg(sh.alpha));
   writeHash();
 }
 let hashTimer = 0;
@@ -111,7 +114,7 @@ function writeHash() {
 }
 function readHash() {
   const q = new URLSearchParams(location.hash.slice(1));
-  if (by[q.get('s')]) st.shape = q.get('s');
+  if (SHOWN.some((x) => x.id === q.get('s'))) st.shape = q.get('s');
   if (q.has('c')) st.color = q.get('c') !== '0';
 }
 
@@ -122,7 +125,7 @@ function tick(now) {
   raf = 0;
   if (broken || !scene) return;
   const dt = Math.min(0.05, last ? (now - last) / 1000 : 0.016); last = now;
-  const moving = st.play && !shape().jammed && st.held < 0;
+  const moving = st.play && st.e === 0 && st.held < 0;
   if (moving) { st.t += SPEED * dt; dirty = true; }
   if (dirty) { dirty = false; try { draw(); sync(); drawn.t = st.t; drawn.shape = st.shape; } catch (e) { oops(e); } }
   if (moving) kick(); else last = 0;
@@ -137,7 +140,7 @@ function capHeight() {
   cap.removeAttribute('aria-live'); cap.style.minHeight = ''; let m = 0;
   for (const c of Object.values(CAPTIONS)) { h2.textContent = c.title; p.textContent = c.body; m = Math.max(m, cap.getBoundingClientRect().height); }
   [h2.textContent, p.textContent] = keep; cap.style.minHeight = Math.ceil(m) + 'px'; cap.setAttribute('aria-live', 'polite');
-  const key = $('key'), k0 = key.textContent; key.style.minHeight = ''; key.textContent = KEY_JAM; const kh = key.getBoundingClientRect().height; key.textContent = k0; key.style.minHeight = Math.ceil(kh) + 'px';
+  const key = $('key'), k0 = key.textContent; key.style.minHeight = ''; key.textContent = KEY; const kh = key.getBoundingClientRect().height; key.textContent = k0; key.style.minHeight = Math.ceil(kh) + 'px';
 }
 function measure() {
   capHeight();
@@ -149,15 +152,16 @@ function measure() {
 }
 
 // ---- controls ----
-function turnBy(a) { if (shape().jammed) return; st.t += a; touch(); }   // (not wrapped: the slider shows it modulo a turn)
+function turnBy(a) { if (st.e > 0) return; st.t += a; touch(); }   // (not wrapped: the slider shows it modulo a turn)
 function orbit(dx, dy) { st.yaw = (st.yaw + dx) % TAU; st.pitch = clamp(st.pitch + dy, -1.35, 1.35); touch(); }
 function controls() {
   const ans = $('answer');
   ans.querySelector('h2').textContent = ANSWER.title; ans.querySelector('p').textContent = ANSWER.body;
-  for (const s of SHAPES) { const b = document.createElement('button'); b.type = 'button'; b.textContent = s.name; b.dataset.id = s.id; b.addEventListener('click', () => choose(s.id)); $('shapes').append(b); }
+  for (const s of SHOWN) { const b = document.createElement('button'); b.type = 'button'; b.textContent = s.name; b.dataset.id = s.id; b.addEventListener('click', () => choose(s.id)); $('shapes').append(b); }
   for (const t of HOW) { const p = document.createElement('p'); p.className = 'fine'; p.textContent = t; $('how').append(p); }
   $('turn').addEventListener('input', (e) => { st.play = false; st.t = +e.target.value * D; touch(); });
   $('play').addEventListener('click', () => { st.play = !st.play; touch(); });
+  $('apart').addEventListener('input', (e) => { st.e = clamp(+e.target.value, 0, 1); st.held = -1; touch(); });
   $('color').addEventListener('change', (e) => { st.color = e.target.checked; touch(); });
   // a finger or mouse on a gear turns it; anywhere else it turns the view
   let drag = null;
@@ -165,7 +169,7 @@ function controls() {
     if (drag) return;
     cv.setPointerCapture?.(e.pointerId);
     const i = cam ? pick(e.clientX, e.clientY) : -1;
-    if (i >= 0 && !shape().jammed) { st.held = i; drag = { id: e.pointerId, gear: i, a: angleAbout(i, e.clientX, e.clientY) }; cv.classList.add('turning'); }
+    if (i >= 0 && st.e === 0) { st.held = i; drag = { id: e.pointerId, gear: i, a: angleAbout(i, e.clientX, e.clientY) }; cv.classList.add('turning'); }
     else drag = { id: e.pointerId, gear: -1, x: e.clientX, y: e.clientY };
     touch();
   });
@@ -178,7 +182,7 @@ function controls() {
       } else { orbit(-(e.clientX - drag.x) * 0.006, (e.clientY - drag.y) * 0.006); drag.x = e.clientX; drag.y = e.clientY; }
       return;
     }
-    if (e.pointerType === 'mouse' && cam) { const i = pick(e.clientX, e.clientY); cv.classList.toggle('over', i >= 0 && !shape().jammed); if (i !== st.hi) { st.hi = i; touch(); } }
+    if (e.pointerType === 'mouse' && cam) { const i = pick(e.clientX, e.clientY); cv.classList.toggle('over', i >= 0 && st.e === 0); if (i !== st.hi) { st.hi = i; touch(); } }
   });
   for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) cv.addEventListener(type, (e) => { if (!drag || e.pointerId !== drag.id) return; drag = null; st.held = -1; cv.classList.remove('turning'); touch(); });
   cv.addEventListener('pointerleave', () => { if (st.hi >= 0) { st.hi = -1; touch(); } });
@@ -191,12 +195,12 @@ function controls() {
   addEventListener('resize', measure);
   addEventListener('hashchange', () => { readHash(); touch(); });
   document.addEventListener('visibilitychange', () => { last = 0; });
-  const step = (k) => { const i = SHAPES.findIndex((s) => s.id === st.shape); choose(SHAPES[(i + k + SHAPES.length) % SHAPES.length].id); };
+  const step = (k) => { const i = SHOWN.findIndex((s) => s.id === st.shape); choose(SHOWN[(i + k + SHOWN.length) % SHOWN.length].id); };
   gamepad({
     look: { label: 'Turn the view', move(x, y, dt) { orbit(-x * 1.6 * dt, -y * 1.2 * dt); } },
     zoom: { label: ['Turn the gears back', 'Turn the gears on'], move(v, dt) { st.play = false; turnBy(v * 1.5 * dt); } },
-    prev: { label: 'The solid before', press: () => step(-1) },
-    next: { label: 'The next solid', press: () => step(1) },
+    prev: { label: 'The other shape', press: () => step(-1) },
+    next: { label: 'The other shape', press: () => step(1) },
   });
 }
 
@@ -211,7 +215,7 @@ function start() {
 }
 readHash(); controls(); measure();
 try { start(); } catch (e) { oops(e); }
-window.__gears = { st, drawn, SHAPES, get busy() { return st.play && !shape().jammed; }, pick: (x, y) => pick(x, y),
+window.__gears = { st, drawn, SHAPES, get busy() { return st.play && st.e === 0; }, pick: (x, y) => pick(x, y),
   settle() { st.play = false; touch(); }, res(k) { res = k; measure(); }, redraw() { draw(); sync(); gl.finish(); },
   // where gear i's cap is on the screen, in CSS pixels, for the tests
   capAt(i) { const n = shape().normals[i], p = [n[0] * (R_OUT + 0.04), n[1] * (R_OUT + 0.04), n[2] * (R_OUT + 0.04), 1], m = cam.vp;

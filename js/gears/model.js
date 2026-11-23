@@ -14,7 +14,7 @@
 
 const D = Math.PI / 180;
 export const PRESSURE = 20 * D;         // the angle of the crown gear's straight tooth sides
-export const R_OUT = 1, R_IN = 0.68;    // the teeth run along the pitch cone from 0.68 to 1 of the distance from the center
+export const R_OUT = 1, R_IN = 0.74;    // the teeth run along the pitch cone from 0.74 to 1 of the distance from the center
 const BACKLASH = 0.05;                  // each tooth is thinned by this share of the tooth spacing, so meshing teeth do not bind
 
 // ---- small vector helpers ----
@@ -38,9 +38,9 @@ const OCTA = [];
 for (const y of [1, -1]) for (const [x, z] of [[1, 1], [-1, 1], [-1, -1], [1, -1]]) OCTA.push([x * s3, y * s3, z * s3]);
 
 export const SHAPES = [
-  { id: 'cube4', name: 'Cube, 4', solid: 'cube', faces: CUBE_RING, plain: CUBE_CAPS, teeth: 18 },
-  { id: 'cube6', name: 'Cube, 6', solid: 'cube', faces: [...CUBE_RING, ...CUBE_CAPS], plain: [], teeth: 18 },
-  { id: 'octa', name: 'Octahedron, 8', solid: 'octa', faces: OCTA, plain: [], teeth: 15 },
+  { id: 'cube4', name: 'Cube, 4', solid: 'cube', faces: CUBE_RING, plain: CUBE_CAPS, teeth: 14 },
+  { id: 'cube6', name: 'Cube, 6', solid: 'cube', faces: [...CUBE_RING, ...CUBE_CAPS], plain: [], teeth: 14 },
+  { id: 'octa', name: 'Octahedron, 8', solid: 'octa', faces: OCTA, plain: [], teeth: 13 },
 ].map(makeShape);
 
 export function makeShape(sh) {
@@ -156,14 +156,24 @@ export function inside(sh, i, t, d, ang = angles(sh, t)) {
   return Math.abs(u) < halfWidth(sh.profile, th);
 }
 
-// ---- the body that holds the axles ----
-// A solid of the same kind, small enough to stay clear of every gear: it is cut by the plane of each face at
-// `h`, and its edges are cut back so that they stay inside the gears' inner ends. The faces with no gear (the
-// cube's top and bottom) are allowed further out.
+// ---- the parts ----
+// Each gear is a thin brass disc with its teeth on the rim, turning on a ball bearing pressed into its middle. A
+// flanged screw through the bearing holds it to the brass core, with a thick washer between gear and core. The core is the
+// solid itself, with its edges cut back so that they clear the teeth. Sizes are in units of the teeth's outer end.
+export function parts(sh) {
+  const pr = sh.profile;
+  const front = R_OUT * Math.cos(pr.root), back = R_IN * Math.cos(pr.root);   // the gear disc's two flat faces
+  // the core's faces stay inside the teeth's inner ends, which reach below the disc; a thick washer makes up the gap
+  const core = R_IN * Math.cos(pr.tip) * 0.97;
+  return { front, back, core, rootR: R_OUT * Math.sin(pr.root),
+    bearing: { outer: 0.2, inner: 0.075, ball: 0.032, pitch: 0.138, balls: 9, width: Math.min(0.13, front - back - 0.02) },
+    washer: { outer: 0.13, inner: 0.065 }, screw: { flange: 0.3, thick: 0.05, post: 0.062, into: 0.22 } };
+}
 export function bodyPlanes(sh) {
-  const tipCos = Math.cos(sh.profile.tip), h = R_IN * tipCos * 0.97;
-  const planes = sh.normals.map((n) => ({ n, d: h }));
-  for (const n of sh.plainNormals) planes.push({ n, d: h * 1.28 });
+  const P = parts(sh), all = [...sh.normals, ...sh.plainNormals], planes = all.map((n) => ({ n, d: P.core }));
+  // cut back every edge, across the line from the center through its middle
+  const near = Math.max(...all.flatMap((a, i) => all.filter((_, j) => j !== i).map((b) => dot(a, b))));
+  for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) if (dot(all[i], all[j]) > near - 1e-9) planes.push({ n: norm(add(all[i], all[j])), d: 0.93 * P.core / Math.cos(sh.alpha) });
   return planes;
 }
 export const insideBody = (planes, p) => planes.every((q) => dot(q.n, p) <= q.d + 1e-9);
