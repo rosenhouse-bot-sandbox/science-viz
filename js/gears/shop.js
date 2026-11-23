@@ -2,10 +2,10 @@
 // carriage, cross slide, compound, tool post, tailstock) and a knee mill (table, vise, spin indexer, tilting dividing
 // head, a head that tilts), drawn round the part being made. All sizes in millimeters; the machines are a typical
 // bench lathe's and a small knee mill's. The part's shape comes from cut.js; nothing here decides it.
-import { program } from './gl.js?v=2f6fbebf';
-import { grow, lathe, box, poly, sphere, gearMesh } from './mesh.js?v=2f6fbebf';
-import { bodyFaces, dot, cross, norm } from './model.js?v=2f6fbebf';
-import { outline } from './cut.js?v=2f6fbebf';
+import { program } from './gl.js?v=8d116acc';
+import { grow, lathe, box, poly, sphere, gearMesh } from './mesh.js?v=8d116acc';
+import { bodyFaces, dot, cross, norm } from './model.js?v=8d116acc';
+import { outline } from './cut.js?v=8d116acc';
 
 const VS = `#version 300 es
 layout(location=0) in vec3 aPos; layout(location=1) in vec3 aNor; layout(location=2) in vec3 aT;
@@ -98,7 +98,7 @@ function mesh(gl, g, dynamic = false) {
       gl.bindVertexArray(vao);
       [g.P, g.N, g.T].forEach((a, i) => { gl.bindBuffer(gl.ARRAY_BUFFER, bufs[i]); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(a), dynamic ? gl.DYNAMIC_DRAW : gl.STATIC_DRAW); });
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(g.I), dynamic ? gl.DYNAMIC_DRAW : gl.STATIC_DRAW);
-      gl.bindVertexArray(null); m.count = g.I.length;
+      gl.bindVertexArray(null); m.count = g.I.length; m.g = g;   // (the geometry is kept for the collision check)
     },
     draw() { if (!m.count) return; gl.bindVertexArray(vao); gl.drawElements(gl.TRIANGLES, m.count, gl.UNSIGNED_INT, 0); },
   };
@@ -170,8 +170,20 @@ function latheParts() {
 function latheTool(t) {
   const g = grow(), m0 = mark(g);
   if (t.type === 'part') { box(g, [-t.w, -9, 0], [0, 0, 28], K(3)); return g; }
-  // a ground high-speed-steel bit, 6 mm square: side cutting edge toward -x (cutting toward the chuck), or mirrored
-  const s = t.left ? -1 : 1, pts = [[0, 0], [4.8 * s, 1.6], [5.2 * s, 34], [-0.8 * s, 34], [-0.8 * s, 5]];
+  if (t.type === 'boring') {
+    // a small boring bar, Ø1.8 for its first 9 mm, along the spindle axis, for a recess too small for a square bit. Below the cutting
+    // edges the head steps back toward the tailstock, the clearance that lets it face a small radius and follow a cone
+    const head = [[0, 0], [2.4, 1.2], [2.4, -2.2], [0.9, -1.5]];
+    for (const [y0, y1, back] of [[-0.3, 0, 0], [-1, -0.3, 0.6], [-2, -1, 1.1]]) {
+      const m = mark(g); prism(g, head.map(([x, z]) => [x + back, z]), y0, y1, 3);
+      place(g, m, new Float32Array([1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1]));
+    }
+    let m = mark(g); lathe(g, [[0, 2.4], [0.9, 2.4], [0.9, 9], [2.5, 10.6], [2.5, 44], [0, 44]], 3, 24); place(g, m, M4.mul(M4.t(0, -1.2, -0.9), ALONG_X));
+    m = mark(g); box(g, [30, -7, -3.5], [46, 1, 14], K(1));     // its holder, clamped in the tool post
+    return g;
+  }
+  // a ground high-speed-steel bit, 6 mm square: nothing of it lies past the tip on the cutting side, so it can reach a shoulder
+  const s = t.left ? -1 : 1, pts = [[0, 0], [5.6 * s, 1.4], [6 * s, 34], [0.4 * s, 34], [0.25 * s, 5]];
   const ordered = s > 0 ? pts.slice().reverse() : pts;
   const g2 = grow();
   prism(g2, ordered.map(([x, z]) => [x, z]), -6, 0, 3);
