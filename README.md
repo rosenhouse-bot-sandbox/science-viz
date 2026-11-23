@@ -1053,6 +1053,8 @@ the rest turn with it. A Take apart slider spreads the parts out along each gear
     tooth is then an approximation, which is why the drawing says to check the mesh in pairs.
   - Tests: `node tests/gears/make.mjs` (no browser) plays every plan and fails if the finished part differs from
     its drawing (diameters, lengths, faces, holes, every gap, the slot), a tool comes within 0.4 mm of the jaws,
-    or a speed is out of range. `node tests/gears/makepage.mjs` (`--quick` for the desktop only) checks that no
+    or a speed is out of range. `node tests/gears/collide.mjs` (about 5 minutes) plays every step in the 3D
+    shop and fails if anything runs into anything: tool, post or tailstock into the chuck, jaws, collet or mandrel;
+    a tool's body into the part; a mill cutter into the vise or fixture. `node tests/gears/makepage.mjs` (`--quick` for the desktop only) checks that no
     text on a drawing overlaps other text or leaves the frame, steps through every machining step, and fails on a
     control that moved or a blank picture.

@@ -144,7 +144,8 @@ Before pushing:
   not engage, if the cube with six gears can turn or another set cannot, or if the body touches a gear. Then
   `node tests/gears/page.mjs` (`--quick` for the desktop only). Numbers and sentences on screen come from
   `js/gears/model.js` and `js/gears/facts.js`. The workshop page (`gears/make.html`): after changing a size, a plan or
-  how cuts are replayed, run `node tests/gears/make.mjs` (no browser; the finished part must match its drawing), then
+  how cuts are replayed, run `node tests/gears/make.mjs` (no browser; the finished part must match its drawing) and
+  `node tests/gears/collide.mjs` (about 5 minutes; nothing in the shop may run into anything), then
   `node tests/gears/makepage.mjs` (`--quick` for the desktop only). After changing any file under `js/gears/` or
   `css/gears.css`, run `node tests/gears/stamp.mjs`.
 - After changing `js/gamepad/`, `css/gamepad.css`, a page's `gamepad({ ... })` mapping, or which

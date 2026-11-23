@@ -6,8 +6,8 @@
 // faces (dir +1: its +z end toward the tailstock) and where the chuck's jaws end (zJaw). Mill passes are in the
 // part's frame too; a setup says how the part sits on the machine (rot: part to machine) and how far the head
 // is tilted. Speeds are real; feeds are real, in mm a second.
-import { by, SHOWN, gearSpec, spacerSpec, screwSpec, coreSpec, stockOf } from './spec.js?v=2f6fbebf';
-import { norm, cross, dot } from './model.js?v=2f6fbebf';
+import { by, SHOWN, gearSpec, spacerSpec, screwSpec, coreSpec, stockOf } from './spec.js?v=8d116acc';
+import { norm, cross, dot } from './model.js?v=8d116acc';
 
 const D = Math.PI / 180;
 // spindle speed for a cut at surface speed v (m/min) on diameter d (mm), within what the machine can do
@@ -24,6 +24,9 @@ function taper(z0, r0, z1, r1, depth, cut, feed, side = 1) {
   for (const off of steps(depth, 0, cut)) out.push({ k: 'turn', pts: [[z0 + nz * off, r0 + nr * off], [z1 + nz * off, r1 + nr * off]], feed });
   return out;
 }
+// how far the expanding mandrel's shoulder stands out from the chuck's jaws: far enough that the tool post, which
+// reaches 7 mm toward the chuck past the tool's point, stays clear of the jaws while the tool works on the gear
+export const MANDREL = 24;
 function gearPlan(sh) {
   const g = gearSpec(sh), st = stockOf('gear', sh), R0 = st.d / 2, a = g.alpha;
   const T = g.tipOut, B = g.rootOut, Ti = g.tipIn, Bi = g.rootIn, zo = g.zo, zi = g.zi, rb = g.bore / 2;
@@ -34,7 +37,7 @@ function gearPlan(sh) {
   const fc = (r) => Bi.z + (Bi.r - r) / Math.tan(Math.PI / 2 - a);         // z on the front cone at radius r
   const face = (r) => Ti.z + (r - Ti.r) * (T.z - Ti.z) / (T.r - Ti.r);       // z on the face cone (the teeth's tops) at radius r
   const op1 = {
-    machine: 'lathe', hold: 'chuck', dir: 1, zJaw: zo - 10, stock: { r: R0, free: zo + 0.5 }, title: 'Lathe: outer side',
+    machine: 'lathe', hold: 'chuck', dir: 1, zJaw: zo - 16, stock: { r: R0, free: zo + 0.5 }, title: 'Lathe: outer side',
     steps: [
       { title: 'Face the end', line: `Takes 0.5 off the sawn end. This face is the gear's outer side.`, tool: { type: 'turn' }, rpm: n1,
         passes: [{ k: 'face', z: zo, r0: R0 + 0.5, r1: 0, feed: perRev(0.05, n1) }] },
@@ -55,15 +58,15 @@ function gearPlan(sh) {
   const n2 = lrpm(g.od);
   const recess = steps(Ti.z, zi, 0.35);
   const op2 = {
-    machine: 'lathe', hold: 'mandrel', dir: -1, zJaw: zo + 0.01, title: 'Lathe: inner side, on a mandrel',
+    machine: 'lathe', hold: 'mandrel', dir: -1, zJaw: zo + MANDREL, title: 'Lathe: inner side, on a mandrel',
     steps: [
       { title: 'Face to the teeth\'s ends', line: 'A 4 mm expanding mandrel holds it by the bore.', tool: { type: 'turn' }, rpm: n2,
         passes: [{ k: 'face', z: Ti.z, r0: T.r + 0.5, r1: rb + 0.2, feed: perRev(0.04, n2) }] },
       { title: 'Turn the teeth\'s tops', line: `Compound set to ${(g.tip / D).toFixed(2)}°.`, tool: { type: 'turn', compound: g.tip }, rpm: n2,
         passes: taper(Ti.z - 0.3 * Math.cos(g.tip), Ti.r - 0.3 * Math.sin(g.tip), T.z + 0.02 * Math.cos(g.tip), T.r + 0.02 * Math.sin(g.tip), (T.r - Ti.r) * Math.cos(g.tip) + 0.05, 0.35, perRev(0.04, n2)) },
-      { title: 'Cut the recess', line: `${(zi - Ti.z).toFixed(2)} deep, out to the front cone.`, tool: { type: 'face', left: true }, rpm: n2,
-        passes: recess.map((z) => ({ k: 'faceIn', z, r0: rb + 0.1, r1: Math.min(Ti.r - 0.05, Bi.r + (zi - z) * Math.tan(Math.PI / 2 - a)), feed: perRev(0.04, n2) })) },
-      { title: 'Turn the front cone', line: `Compound set to ${(90 - a / D).toFixed(2)}°, the other way.`, tool: { type: 'face', left: true, compound: -(Math.PI / 2 - a) }, rpm: n2,
+      { title: 'Cut the recess', line: `${(zi - Ti.z).toFixed(2)} deep, from the outside in. Too small for a square bit.`, tool: { type: 'boring' }, rpm: n2,
+        passes: recess.map((z) => ({ k: 'faceIn', z, r0: Math.min(Ti.r - 0.05, Bi.r + (zi - z) * Math.tan(Math.PI / 2 - a)) - 0.3, r1: rb + 0.1, feed: perRev(0.04, n2) })) },
+      { title: 'Turn the front cone', line: `Compound set to ${(90 - a / D).toFixed(2)}°, the other way.`, tool: { type: 'boring', compound: -(Math.PI / 2 - a) }, rpm: n2,
         passes: [{ k: 'bore', pts: [[Ti.z - 0.02, Ti.r + 0.02], [zi, Bi.r]], feed: perRev(0.03, n2) }] },
     ],
   };

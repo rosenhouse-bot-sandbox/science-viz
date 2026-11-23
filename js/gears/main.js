@@ -1,9 +1,9 @@
 // Gears on a cube and an octahedron: the controller. The state is which solid, how far the gears have turned, and
 // the camera. Dragging a gear turns it about its own axis, and every gear it meshes with follows.
-import { SHAPES, angles, dot, cross, norm, R_IN, R_OUT, MM } from './model.js?v=2f6fbebf';
-import { makeScene } from './scene.js?v=2f6fbebf';
-import { KEY } from './facts.js?v=2f6fbebf';
-import { perspective, lookAt, mul4 } from './gl.js?v=2f6fbebf';
+import { SHAPES, angles, dot, cross, norm, R_IN, R_OUT, MM } from './model.js?v=8d116acc';
+import { makeScene } from './scene.js?v=8d116acc';
+import { KEY } from './facts.js?v=8d116acc';
+import { perspective, lookAt, mul4 } from './gl.js?v=8d116acc';
 import { gamepad } from '../gamepad/gamepad.js';
 
 const $ = (id) => document.getElementById(id);

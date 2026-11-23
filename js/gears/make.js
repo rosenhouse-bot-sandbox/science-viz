@@ -1,14 +1,15 @@
 // Gears on a cube and an octahedron, the workshop: for each part, its dimensioned drawing, and how it is made on a
 // lathe and a mill, step by step. The state is which toy, which part, which view, the machine time, and the camera.
-import { MM, parts, unitMM } from './model.js?v=2f6fbebf';
-import { planOf, startOf, PARTS, NAMES, by, SHOWN } from './plan.js?v=2f6fbebf';
-import { stockOf, gearSpec, screwSpec } from './spec.js?v=2f6fbebf';
-import { timeline, makeReplay } from './cut.js?v=2f6fbebf';
-import { makeShop, M4, turnedMesh, milledMesh, holeMesh, slotMesh } from './shop.js?v=2f6fbebf';
-import { grow, lathe, box, gearMesh, smallParts, sphere } from './mesh.js?v=2f6fbebf';
-import { drawing } from './drawing.js?v=2f6fbebf';
-import { perspective, lookAt, mul4 } from './gl.js?v=2f6fbebf';
-import { dot, cross, norm, bodyFaces } from './model.js?v=2f6fbebf';
+import { MM, parts, unitMM } from './model.js?v=8d116acc';
+import { planOf, startOf, MANDREL, PARTS, NAMES, by, SHOWN } from './plan.js?v=8d116acc';
+import { stockOf, gearSpec, screwSpec } from './spec.js?v=8d116acc';
+import { timeline, makeReplay, DZ } from './cut.js?v=8d116acc';
+import { makeShop, M4, turnedMesh, milledMesh, holeMesh, slotMesh } from './shop.js?v=8d116acc';
+import { grow, lathe, box, gearMesh, smallParts, sphere } from './mesh.js?v=8d116acc';
+import { collisions, turnedEnvelope } from './collide.js?v=8d116acc';
+import { drawing } from './drawing.js?v=8d116acc';
+import { perspective, lookAt, mul4 } from './gl.js?v=8d116acc';
+import { dot, cross, norm, bodyFaces } from './model.js?v=8d116acc';
 import { gamepad } from '../gamepad/gamepad.js';
 
 const $ = (id) => document.getElementById(id);
@@ -42,6 +43,8 @@ const VIEWS = { chuck: { yaw: 0.45, pitch: 1.05, zoom: 0.55 }, collet: { yaw: 0.
   vise: { yaw: -0.8, pitch: 0.28, zoom: 0.62 }, indexer: { yaw: 0.8, pitch: 0.42, zoom: 0.5 }, dividing: { yaw: 1.35, pitch: 0.32, zoom: 0.5 }, colletblock: { yaw: 0.75, pitch: 0.75, zoom: 0.5 },
   bench: { yaw: 0.5, pitch: 0.45, zoom: 1 } };
 let target = [0, 0, 0], frameDist = 100, upAxis = [0, 1, 0];
+// what turns in this frame, for the collision check: the lathe's spindle, or the mill's tool; and the cutting edge
+let spinAxis = null, cutTip = null;
 function camera() {
   const p = st.pitch, y = st.yaw, R = frameDist * st.zoom;
   // the lathe's world has y up; the mill's has z up
@@ -67,6 +70,7 @@ const P_LATHE = (dir) => new Float32Array([0, dir, 0, 0, 0, 0, 1, 0, dir, 0, 0, 
 function frameOf() {
   const items = [], R = cur.replay;
   if (st.part === 'bearing' || !R) return bench(items);
+  spinAxis = null; cutTip = null;
   const r = R.at(st.t), op = cur.plan[r.op], step = op.steps[r.step], p = r.seg.p, tool = p.tool && typeof p.tool === 'object' ? p.tool : step.tool;
   const L = shop.lathe3, MI = shop.mill;
   const cutting = r.away < 1 && r.seg.t0 <= st.t && st.t <= r.seg.t1;
@@ -75,47 +79,50 @@ function frameOf() {
     const S = r.lathe, dir = op.dir, rot = M4.rx(spin);
     const Mpart = M4.mul(rot, M4.mul(P_LATHE(dir), M4.t(0, 0, -op.zJaw)));
     partKey = dynSet(shop.dyn.part, 'L' + cur.key + st.t.toFixed(3), partKey, () => turnedMesh(S));
-    items.push({ mesh: shop.dyn.part, M: Mpart, part: true });
+    items.push({ name: 'part', role: 'part', mesh: shop.dyn.part, M: Mpart, part: true, lathe: { S, dir, zJaw: op.zJaw } });
     // the holder: a 3-jaw chuck (gripping the bar, or a mandrel), or a collet chuck
     const grip = gripRadius(R.atOp[r.op].S, op);
-    if (op.hold === 'collet') items.push({ mesh: L.collet, M: rot });
+    if (op.hold === 'collet') items.push({ name: 'collet', role: 'hold', mesh: L.collet, M: rot });
     else {
-      items.push({ mesh: L.chuck, M: rot });
+      items.push({ name: 'chuck', role: 'hold', mesh: L.chuck, M: rot });
       const rg = op.hold === 'mandrel' ? 5 : grip;
-      items.push({ mesh: cached('jaws' + rg.toFixed(2), () => jaws(rg)), M: rot });
-      if (op.hold === 'mandrel') items.push({ mesh: cached('mandrel' + cur.key, () => mandrel(gearSpec(cur.sh), dir)), M: rot });
+      items.push({ name: 'jaws', role: 'hold', mesh: cached('jaws' + rg.toFixed(2), () => jaws(rg)), M: rot });
+      if (op.hold === 'mandrel') items.push({ name: 'mandrel', role: 'hold', mesh: cached('mandrel' + cur.key, () => mandrel(gearSpec(cur.sh), dir)), M: rot });
     }
-    items.push({ mesh: L.base, M: M4.id() });
+    items.push({ name: 'bed', role: 'skip', mesh: L.base, M: M4.id() });
     // the tool
-    const [tz, tr] = r.tip || [op.dir > 0 ? 30 : -30, 10];
-    const tipX = dir * (tz - op.zJaw), back = r.away;
+    const [tz, tr] = r.tip || [op.dir > 0 ? 30 : -30, 14];   // the tip, pulled back between passes by the replay
+    const tipX = dir * (tz - op.zJaw);
     const tail = tool.type === 'center' || tool.type === 'drill' || tool.type === 'reamer' || tool.type === 'die';
-    const postZ = tail ? 40 : tr + back * 4;
-    const tx = tail ? 30 : tipX;
-    items.push({ mesh: L.carriage, M: M4.t(tx, 0, 0) });
-    items.push({ mesh: L.cross, M: M4.t(tx, 0, postZ) });
-    items.push({ mesh: L.compound, M: M4.mul(M4.t(tx, 0, postZ + 14), M4.ry(tool.compound || 0)) });
-    items.push({ mesh: L.post, M: M4.t(tx, 0, postZ) });
-    if (!tail) items.push({ mesh: cached('lt' + tool.type + (tool.left ? 'L' : '') + (tool.w || ''), () => shop.latheTool(tool)), M: M4.t(tipX, 0, postZ) });
+    const postZ = tail ? 40 : tr;
+    const tx = tail ? 30 : tipX + (tool.type === 'boring' ? 38 : 0);   // a boring bar's holder sits out toward the tailstock
+    items.push({ name: 'carriage', role: 'move', mesh: L.carriage, M: M4.t(tx, 0, 0) });
+    items.push({ name: 'cross slide', role: 'move', mesh: L.cross, M: M4.t(tx, 0, postZ) });
+    items.push({ name: 'compound', role: 'move', mesh: L.compound, M: M4.mul(M4.t(tx, 0, postZ + 14), M4.ry(tool.compound || 0)) });
+    // the post sits behind the bit, so the bit reaches past it toward the chuck (or away, for a left-hand bit)
+    const px = tail || tool.type === 'boring' ? 0 : tool.left ? -7 : 7;
+    items.push({ name: 'tool post', role: 'move', mesh: L.post, M: M4.t(tx + px, 0, postZ) });
+    if (!tail) items.push({ name: 'tool', role: 'cut', mesh: cached('lt' + tool.type + (tool.left ? 'L' : '') + (tool.w || ''), () => shop.latheTool(tool)), M: M4.t(tipX, 0, postZ) });
     // the tailstock, with a drill, center drill, reamer or die; parked to the right otherwise
     let qx = 150;
     if (tail) {
-      const into = tipX + back * 6;
-      if (tool.type === 'die') { items.push({ mesh: L.die, M: M4.t(into, 0, 0) }); qx = into + 45; }
+      const into = tipX;
+      if (tool.type === 'die') { items.push({ name: 'die holder', role: 'cut', mesh: L.die, M: M4.t(into, 0, 0) }); qx = into + 45; }
       else {
         const t = shop.rotaryTool(tool), len = t.P.reduce((m, v, i) => (i % 3 === 2 ? Math.max(m, v) : m), 0);
-        items.push({ mesh: cached('rt' + tool.type + tool.d, () => shop.rotaryTool(tool)), M: M4.mul(M4.t(into, 0, 0), M4.mul(new Float32Array([0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1]), M4.rz(0))) });
-        items.push({ mesh: L.jacobs, M: M4.t(into + len - 8, 0, 0) });
+        items.push({ name: 'drill', role: 'cut', edge: (tool.d || 1) / 2 + 0.8, mesh: cached('rt' + tool.type + tool.d, () => shop.rotaryTool(tool)), M: M4.mul(M4.t(into, 0, 0), M4.mul(new Float32Array([0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1]), M4.rz(0))) });
+        items.push({ name: 'drill chuck', role: 'move', mesh: L.jacobs, M: M4.t(into + len - 8, 0, 0) });
         qx = into + len - 8 + 52;
       }
     }
-    items.push({ mesh: L.quill, M: M4.t(qx, 0, 0) }, { mesh: L.tail, M: M4.t(qx + 60, 0, 0) });
+    items.push({ name: 'tailstock quill', role: 'move', mesh: L.quill, M: M4.t(qx, 0, 0) }, { name: 'tailstock', role: 'move', mesh: L.tail, M: M4.t(qx + 60, 0, 0) });
     // look at the part's free end, where the cutting is
     const free = Math.max(dir * (S.z0 - op.zJaw), dir * (S.z0 + (S.n - 1) * 0.01 - op.zJaw));
+    spinAxis = { p: [0, 0, 0], s: [1, 0, 0] }; cutTip = tail ? [tipX, 0, 0] : [tipX, 0, postZ];
     target = [Math.max(free - 8, 4), -4, 4];
     frameDist = 210;
   } else millFrame(items, r, op, step, tool, p);
-  return { items, cutting };
+  return { items, cutting, axis: spinAxis, tip: cutTip };
 }
 // how far out the jaws close: the bar's radius where they grip
 function gripRadius(S, op) {
@@ -135,10 +142,10 @@ function jaws(rg) {
   return g;
 }
 // the expanding mandrel the gear sits on for its second turning setup: gripped in the chuck, the gear's outer face
-// against its shoulder (x = 0), the split spigot through the bore
+// against its shoulder (x = MANDREL, clear of the jaws), the split spigot through the bore
 function mandrel(g, dir) {
-  const m = grow(), t = g.zo - g.tipIn.z + 0.6;
-  lathe(m, [[0, -18], [5, -18], [5, -6], [3.4, -6], [3.4, 0], [2, 0], [2, t], [1.6, t + 0.4], [1.6, t + 2.5], [0, t + 2.5]], 1, 48);
+  const m = grow(), t = g.zo - g.zi + 0.1, L = MANDREL;   // the spigot ends just past the hub, clear of a tool in the recess
+  lathe(m, [[0, -18], [5, -18], [5, L - 3], [3.4, L - 3], [3.4, L], [2, L], [2, L + t], [1.7, L + t + 0.3], [0, L + t + 0.3]], 1, 48);
   const out = grow();
   for (let i = 0; i < m.P.length / 3; i++) { const [x, y, z] = m.P.slice(3 * i, 3 * i + 3), [a, b, c] = m.N.slice(3 * i, 3 * i + 3); out.v([z, x, y], [c, a, b], m.T.slice(3 * i, 3 * i + 3)); }
   out.I.push(...m.I);
@@ -149,31 +156,32 @@ function mandrel(g, dir) {
 function millFrame(items, r, op, step, tool, p) {
   upAxis = [0, 0, 1];
   const MI = shop.mill, M = r.mill, sh = cur.sh;
-  items.push({ mesh: MI.table, M: M4.id() });
+  items.push({ name: 'table', role: 'static', mesh: MI.table, M: M4.id() });
   let Rm = null, O = [0, 0, 0], spindle = [0, 0, 1], tipW = null, partM = null;
   if (op.hold === 'vise') {
     Rm = step.rot;
     const box0 = bounds(cur.replay.atOp[r.op].M, Rm, cur.steps.find((s) => s.op === r.op && s.si === r.step), r);
-    const hp = Math.max(4, 59 - (box0.z1 - box0.z0) - 30);
+    // the part stands 4 above the jaws, more for a big chamfer mill, whose cone reaches down past the edge it cuts
+    const top = 55 + Math.max(4, step.tool.type === 'chamfer' ? step.tool.d / 2 + 1 : 0), hp = Math.max(4, top - (box0.z1 - box0.z0) - 30);
     O = [0, -(box0.y0 + box0.y1) / 2, 30 + hp - box0.z0];
     const w = box0.y1 - box0.y0;
-    items.push({ mesh: cached('vise' + w.toFixed(2), () => shop.millVise(w)), M: M4.id() });
-    items.push({ mesh: cached('par' + w.toFixed(2) + hp.toFixed(2), () => parallels(w, hp)), M: M4.id() });
+    items.push({ name: 'vise', role: 'static', mesh: cached('vise' + w.toFixed(2), () => shop.millVise(w)), M: M4.id() });
+    items.push({ name: 'parallels', role: 'static', mesh: cached('par' + w.toFixed(2) + hp.toFixed(2), () => parallels(w, hp)), M: M4.id() });
   } else if (op.hold === 'indexer') {
     const H = 70, nose = -14;
-    items.push({ mesh: MI.indexer, M: M4.t(nose, 0, H) });
+    items.push({ name: 'indexer', role: 'static', mesh: MI.indexer, M: M4.t(nose, 0, H) });
     const n = p.n || [0, 1, 0], ax = op.axis;
     Rm = indexRot(ax, n, op.tilt, r, op);
     const along = extent(cur.replay.atOp[r.op].M, ax);
     O = [nose - 6 - along.lo, 0, H];
-    items.push({ mesh: cached('sqcollet', squareCollet), M: M4.t(nose, 0, H) });
+    items.push({ name: 'square collet', role: 'static', mesh: cached('sqcollet', squareCollet), M: M4.t(nose, 0, H) });
   }
   if (op.hold === 'vise' || op.hold === 'indexer') {
     partM = M4.rows(Rm, O);
     partKey = dynSet(shop.dyn.part, 'M' + cur.key + st.t.toFixed(3), partKey, () => milledMesh(M));
     holeKey = dynSet(shop.dyn.holes, 'H' + cur.key + st.t.toFixed(3), holeKey, () => holeMesh(M));
-    items.push({ mesh: shop.dyn.part, M: partM, part: true, holes: M.holes.filter((h) => h.depth > 0 || h.spot > 0) });
-    items.push({ mesh: shop.dyn.holes, M: partM });
+    items.push({ name: 'part', role: 'part', mesh: shop.dyn.part, M: partM, part: true, holes: M.holes.filter((h) => h.depth > 0 || h.spot > 0) });
+    items.push({ name: 'holes', role: 'skip', mesh: shop.dyn.holes, M: partM });
     const pose = r.tip;
     const RT = [Rm[0], Rm[3], Rm[6], Rm[1], Rm[4], Rm[7], Rm[2], Rm[5], Rm[8]];
     if (pose) {
@@ -194,12 +202,13 @@ function millFrame(items, r, op, step, tool, p) {
   tipW = tipW.map((v, i) => v + spindle[i] * lift);
   const tm = cached('mt' + tool.type + tool.d, () => shop.millTool(tool));
   const Mt = M4.mul(M4.axis(spindle, tipW), M4.rz(spin));
-  items.push({ mesh: tm, M: Mt });
+  items.push({ name: 'cutter', role: 'cut', mesh: tm, M: Mt });
+  spinAxis = { p: tipW, s: spindle }; cutTip = tipW;
   const tl = toolLength(tool), small = tool.type === 'drill' || tool.type === 'spot' || tool.type === 'tap';
   // small drills and taps go in a drill chuck; cutters in a collet, under its nut
   const holder = tipW.map((v, i) => v + spindle[i] * (tl - (small ? 8 : 6)));
-  items.push({ mesh: small ? MI.jacobs : MI.nut, M: M4.mul(M4.axis(spindle, holder), M4.rz(small ? spin : spin * 0)) });
-  items.push({ mesh: MI.quill, M: M4.axis(spindle, holder.map((v, i) => v + spindle[i] * (small ? 52 : 24))) });
+  items.push({ name: 'tool holder', role: 'spin', mesh: small ? MI.jacobs : MI.nut, M: M4.mul(M4.axis(spindle, holder), M4.rz(small ? spin : spin * 0)) });
+  items.push({ name: 'spindle', role: 'spin', mesh: MI.quill, M: M4.axis(spindle, holder.map((v, i) => v + spindle[i] * (small ? 52 : 24))) });
   target = O.slice(); frameDist = 210;
 }
 const toolLength = (t) => ({ fly: 40, end: 60, chamfer: 50, spot: 50, drill: Math.max(12, t.d / 2 * 14) + 20, tap: 26 })[t.type] || 40;
@@ -248,11 +257,11 @@ function indexRot(ax, n, tilt) {
 function gearOnHead(items, r, op, step, tool, p) {
   const sh = cur.sh, g = gearSpec(sh), P = parts(sh), u = g.u, beta = op.tilt;
   const MI = shop.mill, H = 90, nose = [-10, 0, H], a = [Math.cos(beta), 0, Math.sin(beta)];
-  items.push({ mesh: MI.dbase, M: M4.t(-10, 0, H) });
-  items.push({ mesh: MI.dhead, M: M4.mul(M4.t(-10, 0, H), M4.ry(-beta)) });
+  items.push({ name: 'dividing head base', role: 'static', mesh: MI.dbase, M: M4.t(-10, 0, H) });
+  items.push({ name: 'dividing head', role: 'static', mesh: MI.dhead, M: M4.mul(M4.t(-10, 0, H), M4.ry(-beta)) });
   const Lm = 26;   // nose to the mandrel's shoulder, along the spindle
   // the gear's frame: its z points back along the spindle; the gap being cut is on top
-  const pose = r.tip || { gap: 0, side: 0, f: 0 }, pitch = 2 * Math.PI / g.N, psi = pose.gap * pitch - pitch / 2 + (pose.side || 0) * 0.035 * (r.away < 1 ? 1 : 0);
+  const pose = r.tip || { gap: 0, side: 0, f: 0 }, pitch = 2 * Math.PI / g.N, top = pose.gap * pitch - pitch / 2, psi = top + (pose.side || 0) * 0.035 * (r.away < 1 ? 1 : 0);
   const zW = a.map((v) => -v), upW = [-Math.sin(beta), 0, Math.cos(beta)], yW = cross(zW, upW);
   // gear frame axes in the world: the azimuth psi maps to "up"
   const ex = [0, 1, 2].map((k) => Math.cos(psi) * upW[k] - Math.sin(psi) * yW[k]), ey = [0, 1, 2].map((k) => Math.sin(psi) * upW[k] + Math.cos(psi) * yW[k]);
@@ -260,17 +269,18 @@ function gearOnHead(items, r, op, step, tool, p) {
   const Mg = new Float32Array([ex[0] * u, ex[1] * u, ex[2] * u, 0, ey[0] * u, ey[1] * u, ey[2] * u, 0, zW[0] * u, zW[1] * u, zW[2] * u, 0, O[0], O[1], O[2], 1]);
   const gaps = r.mill.gaps ? Array.from(r.mill.gaps, (f) => clamp((f - 0.12) / 0.76, 0, 1)) : new Array(g.N).fill(0);
   partKey = dynSet(shop.dyn.part, 'G' + cur.key + gaps.map((x) => x.toFixed(3)).join(), partKey, () => gearMesh(sh.profile, P, gaps));
-  items.push({ mesh: shop.dyn.part, M: Mg, part: true });
-  items.push({ mesh: cached('dmandrel', () => rotX((() => { const m = grow(); lathe(m, [[0, -20], [5, -20], [5, Lm - 3], [3.5, Lm - 3], [3.5, Lm], [2, Lm], [2, Lm + 3.2], [1.5, Lm + 3.6], [1.5, Lm + 5], [0, Lm + 5]], 1, 48); return m; })())), M: M4.mul(M4.t(...nose), M4.ry(-beta)) });
+  items.push({ name: 'part', role: 'part', mesh: shop.dyn.part, M: Mg, part: true });
+  items.push({ name: 'mandrel', role: 'static', mesh: cached('dmandrel', () => rotX((() => { const m = grow(); lathe(m, [[0, -20], [5, -20], [5, Lm - 3], [3.5, Lm - 3], [3.5, Lm], [2, Lm], [2, Lm + 3.2], [1.5, Lm + 3.6], [1.5, Lm + 5], [0, Lm + 5]], 1, 48); return m; })())), M: M4.mul(M4.t(...nose), M4.ry(-beta)) });
   // the cutter: its lowest point runs along the bottom of the gap, from the outer end in
-  const rootAt = (s) => { const th = sh.profile.root, rho = s / Math.cos(th - sh.profile.alpha); const q = [Math.sin(th) * rho, 0, Math.cos(th) * rho]; return M4.apply(Mg, q.map((v) => v / u)); };
+  // (the cutter stays at the top; the indexing turns the gap being cut, at azimuth `top` in the gear's frame, up to it)
+  const rootAt = (s) => { const th = sh.profile.root, rho = s / Math.cos(th - sh.profile.alpha); const q = [Math.sin(th) * rho * Math.cos(psi), Math.sin(th) * rho * Math.sin(psi), Math.cos(th) * rho]; return M4.apply(Mg, q.map((v) => v / u)); };
   const outer = rootAt(g.coneOut + 0.2), inner = rootAt(g.coneIn - 0.2);
-  // put the gap's azimuth back to zero for these points (they were taken at psi = 0 of the gear frame)
   const fr = clamp((pose.f - 0.12) / 0.76, -0.25, 1.25), lift = r.away * 3;
   const bottom = [0, 1, 2].map((k) => outer[k] + (inner[k] - outer[k]) * (r.away >= 1 && pose.f >= 1 ? 1.25 : fr));
   const R = tool.d / 2, c = [bottom[0], bottom[1] + (pose.side || 0) * 0.12, bottom[2] + R + lift];
-  items.push({ mesh: cached('gc' + tool.d, () => shop.gearCutter(tool)), M: M4.mul(M4.t(...c), M4.mul(ALONG_Y(), M4.rz(spin))) });
-  items.push({ mesh: MI.quill, M: M4.mul(M4.t(c[0], c[1] + 120, c[2]), ALONG_Y()) });
+  spinAxis = { p: c, s: [0, 1, 0] }; cutTip = bottom;
+  items.push({ name: 'gear cutter', role: 'cut', mesh: cached('gc' + tool.d, () => shop.gearCutter(tool)), M: M4.mul(M4.t(...c), M4.mul(ALONG_Y(), M4.rz(spin))) });
+  items.push({ name: 'arbor', role: 'spin', mesh: MI.quill, M: M4.mul(M4.t(c[0], c[1] + 120, c[2]), ALONG_Y()) });
   target = shoulder.map((v, k) => v - zW[k] * 4); frameDist = 210;
 }
 const ALONG_Y = () => new Float32Array([0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1]);
@@ -278,8 +288,8 @@ const ALONG_Y = () => new Float32Array([0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0
 // the screw in a collet block in the vise, the slitting saw on a stub arbor
 function screwInBlock(items, r, op, step, tool, p) {
   const s = screwSpec(cur.sh), MI = shop.mill, H = 50, face = 22;
-  items.push({ mesh: cached('vise40', () => shop.millVise(40)), M: M4.id() });
-  items.push({ mesh: cached('cblock', () => { const g = grow(); box(g, [-face - 40, -20, H - 20], [face, 20, H + 20], [4, 0, 0]); return g; }), M: M4.id() });
+  items.push({ name: 'vise', role: 'static', mesh: cached('vise40', () => shop.millVise(40)), M: M4.id() });
+  items.push({ name: 'collet block', role: 'static', mesh: cached('cblock', () => { const g = grow(); box(g, [-face - 40, -20, H - 20], [face, 20, H + 20], [4, 0, 0]); return g; }), M: M4.id() });
   // screw frame: z along the world's +x, head out of the block; x up (the slot's width), y across (the saw's way)
   const top = s.z.top, O = [face + 3 - top, 0, H];
   const Mp = new Float32Array([0, 0, 1, 0, 0, -1, 0, 0, 1, 0, 0, 0, O[0], O[1], O[2], 1]);
@@ -287,12 +297,13 @@ function screwInBlock(items, r, op, step, tool, p) {
   partKey = dynSet(shop.dyn.part, 'S' + cur.key, partKey, () => turnedMesh(S));
   const sl = r.mill.slot;
   const slot = sl ? [s.slot / 2, top - s.slotD, -sl[0], -sl[1]] : [0, 0, 0, 0];
-  items.push({ mesh: shop.dyn.part, M: Mp, part: true, slot: sl ? [s.slot / 2, top - s.slotD, Math.min(slot[2], slot[3]), Math.max(slot[2], slot[3])] : null });
-  if (sl) { slotKey = dynSet(shop.dyn.slot, 'sl' + sl[1].toFixed(3), slotKey, () => slotMesh(top, s.flange / 2, s.slot, s.slotD, -sl[0], -sl[1])); items.push({ mesh: shop.dyn.slot, M: Mp }); }
+  items.push({ name: 'part', role: 'part', mesh: shop.dyn.part, M: Mp, part: true, slot: sl ? [s.slot / 2, top - s.slotD, Math.min(slot[2], slot[3]), Math.max(slot[2], slot[3])] : null });
+  if (sl) { slotKey = dynSet(shop.dyn.slot, 'sl' + sl[1].toFixed(3), slotKey, () => slotMesh(top, s.flange / 2, s.slot, s.slotD, -sl[0], -sl[1])); items.push({ name: 'slot', role: 'skip', mesh: shop.dyn.slot, M: Mp }); }
   const y = r.tip ? r.tip.slot : p.from, R = tool.d / 2;
   const c = [O[0] + top - s.slotD + R, y, H];   // the saw lies flat beyond the head, its edge at the slot's bottom
-  items.push({ mesh: cached('saw' + tool.d, () => shop.sawCutter(tool)), M: M4.mul(M4.t(...c), M4.rz(spin)) });
-  items.push({ mesh: MI.quill, M: M4.t(c[0], c[1], c[2] + 60) });
+  spinAxis = { p: c, s: [0, 0, 1] }; cutTip = [O[0] + top - s.slotD, y, H];
+  items.push({ name: 'saw', role: 'cut', mesh: cached('saw' + tool.d, () => shop.sawCutter(tool)), M: M4.mul(M4.t(...c), M4.rz(spin)) });
+  items.push({ name: 'spindle', role: 'spin', mesh: MI.quill, M: M4.t(c[0], c[1], c[2] + 60) });
   target = [O[0] + top - 2, 0, H]; frameDist = 120;
 }
 
@@ -349,7 +360,7 @@ function sync() {
 }
 function toolText(s) {
   const t = s.tool, rpm = s.rpm ? `${s.rpm.toLocaleString('en-US')} rpm` : 'by hand';
-  const name = { turn: 'HSS turning tool', face: 'HSS facing tool', part: `${t.w} mm parting blade`, center: 'center drill', drill: `Ø${t.d} drill`, reamer: `Ø${t.d} reamer`, die: 'M1.4 × 0.3 die',
+  const name = { turn: 'HSS turning tool', face: 'HSS facing tool', part: `${t.w} mm parting blade`, boring: 'Ø1.8 boring bar', center: 'center drill', drill: `Ø${t.d} drill`, reamer: `Ø${t.d} reamer`, die: 'M1.4 × 0.3 die',
     fly: 'fly cutter', end: `Ø${t.d} end mill`, chamfer: `Ø${t.d} chamfer mill`, spot: 'spot drill', tap: 'M1.4 × 0.3 tap', gearcutter: 'gear cutter', saw: `Ø${t.d} × ${t.w} saw` }[t.type] || t.type;
   return `${name} · ${rpm}`;
 }
@@ -509,5 +520,15 @@ function start() {
 }
 readHash(); load(); controls(); resetView(); measure();
 try { start(); } catch (e) { oops(e); }
-window.__make = { st, drawn, get cur() { return cur; }, settle() { st.play = false; touch(); }, res(k) { res = k; measure(); },
+// for the tests: what runs into what at time t, with the spindle at rest
+function collide(t) {
+  const was = [st.t, spin, st.play]; st.play = false; st.t = t; spin = 0;
+  const f = frameOf(); [st.t, spin, st.play] = was;
+  if (!f.axis) return [];
+  for (const it of f.items) if (it.lathe) it.envelope = turnedEnvelope(it.lathe.S, it.lathe.dir, it.lathe.zJaw, DZ);
+  const lathe = cur.plan[cur.replay.at(t).op].machine === 'lathe';
+  return collisions(f.items, f.axis, f.tip, lathe ? { turning: ['hold', 'part'], still: ['move', 'cut'], cutPart: ['cut', 'part'] }
+    : { turning: ['cut', 'spin'], still: ['static', 'part'], skip: [['part', 'cut']] });
+}
+window.__make = { collide, frame(t) { const was = [st.t, spin]; st.t = t; spin = 0; const f = frameOf(); [st.t, spin] = was; return f; }, st, drawn, get cur() { return cur; }, settle() { st.play = false; touch(); }, res(k) { res = k; measure(); },
   redraw() { if (st.view === 'make') draw(); else sheet(); sync(); gl.finish(); }, at(t) { st.play = false; const was = cur.steps[stepAt(st.t)].op; st.t = t; if (cur.steps[stepAt(t)].op !== was) resetView(); touch(); } };
