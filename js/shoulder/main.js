@@ -1,12 +1,12 @@
 // Shoulder: the controller. The state is the zoom (0 Shoulder, 1 Joint, 2 Tendon), a condition or an exercise,
 // and the arm's lift and turn. Everything drawn and every number shown comes from model.js.
-import { unpack, makeModel, MUSCLES, clamp, smooth, apply, turn as turnDir } from './model.js?v=5c9274c6';
-import { V } from './geom.js?v=5c9274c6';
-import { makeView, COL } from './view.js?v=5c9274c6';
-import { SRC, DOES, CONDITIONS, EXERCISES, MODEL_NOTE, MODEL_SRC } from './facts.js?v=5c9274c6';
+import { unpack, makeModel, MUSCLES, clamp, smooth, apply, turn as turnDir } from './model.js?v=27139963';
+import { V } from './geom.js?v=27139963';
+import { makeView, COL } from './view.js?v=27139963';
+import { SRC, DOES, CONDITIONS, EXERCISES, MODEL_NOTE, MODEL_SRC } from './facts.js?v=27139963';
 import { gamepad } from '../gamepad/gamepad.js';
 
-const STAMP = '5c9274c6';                                        // written by tests/shoulder/stamp.mjs: the data files' version
+const STAMP = '27139963';                                        // written by tests/shoulder/stamp.mjs: the data files' version
 const $ = (id) => document.getElementById(id);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const cv = $('view'), gl = cv.getContext('webgl2', { antialias: true, alpha: false, stencil: true, powerPreference: 'high-performance' });
@@ -35,13 +35,12 @@ const RIDE_UP = 3;                                       // mm the ball rides up
 // ---- exercises: the pose through one round, p from 0 to 1 ----
 const wave = (p) => (1 - Math.cos(2 * Math.PI * p)) / 2;   // 0 at the start, 1 halfway, back to 0
 const EX_POSE = {
-  // one swing forward and back, one side to side, then one circle (growing and shrinking, so that one part runs into
-  // the next)
+  // one swing forward and back, one side to side, then one circle. Each grows from rest and dies back to it, so that
+  // one part runs into the next without a change of direction at speed.
   pendulum: (p) => {
-    const part = Math.min(2, Math.floor(p * 3)), u = p * 3 - part, th = 2 * Math.PI * u, A = 12;
-    if (part === 0) return { elev: 90 + A * Math.sin(th), plane: 90, rot: 0, elbow: 0 };
-    if (part === 1) return { elev: 90, plane: 90 + A * Math.sin(th), rot: 0, elbow: 0 };
-    const r = A * Math.sin(Math.PI * u); return { elev: 90 + r * Math.sin(th), plane: 90 + r * Math.cos(th), rot: 0, elbow: 0 };
+    const part = Math.min(2, Math.floor(p * 3)), u = p * 3 - part, th = 2 * Math.PI * u, r = 12 * Math.sin(Math.PI * u) ** 2;
+    const fwd = part === 1 ? 0 : r * Math.sin(th), side = part === 0 ? 0 : part === 1 ? r * Math.sin(th) : r * Math.cos(th) - r;
+    return { elev: 90 + fwd, plane: 90 + side, rot: 0, elbow: 0 };
   },
   sleeper: (p) => ({ elev: 90, plane: 90, rot: -60 * wave(p), elbow: 90 }),
   external: (p) => ({ elev: 0, plane: 30, rot: 60 * wave(p), elbow: 90 }),
