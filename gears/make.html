@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self'; connect-src 'self'; base-uri 'none'; object-src 'none'; form-action 'none'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>Making the gear cube and octahedron</title>
+<meta name="description" content="Dimensioned drawings of every part of the brass gear cube and gear octahedron, and how each part is turned and milled on a small lathe and mill.">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#05070F">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..700&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="../css/gears.css?v=2f6fbebf">
+</head>
+<body class="make">
+<canvas id="view" tabindex="0" role="img" aria-label="The part on the machine that makes it. Drag, or use the arrow keys, to turn the view; pinch or scroll to zoom."></canvas>
+<div class="sheet" id="sheet" tabindex="0" aria-label="Drawing. Pinch, scroll or press plus and minus to zoom; drag or use the arrow keys to move." hidden></div>
+
+<a class="back" href="./" aria-label="Back to the gears">
+  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M14.5 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+</a>
+
+<div class="oops" id="oops" role="alert" hidden>
+  <p id="oopsText">The picture could not be drawn. Loading the page again usually fixes it.</p>
+  <button type="button" id="reload">Load again</button>
+</div>
+<p class="loading" id="loading">Loading…</p>
+
+<main class="panel" id="panel">
+  <header class="title">
+    <h1>Making it</h1>
+  </header>
+
+  <div class="seg shapes2" role="group" aria-label="Which toy" id="shapes"></div>
+  <div class="seg parts" role="group" aria-label="Part" id="parts"></div>
+  <div class="seg views" role="group" aria-label="Show" id="views">
+    <button type="button" data-v="draw">Drawing</button>
+    <button type="button" data-v="make">Machining</button>
+  </div>
+
+  <section id="makeBox" class="makebox">
+    <p class="eyebrow" id="setup"></p>
+    <div class="stepnav">
+      <button type="button" class="nav" id="prev" aria-label="Previous step">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M14.5 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <div class="steptext" aria-live="polite">
+        <h2 id="stepTitle"></h2>
+        <p id="stepLine"></p>
+        <p class="tool" id="stepTool"></p>
+      </div>
+      <button type="button" class="nav" id="next" aria-label="Next step">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M9.5 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+    <div class="transport">
+      <button type="button" class="play" id="play" aria-label="Play" aria-pressed="false">
+        <svg class="i-play" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M7 4.5v15l12-7.5z" fill="currentColor"/></svg>
+        <svg class="i-pause" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6 4.5h4v15H6zM14 4.5h4v15h-4z" fill="currentColor"/></svg>
+      </button>
+      <div class="ctl">
+        <div class="lab"><label for="time">Machine time</label><b id="timeV" aria-hidden="true"></b></div>
+        <input id="time" type="range" min="0" max="1000" step="1" value="0">
+      </div>
+    </div>
+  </section>
+  <p class="fine" id="note"></p>
+</main>
+
+<script type="module" src="../js/gears/make.js?v=2f6fbebf"></script>
+</body>
+</html>

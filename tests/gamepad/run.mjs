@@ -73,6 +73,16 @@ const PAGES = {
     look: () => window.__saccade.st.yaw, zoom: () => window.__saccade.st.z, settle: () => window.__saccade.settle(), idle: () => !window.__saccade.busy,
     stage: () => (window.__saccade.busy ? null : Math.round(window.__saccade.st.z * 1000) / 1000),
   },
+  gears: {
+    path: 'gears/?res=0.4#s=cube4', keys: ALL, ready: () => !!(window.__gears && window.__gears.drawn.shape), before: () => window.__gears.settle(),
+    look: () => window.__gears.st.yaw, zoom: () => window.__gears.st.t, settle: () => window.__gears.settle(), idle: () => !window.__gears.busy,
+    stage: () => window.__gears.st.shape,
+  },
+  gearsmake: {
+    path: 'gears/make.html?res=0.4#s=cube4&p=core&v=make', back: 'gears/', keys: ALL, ready: () => !!(window.__make && window.__make.cur), before: () => { window.__make.settle(); window.__make.at(60); },
+    look: () => window.__make.st.yaw, zoom: () => window.__make.st.t, settle: () => window.__make.settle(), idle: () => !window.__make.st.play,
+    stage: () => window.__make.st.part,
+  },
 };
 
 let fails = 0;
@@ -297,7 +307,9 @@ async function run(name) {
   if (name === 'home') { await tap(page, 'b'); await page.waitForTimeout(200); if (page.url() !== base) fail(`${name}: B left the landing page`); }
   else {
     await set(page, 'b', 1);
-    if (!await until(page, (u) => location.href === u, base, 60000)) fail(`${name}: B did not go back to the landing page (at ${page.url()})`);
+    // a page inside an experience (P.back) goes back to that experience; the rest go back to the landing page
+    const to = P.back ? base + P.back : base;
+    if (!await until(page, ([u, sub]) => (sub ? location.href.startsWith(u) : location.href === u), [to, !!P.back], 60000)) fail(`${name}: B did not go back to ${P.back || 'the landing page'} (at ${page.url()})`);
   }
   console.log(`${name}: ${count} controls, all reached by the ring`);
   await page.context().close();
@@ -315,7 +327,8 @@ async function deck() {
   const href = await page.evaluate(() => window.__gamepad.cur.getAttribute('href'));
   if (href === first) fail('deck: the ring did not move down the list of experiences');
   await set(page, 'a', 1);
-  if (!await until(page, (u) => location.href === u, base + href, 10000)) { fail(`deck: A did not open ${href}`); return; }
+  // (the page may add its state after # as soon as it opens)
+  if (!await until(page, (u) => location.href.split('#')[0] === u, base + href, 10000)) { fail(`deck: A did not open ${href}`); return; }
   // A is still held as the new page opens: it must not press anything there
   await until(page, () => !!window.__gamepad);
   await page.evaluate(() => { window.__pad.buttons[0] = { pressed: true, touched: true, value: 1 }; window.__pad.plugged = true; dispatchEvent(new Event('gamepadconnected')); });

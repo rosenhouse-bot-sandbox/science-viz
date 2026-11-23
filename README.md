@@ -377,6 +377,7 @@ every push to `main`. In the repository settings, set Pages → Source to
 - `maple/index.html`, `css/maple.css`, `js/maple/*.js`: Japanese maple (see its section below).
 - `engine/index.html`, `css/engine.css`, `js/engine/*.js`: Engine (see its section below).
 - `shoulder/index.html`, `css/shoulder.css`, `js/shoulder/*.js`, `shoulder/data/`: Shoulder (see its section below).
+- `gears/index.html`, `css/gears.css`, `js/gears/*.js`: Gear cube and octahedron (see its section below).
 - `js/gamepad/`, `css/gamepad.css`: controller support, shared by every page (see Controller above).
 - `drafts/`: review boards from each design round.
 - `tests/vesicle/placement.mjs`: steps Vesicle fusion through every frame without a GPU and fails if a
@@ -991,3 +992,67 @@ this in "What the clinic's note may mean". It opens on poor pursuit with oversho
   (`--quick` for the desktop only) presses every control at a desktop and a phone size. After changing
   any file under `js/saccade/` or `css/saccade.css`, run `node tests/saccade/stamp.mjs`.
   `node tests/saccade/shots.mjs <dir>` writes screenshots for a reviewer.
+
+## Gear cube and octahedron
+
+A page at `gears/` that answers one question: can gears cover the faces of a regular octahedron, meshing and
+turning together like the brass fidget cube with gears on four of its six faces? Yes. The page shows the cube with
+four gears and the octahedron with eight, in 3D, built from the same kinds of parts as the toy. Drag a gear and
+the rest turn with it. A Take apart slider spreads the parts out along each gear's axis.
+
+- **The answer** (in this README only; the page shows just the picture and its controls, at Gabe's asking): gears that touch spin opposite ways, so a loop of meshing gears turns only if its
+  count is even. Four faces meet at each corner of an octahedron, three at each corner of a cube. So an
+  octahedron carries eight gears, and a cube only a ring of four. The page no longer shows the cube with six
+  gears (Gabe's choice); `tests/gears/model.mjs` still checks that it jams.
+- **The gears** (`js/gears/model.js`): bevel gears with their axes from the solid's center through the middle of
+  each face. Neighbors' axes meet at 90° on the cube and 70.53° on the octahedron (180° less the 109.47° angle
+  between two faces). Their pitch cones touch along the line through the middle of the shared edge, so each cone's
+  half-angle is half that: 45° and 35.26°. All gears are the same size, so all turn at the same speed.
+- **The teeth** are cut as bevel-gear machines cut them: the blank is rolled against a flat crown gear with straight
+  20° tooth sides, computed when the page loads. Two gears cut by the same crown gear mesh at any angle between
+  their axes. Each tooth is thinned by 5% of the tooth spacing. The cube's gears have 14 teeth and the
+  octahedron's 13. Each gear is turned so that a tooth faces a gap at each of its contacts. Around every corner
+  these turns agree for any tooth count; the test tries counts from 9 to 23. With 14 teeth (any count of 2 more
+  than a multiple of 4, with the ring set as here) all six gears on a cube would also sit together at rest.
+- **The parts** (`parts()` in model.js, drawn by `js/gears/scene.js`), as in the toy: a brass core, and on each face
+  a washer, a gear with a ball bearing pressed into it, and a flanged screw through the bearing into the core. The
+  teeth's inner ends reach below the gear's flat back, so the core's faces sit lower and the washer is thick; the
+  core's edges are cut back. The test checks that the core touches no gear. The toy's own gears are flat; these are
+  bevel gears so that they also mesh at 70.5°. The bearings' balls go round at 0.62 of the gear's speed, as balls
+  do with the outer ring turning and the inner ring held. Taking the parts apart is a slider the visitor moves; it
+  never plays by itself, and the gears cannot be turned while the parts are apart.
+- **Controls**: the shape, Play (off with reduced motion), a Spin slider, Take apart, and a tick box that colors
+  the gears by the way they spin (gold and blue). Dragging off the gears, or the arrow keys on the picture, turns
+  the view; a double click puts it back. A controller's right stick turns the view, the triggers turn the gears,
+  and the bumpers change the shape.
+- **Tests**: `node tests/gears/model.mjs` (no browser) checks which sets can turn against an independent search for
+  a loop with an odd count, turns every meshing pair through two tooth spacings and fails if a tooth enters
+  another, checks that a gear held still lets its neighbor turn no more than the backlash, and checks the core and
+  the gears that do not mesh. `node tests/gears/page.mjs` (`--quick` for the desktop only) presses every control at
+  a desktop and a phone size, drags a gear, and sweeps Spin and Take apart. After changing any file under
+  `js/gears/` or `css/gears.css`, run `node tests/gears/stamp.mjs`.
+- **Making it** (`gears/make.html`, linked from the gears page as "How to make the parts"): for each toy and each
+  part, a dimensioned drawing and the part being machined from brass, step by step.
+  - Sizes (`js/gears/spec.js`, from `MM` and `blank()` in model.js): the gears are module 1 (cube, 14 teeth, Ø15.42
+    over the teeth) and module 0.9 (octahedron, 13 teeth, Ø13.17), so both toys come out about 2 cm across. A 681X
+    ball bearing (1.5 × 4 × 2 mm, bought) is pressed into each gear, flush with its outer face. A shoulder screw
+    (M1.4 × 0.3) clamps a spacer (the washer, Ø2.2 × Ø1.6) to the core; the bearing turns on the screw's Ø1.5
+    shoulder. The cube's core is 9.00 mm across; the octahedron's is 11.00 across faces, with 1.20 mm flats on its
+    edges and corner flats 14.00 apart.
+  - Drawings (`js/gears/drawing.js`, SVG built from numbers): third-angle views, hatched sections, a gear data
+    table and a title block. Pinch, scroll or use + and − to zoom. These are the page's own engineering choices,
+    not the real toy's drawings.
+  - Machining (`js/gears/plan.js` for the steps, `js/gears/cut.js` to replay them, `js/gears/shop.js` and
+    `js/gears/make.js` to draw them): gears are turned in a 3-jaw chuck, finished on an expanding mandrel, then
+    their teeth are cut one gap at a time with an involute form cutter, the blank on a dividing head tilted to the
+    root angle. The cube's core is milled in a vise; the octahedron's is squared in the vise, then held in a 5C
+    square collet in an indexer tilted 35.26° for its eight faces. Spacers and screws are turned from rod in
+    collets; the screw's thread is cut with a die and its slot with a slitting saw. Times are real machine
+    times; the animation plays them faster (the page says the total). Spindle speeds suit HSS tools in
+    free-cutting brass. A single-point form cutter on a tilted head is how a home shop makes a bevel gear; the
+    tooth is then an approximation, which is why the drawing says to check the mesh in pairs.
+  - Tests: `node tests/gears/make.mjs` (no browser) plays every plan and fails if the finished part differs from
+    its drawing (diameters, lengths, faces, holes, every gap, the slot), a tool comes within 0.4 mm of the jaws,
+    or a speed is out of range. `node tests/gears/makepage.mjs` (`--quick` for the desktop only) checks that no
+    text on a drawing overlaps other text or leaves the frame, steps through every machining step, and fails on a
+    control that moved or a blank picture.
