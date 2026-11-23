@@ -1,8 +1,8 @@
 // Overshoot saccades: the controller. The state is the zoom (0 Screen, 1 Eyes, 2 Muscles), healthy or poor pursuit,
 // how fast time runs, and the target. The simulation in model.js moves the eyes; scene.js draws them.
-import { makeSim, STEP, INSET_DEG, CATCHUP, SCREEN, MUSCLES, PURSUIT, onScreen, gazeOf, eyeGaze, listing, turnOf, rate, musclePath, rot } from './model.js?v=c6871684';
-import { makeScene, camera } from './scene.js?v=c6871684';
-import { SRC, CONDITIONS, SACCADES, CAPTIONS, NOTE, NOTE_SRC, MODEL, MODEL_SRC, INSET } from './facts.js?v=c6871684';
+import { makeSim, STEP, INSET_DEG, CATCHUP, SCREEN, MUSCLES, PURSUIT, onScreen, gazeOf, eyeGaze, listing, turnOf, rate, musclePath, rot } from './model.js?v=0c109ece';
+import { makeScene, camera } from './scene.js?v=0c109ece';
+import { SRC, CONDITIONS, SACCADES, CAPTIONS, NOTE, NOTE_SRC, MODEL, MODEL_SRC, INSET } from './facts.js?v=0c109ece';
 import { gamepad } from '../gamepad/gamepad.js';
 
 const $ = (id) => document.getElementById(id);

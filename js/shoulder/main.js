@@ -1,13 +1,13 @@
 // Shoulder: the controller. The state is the zoom (0 Shoulder, 1 Joint, 2 Tendon), a condition or an exercise,
 // and the arm's lift and turn. Everything drawn and every number shown comes from model.js.
-import { unpack, makeModel, MUSCLES, clamp, smooth, apply, turn as turnDir } from './model.js?v=d5629277';
-import { V } from './geom.js?v=d5629277';
-import { makeView, COL } from './view.js?v=d5629277';
-import { SRC, DOES, CONDITIONS, EXERCISES, MODEL_NOTE, MODEL_SRC } from './facts.js?v=d5629277';
-import { EX_POSE, EX_STILL, EX_SECONDS } from './exercises.js?v=d5629277';
+import { unpack, makeModel, MUSCLES, clamp, smooth, apply, turn as turnDir } from './model.js?v=3896650a';
+import { V } from './geom.js?v=3896650a';
+import { makeView, COL } from './view.js?v=3896650a';
+import { SRC, DOES, CONDITIONS, EXERCISES, MODEL_NOTE, MODEL_SRC } from './facts.js?v=3896650a';
+import { EX_POSE, EX_STILL, EX_SECONDS } from './exercises.js?v=3896650a';
 import { gamepad } from '../gamepad/gamepad.js';
 
-const STAMP = 'd5629277';                                        // written by tests/shoulder/stamp.mjs: the data files' version
+const STAMP = '3896650a';                                        // written by tests/shoulder/stamp.mjs: the data files' version
 const $ = (id) => document.getElementById(id);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const cv = $('view'), gl = cv.getContext('webgl2', { antialias: true, alpha: false, stencil: true, powerPreference: 'high-performance' });
