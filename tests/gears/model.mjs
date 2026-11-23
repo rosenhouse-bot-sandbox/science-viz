@@ -7,7 +7,7 @@
 //  - the numbers the page shows (the angle between axes, the cone angle, the tooth count) are the ones it uses.
 //
 //   node tests/gears/model.mjs
-import { SHAPES, makeShape, angles, inside, bodyPlanes, bodyFaces, dot, norm, R_IN, R_OUT } from '../../js/gears/model.js';
+import { SHAPES, makeShape, angles, inside, bodyPlanes, bodyFaces, parts, dot, norm, R_IN, R_OUT } from '../../js/gears/model.js';
 
 let fails = 0;
 const fail = (what) => { fails++; console.log('FAIL ' + what); };
@@ -100,7 +100,7 @@ for (const sh of SHAPES) {
   }));
   // sample the body's surface: corners, edges, and across each face
   const faces = bodyFaces(bodyPlanes(sh)), pts = [];
-  if (faces.length !== sh.normals.length + sh.plainNormals.length + { cube4: 12, cube6: 12, octa: 12 }[sh.id]) fail(`${sh.id}: the body has ${faces.length} faces`);
+  if (faces.length !== sh.normals.length + sh.plainNormals.length + { cube4: 12, cube6: 12, octa: 18 }[sh.id]) fail(`${sh.id}: the body has ${faces.length} faces`);
   for (const f of faces) {
     const P = f.poly, c = P.reduce((s, p) => [s[0] + p[0] / P.length, s[1] + p[1] / P.length, s[2] + p[2] / P.length], [0, 0, 0]);
     for (let k = 0; k < P.length; k++) for (let u = 0; u <= 10; u++) for (let v = 0; v <= 10 - u; v++) {
@@ -108,10 +108,16 @@ for (const sh of SHAPES) {
       pts.push([0, 1, 2].map((x) => a[x] * u / 10 + b[x] * v / 10 + c[x] * w));
     }
   }
+  // a gear's metal: the toothed band between its front and back cones, and the disc inside it
+  const P = parts(sh);
   let hit = 0;
   for (const p of pts) {
-    const r = Math.hypot(...p); if (r < R_IN - 1e-9 || r > R_OUT) continue;
-    for (let i = 0; i < sh.normals.length; i++) if (Math.acos(Math.min(1, dot(norm(p), sh.normals[i]))) <= tip) hit++;
+    const r = Math.hypot(...p);
+    for (let i = 0; i < sh.normals.length; i++) {
+      const along = dot(p, sh.normals[i]), th = Math.acos(Math.max(-1, Math.min(1, along / r))), s = r * Math.cos(th - sh.alpha);
+      if (th <= tip && s >= R_IN - 1e-9 && s <= R_OUT) hit++;
+      else if (along >= P.back - 1e-9 && Math.sqrt(Math.max(0, r * r - along * along)) <= P.rootR) hit++;
+    }
   }
   if (hit) fail(`${sh.id}: the body reaches into a gear at ${hit} sample points`);
 }

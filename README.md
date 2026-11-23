@@ -1031,3 +1031,28 @@ the rest turn with it. A Take apart slider spreads the parts out along each gear
   the gears that do not mesh. `node tests/gears/page.mjs` (`--quick` for the desktop only) presses every control at
   a desktop and a phone size, drags a gear, and sweeps Spin and Take apart. After changing any file under
   `js/gears/` or `css/gears.css`, run `node tests/gears/stamp.mjs`.
+- **Making it** (`gears/make.html`, linked from the gears page as "How to make the parts"): for each toy and each
+  part, a dimensioned drawing and the part being machined from brass, step by step.
+  - Sizes (`js/gears/spec.js`, from `MM` and `blank()` in model.js): the gears are module 1 (cube, 14 teeth, Ø15.42
+    over the teeth) and module 0.9 (octahedron, 13 teeth, Ø13.17), so both toys come out about 2 cm across. A 681X
+    ball bearing (1.5 × 4 × 2 mm, bought) is pressed into each gear, flush with its outer face. A shoulder screw
+    (M1.4 × 0.3) clamps a spacer (the washer, Ø2.2 × Ø1.6) to the core; the bearing turns on the screw's Ø1.5
+    shoulder. The cube's core is 9.00 mm across; the octahedron's is 11.00 across faces, with 1.20 mm flats on its
+    edges and corner flats 14.00 apart.
+  - Drawings (`js/gears/drawing.js`, SVG built from numbers): third-angle views, hatched sections, a gear data
+    table and a title block. Pinch, scroll or use + and − to zoom. These are the page's own engineering choices,
+    not the real toy's drawings.
+  - Machining (`js/gears/plan.js` for the steps, `js/gears/cut.js` to replay them, `js/gears/shop.js` and
+    `js/gears/make.js` to draw them): gears are turned in a 3-jaw chuck, finished on an expanding mandrel, then
+    their teeth are cut one gap at a time with an involute form cutter, the blank on a dividing head tilted to the
+    root angle. The cube's core is milled in a vise; the octahedron's is squared in the vise, then held in a 5C
+    square collet in an indexer tilted 35.26° for its eight faces. Spacers and screws are turned from rod in
+    collets; the screw's thread is cut with a die and its slot with a slitting saw. Times are real machine
+    times; the animation plays them faster (the page says the total). Spindle speeds suit HSS tools in
+    free-cutting brass. A single-point form cutter on a tilted head is how a home shop makes a bevel gear; the
+    tooth is then an approximation, which is why the drawing says to check the mesh in pairs.
+  - Tests: `node tests/gears/make.mjs` (no browser) plays every plan and fails if the finished part differs from
+    its drawing (diameters, lengths, faces, holes, every gap, the slot), a tool comes within 0.4 mm of the jaws,
+    or a speed is out of range. `node tests/gears/makepage.mjs` (`--quick` for the desktop only) checks that no
+    text on a drawing overlaps other text or leaves the frame, steps through every machining step, and fails on a
+    control that moved or a blank picture.

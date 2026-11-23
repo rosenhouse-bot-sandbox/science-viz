@@ -1,9 +1,9 @@
 // Gears on a cube and an octahedron: the controller. The state is which solid, how far the gears have turned, and
 // the camera. Dragging a gear turns it about its own axis, and every gear it meshes with follows.
-import { SHAPES, angles, dot, cross, norm, R_IN, R_OUT } from './model.js?v=c2329040';
-import { makeScene } from './scene.js?v=c2329040';
-import { KEY } from './facts.js?v=c2329040';
-import { perspective, lookAt, mul4 } from './gl.js?v=c2329040';
+import { SHAPES, angles, dot, cross, norm, R_IN, R_OUT, MM } from './model.js?v=2f6fbebf';
+import { makeScene } from './scene.js?v=2f6fbebf';
+import { KEY } from './facts.js?v=2f6fbebf';
+import { perspective, lookAt, mul4 } from './gl.js?v=2f6fbebf';
 import { gamepad } from '../gamepad/gamepad.js';
 
 const $ = (id) => document.getElementById(id);
@@ -13,7 +13,7 @@ const TAU = 2 * Math.PI, D = Math.PI / 180;
 const cv = $('view'), gl = cv.getContext('webgl2', { antialias: true, alpha: false, powerPreference: 'high-performance' });
 const by = Object.fromEntries(SHAPES.map((s) => [s.id, s]));
 const SHOWN = [by.cube4, by.octa];                     // (the cube with six gears jams; the tests still check that)
-const CAGE = (1 + 0.064 / 0.276) / 2;                  // a bearing's balls go round at this share of the gear's speed (outer ring turning, inner held)
+const CAGE = (1 + MM.bearing.ball / MM.bearing.pitch) / 2;   // a bearing's balls go round at this share of the gear's speed (outer ring turning, inner held)
 const SPEED = 24 * D;                                  // how fast Play turns the gears, radians a second
 const VIEW = { yaw: 0.35, pitch: 0.85 };                // the camera at the start, and after a double click
 const st = { shape: 'octa', t: 0, e: 0, play: !reduced, color: false, yaw: VIEW.yaw, pitch: VIEW.pitch, hi: -1, held: -1 };
@@ -91,6 +91,7 @@ const deg = (r, d = 1) => `${(r * 180 / Math.PI).toFixed(d).replace(/\.0$/, '')}
 function sync() {
   const sh = shape();
   for (const b of $('shapes').children) b.setAttribute('aria-pressed', String(b.dataset.id === st.shape));
+  const mk = 'make.html#s=' + (st.shape === 'octa' ? 'octa' : 'cube4'); if ($('more').getAttribute('href') !== mk) $('more').setAttribute('href', mk);
   const tv = $('turn'), td = Math.round(((st.t / D) % 360 + 360) % 360) % 360;
   if (+tv.value !== td) tv.value = td;
   tv.style.setProperty('--v', (td / 359 * 100) + '%'); tv.setAttribute('aria-valuetext', `${td} degrees`);

@@ -143,11 +143,13 @@ Before pushing:
   shape or how the gears are set: it turns every meshing pair and fails if a tooth enters another, if the teeth do
   not engage, if the cube with six gears can turn or another set cannot, or if the body touches a gear. Then
   `node tests/gears/page.mjs` (`--quick` for the desktop only). Numbers and sentences on screen come from
-  `js/gears/model.js` and `js/gears/facts.js`. After changing any file under `js/gears/` or `css/gears.css`, run
-  `node tests/gears/stamp.mjs`.
+  `js/gears/model.js` and `js/gears/facts.js`. The workshop page (`gears/make.html`): after changing a size, a plan or
+  how cuts are replayed, run `node tests/gears/make.mjs` (no browser; the finished part must match its drawing), then
+  `node tests/gears/makepage.mjs` (`--quick` for the desktop only). After changing any file under `js/gears/` or
+  `css/gears.css`, run `node tests/gears/stamp.mjs`.
 - After changing `js/gamepad/`, `css/gamepad.css`, a page's `gamepad({ ... })` mapping, or which
   controls a page has, run `node tests/gamepad/run.mjs` (or with page names: `home`, `rainbows`,
-  `vesicle`, `optics`, `graph`, `maple`, `engine`, `shoulder`, `saccade`, `gears`, `deck`). It drives each page with a simulated Xbox
+  `vesicle`, `optics`, `graph`, `maple`, `engine`, `shoulder`, `saccade`, `gears`, `gearsmake`, `deck`). It drives each page with a simulated Xbox
   controller at 1280 × 800 and fails if the ring cannot reach a control, a stick, trigger or bumper
   does nothing, or the picture of the pad does not list exactly what the page maps. A new page
   needs a mapping, and an entry in `PAGES` there.

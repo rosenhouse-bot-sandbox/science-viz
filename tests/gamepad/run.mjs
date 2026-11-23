@@ -78,6 +78,11 @@ const PAGES = {
     look: () => window.__gears.st.yaw, zoom: () => window.__gears.st.t, settle: () => window.__gears.settle(), idle: () => !window.__gears.busy,
     stage: () => window.__gears.st.shape,
   },
+  gearsmake: {
+    path: 'gears/make.html?res=0.4#s=cube4&p=core&v=make', back: 'gears/', keys: ALL, ready: () => !!(window.__make && window.__make.cur), before: () => { window.__make.settle(); window.__make.at(60); },
+    look: () => window.__make.st.yaw, zoom: () => window.__make.st.t, settle: () => window.__make.settle(), idle: () => !window.__make.st.play,
+    stage: () => window.__make.st.part,
+  },
 };
 
 let fails = 0;
@@ -302,7 +307,9 @@ async function run(name) {
   if (name === 'home') { await tap(page, 'b'); await page.waitForTimeout(200); if (page.url() !== base) fail(`${name}: B left the landing page`); }
   else {
     await set(page, 'b', 1);
-    if (!await until(page, (u) => location.href === u, base, 60000)) fail(`${name}: B did not go back to the landing page (at ${page.url()})`);
+    // a page inside an experience (P.back) goes back to that experience; the rest go back to the landing page
+    const to = P.back ? base + P.back : base;
+    if (!await until(page, ([u, sub]) => (sub ? location.href.startsWith(u) : location.href === u), [to, !!P.back], 60000)) fail(`${name}: B did not go back to ${P.back || 'the landing page'} (at ${page.url()})`);
   }
   console.log(`${name}: ${count} controls, all reached by the ring`);
   await page.context().close();

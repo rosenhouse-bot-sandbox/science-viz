@@ -1,8 +1,9 @@
 // Gears on a cube and an octahedron: the 3D picture. The parts are the ones the brass toy is made of: a core block,
 // and on each face a washer, a toothed gear with a ball bearing pressed into it, and a flanged screw. Sizes come
 // from model.js; nothing here decides how the gears move.
-import { program, meshBuffers } from './gl.js?v=c2329040';
-import { R_IN, R_OUT, bodyPlanes, bodyFaces, parts } from './model.js?v=c2329040';
+import { program, meshBuffers } from './gl.js?v=2f6fbebf';
+import { bodyPlanes, bodyFaces, parts } from './model.js?v=2f6fbebf';
+import { grow, gearMesh, smallParts } from './mesh.js?v=2f6fbebf';
 
 const VS = `#version 300 es
 layout(location=0) in vec3 aPos; layout(location=1) in vec3 aNor; layout(location=2) in vec3 aT;
@@ -49,79 +50,10 @@ void main(){
 }`;
 
 // ---- building meshes ----
-function grow() { const P = [], N = [], T = [], I = []; return { P, N, T, I, v(p, n, t) { P.push(p[0], p[1], p[2]); N.push(n[0], n[1], n[2]); T.push(t[0], t[1], t[2]); return P.length / 3 - 1; } }; }
 function upload(gl, g) {
   const m = meshBuffers(gl, g.P.length / 3, new Uint32Array(g.I));
   m.setPos(new Float32Array(g.P)); m.setNor(new Float32Array(g.N)); m.setTT(new Float32Array(g.T));
   return m;
-}
-const dir = (th, ps) => [Math.sin(th) * Math.cos(ps), Math.sin(th) * Math.sin(ps), Math.cos(th)];
-const sc = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
-const SEG = 72;
-// a solid of revolution about z from a list of [radius, height] points; each segment is its own band, so edges stay sharp
-function lathe(g, pts, kind, seg = SEG) {
-  for (let k = 0; k + 1 < pts.length; k++) {
-    const [r0, z0] = pts[k], [r1, z1] = pts[k + 1], dr = r1 - r0, dz = z1 - z0, l = Math.hypot(dr, dz) || 1, nr = dz / l, nz = -dr / l;
-    const a = [], b = [];
-    for (let s = 0; s <= seg; s++) {
-      const t = s / seg * 2 * Math.PI, c = Math.cos(t), si = Math.sin(t), n = [nr * c, nr * si, nz];
-      a.push(g.v([r0 * c, r0 * si, z0], n, [kind, r0, 0])); b.push(g.v([r1 * c, r1 * si, z1], n, [kind, r1, 0]));
-    }
-    for (let s = 0; s < seg; s++) g.I.push(a[s], b[s], b[s + 1], a[s], b[s + 1], a[s + 1]);
-  }
-  // the thread's rings go by height, not radius
-  if (kind === 5) for (let i = 0; i < g.T.length; i += 3) if (g.T[i] === 5) g.T[i + 1] = g.P[i + 2];
-}
-function sphere(g, c, r, kind) {
-  const st = 10, sl = 16, first = g.P.length / 3;
-  for (let i = 0; i <= st; i++) for (let j = 0; j <= sl; j++) {
-    const th = i / st * Math.PI, ph = j / sl * 2 * Math.PI, n = [Math.sin(th) * Math.cos(ph), Math.sin(th) * Math.sin(ph), Math.cos(th)];
-    g.v([c[0] + r * n[0], c[1] + r * n[1], c[2] + r * n[2]], n, [kind, 0, 0]);
-  }
-  for (let i = 0; i < st; i++) for (let j = 0; j < sl; j++) { const a = first + i * (sl + 1) + j, b = a + sl + 1; g.I.push(a, b, b + 1, a, b + 1, a + 1); }
-}
-
-// one gear in its own frame (axis along z), tooth 0 centered on the x axis: a disc with a bore for the bearing, and
-// its teeth on a cone round the rim, every tooth surface aimed at the solid's center
-function gearGeometry(pr, P) {
-  const pts = [], half = pr.half, rows = pr.th.length;
-  for (let k = 0; k < pr.N; k++) {
-    const c = k * 2 * half, rootW = pr.hw[0];
-    pts.push({ th: pr.root, ps: c - half, sharp: false });
-    for (let s = 1; s <= 3; s++) pts.push({ th: pr.root, ps: c - half + (half - rootW) * s / 3 * 0.999, sharp: s === 3 });
-    for (let r = 1; r < rows; r++) pts.push({ th: pr.th[r], ps: c - pr.hw[r], sharp: r === rows - 1 });
-    for (let s = 1; s < 4; s++) pts.push({ th: pr.tip, ps: c - pr.hw[rows - 1] + 2 * pr.hw[rows - 1] * s / 4, sharp: false });
-    for (let r = rows - 1; r >= 1; r--) pts.push({ th: pr.th[r], ps: c + pr.hw[r], sharp: r === rows - 1 });
-    for (let s = 3; s >= 1; s--) pts.push({ th: pr.root, ps: c + half - (half - rootW) * s / 3 * 0.999, sharp: s === 3 });
-  }
-  const n = pts.length, g = grow(), K = [0, 0, 0];
-  const segN = [];
-  for (let j = 0; j < n; j++) {
-    const a = dir(pts[j].th, pts[j].ps), b = dir(pts[(j + 1) % n].th, pts[(j + 1) % n].ps);
-    const e = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2];
-    const nn = [m[1] * e[2] - m[2] * e[1], m[2] * e[0] - m[0] * e[2], m[0] * e[1] - m[1] * e[0]], l = Math.hypot(...nn) || 1;
-    segN.push(sc(nn, -1 / l));
-  }
-  const at = (j) => { if (pts[j].sharp) return null; const A = segN[(j - 1 + n) % n], B = segN[j], s = [A[0] + B[0], A[1] + B[1], A[2] + B[2]], l = Math.hypot(...s); return sc(s, 1 / l); };
-  // the toothed rim
-  for (let j = 0; j < n; j++) {
-    const j1 = (j + 1) % n, a = dir(pts[j].th, pts[j].ps), b = dir(pts[j1].th, pts[j1].ps), na = at(j) || segN[j], nb = at(j1) || segN[j];
-    const i0 = g.v(sc(a, R_IN), na, K), i1 = g.v(sc(a, R_OUT), na, K), i2 = g.v(sc(b, R_OUT), nb, K), i3 = g.v(sc(b, R_IN), nb, K);
-    g.I.push(i0, i1, i2, i0, i2, i3);
-  }
-  // the two faces: the teeth's ends, then the flat disc in to the bore
-  const bore = P.bearing.outer;
-  for (const [R, z, s] of [[R_OUT, P.front, 1], [R_IN, P.back, -1]]) {
-    for (let j = 0; j < n; j++) {
-      const j1 = (j + 1) % n, A = [j, j1].map((q) => sc(dir(pts[q].th, pts[q].ps), R)), B = [j, j1].map((q) => sc(dir(pr.root, pts[q].ps), R));
-      const C = [j, j1].map((q) => [bore * Math.cos(pts[q].ps), bore * Math.sin(pts[q].ps), z]);
-      const ids = (L) => L.map((p) => g.v(p, [0, 0, s], K));
-      const [a0, a1] = ids(A), [b0, b1] = ids(B), [c0, c1] = ids(C);
-      g.I.push(b0, a0, a1, b0, a1, b1, c0, b0, b1, c0, b1, c1);
-    }
-  }
-  lathe(g, [[bore, P.back], [bore, P.front]], 0, 96);
-  return g;
 }
 function bodyGeometry(sh) {
   const g = grow();
@@ -131,19 +63,6 @@ function bodyGeometry(sh) {
   }
   return g;
 }
-// the small parts, in a gear's frame, at their assembled places
-function smallParts(P) {
-  const B = P.bearing, mid = (P.front + P.back) / 2, w = B.width / 2, ch = 0.008;
-  const outer = grow(); lathe(outer, [[B.outer - 0.045, mid - w], [B.outer, mid - w], [B.outer, mid + w], [B.outer - 0.045, mid + w], [B.outer - 0.045, mid - w]], 3);
-  const inner = grow(); lathe(inner, [[B.inner, mid - w], [B.inner + 0.045, mid - w], [B.inner + 0.045, mid + w], [B.inner, mid + w], [B.inner, mid - w]], 3);
-  const ball = grow(); sphere(ball, [0, 0, 0], B.ball, 3);
-  const washer = grow(); lathe(washer, [[P.washer.inner, P.core], [P.washer.inner, P.back], [P.washer.outer, P.back], [P.washer.outer, P.core]], 4);
-  const S = P.screw, z0 = P.front + 0.012, z1 = z0 + S.thick;
-  const screw = grow();
-  lathe(screw, [[0, z1], [S.flange - 0.02, z1], [S.flange, z1 - 0.02], [S.flange, z0], [S.post, z0], [S.post, P.back - 0.02]], 1);
-  lathe(screw, [[S.post, P.back - 0.02], [S.post, P.core - S.into], [0, P.core - S.into]], 5);
-  return { outer, inner, ball, washer, screw, mid };
-}
 // how far out along its axis each part sits when the set is taken apart by e (0 to 1)
 export const SPREAD = { washer: 0.3, gear: 0.7, bearing: 1.1, screw: 1.55 };
 
@@ -151,7 +70,7 @@ export function makeScene(gl, SHAPES) {
   const prog = program(gl, VS, FS), u = prog.u, kit = {};
   for (const sh of SHAPES) {
     const P = parts(sh), sp = smallParts(P);
-    kit[sh.id] = { P, gear: upload(gl, gearGeometry(sh.profile, P)), body: upload(gl, bodyGeometry(sh)), mid: sp.mid,
+    kit[sh.id] = { P, gear: upload(gl, gearMesh(sh.profile, P)), body: upload(gl, bodyGeometry(sh)), mid: sp.mid,
       outer: upload(gl, sp.outer), inner: upload(gl, sp.inner), ball: upload(gl, sp.ball), washer: upload(gl, sp.washer), screw: upload(gl, sp.screw) };
   }
   const g = grow(); g.v([-1, -1, 0], [0, 0, 1], [-1, -1, 0]); g.v([3, -1, 0], [0, 0, 1], [3, -1, 0]); g.v([-1, 3, 0], [0, 0, 1], [-1, 3, 0]); g.I.push(0, 1, 2);

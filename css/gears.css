@@ -59,6 +59,9 @@ input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;bac
 /* a row keeps its size whatever its number says */
 .fine{margin:0;font-size:0.75rem;line-height:1.4;color:var(--ink3)}
 .fine:empty{display:none}
+.more{display:flex;align-items:center;justify-content:center;min-block-size:40px;border-radius:10px;border:1px solid var(--line,rgba(255,255,255,.14));color:var(--ink);text-decoration:none;font-size:0.9rem;font-weight:600}
+.more:hover{background:rgba(255,255,255,.06)}
+.more:focus-visible{outline:2px solid #e9efff;outline-offset:2px}
 
 
 @media (forced-colors:active){.seg button[aria-pressed="true"]{outline:2px solid Highlight;outline-offset:-2px}.chips button[aria-pressed="true"]{outline:2px solid Highlight;outline-offset:-2px}}
@@ -101,3 +104,47 @@ input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;bac
 @media (max-width:899px){.panel{height:auto;max-height:47%}}
 @media (min-width:900px){.panel{bottom:auto}}
 @media (min-width:900px){.title h1{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}.panel{top:calc(64px + env(safe-area-inset-top))}}
+
+/* ---- the workshop page (make.html) ---- */
+.make .parts{grid-template-columns:repeat(5,1fr);grid-auto-flow:row}
+.make .shapes2,.make .views{grid-template-columns:repeat(2,1fr);grid-auto-flow:row}
+.make .parts button{padding:8px 2px;font-size:0.8125rem}
+.makebox{display:grid;gap:10px}
+.makebox .eyebrow{margin:0}
+.stepnav{display:grid;grid-template-columns:40px 1fr 40px;gap:8px;align-items:center}
+.stepnav .nav{width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:rgba(234,240,255,.07);color:var(--ink);display:grid;place-items:center;cursor:pointer;padding:0}
+.stepnav .nav:hover{background:rgba(234,240,255,.16)}
+.stepnav .nav:disabled{opacity:.35;cursor:not-allowed}
+.steptext{min-width:0;display:grid;gap:2px;min-height:5.6em;align-content:start}
+.steptext h2{margin:0;font-family:var(--display);font-weight:600;font-size:1.0625rem;letter-spacing:-.01em;line-height:1.2}
+.steptext p{margin:0;font-size:0.875rem;line-height:1.35;color:var(--ink2)}
+.steptext .tool{font-family:var(--mono);font-size:0.75rem;color:var(--gold)}
+#timeV{min-width:11ch}
+.sheet{position:fixed;z-index:1;overflow:hidden;touch-action:none;cursor:zoom-in;outline-offset:-3px}
+.sheet.zoomed{cursor:grab}
+.sheet svg{width:100%;height:100%;display:block;transform-origin:0 0;padding:12px;box-sizing:border-box}
+.make .fine:empty{display:none}
+/* the drawing: dark ink on warm paper, line weights in sheet millimeters */
+.drawing{filter:drop-shadow(0 6px 24px rgba(0,0,0,.5))}
+.drawing .paper{fill:#f4f1e8}
+.drawing .frame{fill:none;stroke:#1d2733;stroke-width:.5}
+.drawing line,.drawing path,.drawing circle{fill:none;stroke:#1d2733;stroke-linecap:round;stroke-linejoin:round}
+.drawing .ol{stroke-width:.35}
+.drawing .sec{stroke-width:.35;fill:url(#hatch)}
+.drawing .hl{stroke:#1d2733;stroke-width:.13}
+.drawing .thin,.drawing .dl,.drawing .tbl{stroke-width:.15}
+.drawing .dl{stroke:#2a4d7a}
+.drawing .cl{stroke-width:.15;stroke:#6b4a2a;stroke-dasharray:4 .8 .6 .8}
+.drawing .ph{stroke-width:.15;stroke:#6b4a2a;stroke-dasharray:1.2 1}
+.drawing .hid{stroke-width:.2;stroke-dasharray:1.2 .6}
+.drawing .ball{fill:#f4f1e8;stroke-width:.35}
+.drawing .ah{fill:#2a4d7a;stroke:none}
+.drawing .dot{fill:#2a4d7a;stroke:none}
+.drawing .tb{fill:none;stroke:#1d2733;stroke-width:.35}
+.drawing text{font-family:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;fill:#1d2733;stroke:none}
+.drawing .dt{font-size:2.5px;fill:#2a4d7a}
+.drawing .nt{font-size:2.3px}
+.drawing .vl{font-size:3px;font-weight:700;letter-spacing:.3px}
+.drawing .tk{font-size:2.2px;fill:#5a6470}
+.drawing .tv{font-size:2.5px}
+.drawing .tt{font-size:3px;font-weight:700}

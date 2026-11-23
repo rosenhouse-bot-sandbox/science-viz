@@ -156,24 +156,62 @@ export function inside(sh, i, t, d, ang = angles(sh, t)) {
   return Math.abs(u) < halfWidth(sh.profile, th);
 }
 
-// ---- the parts ----
-// Each gear is a thin brass disc with its teeth on the rim, turning on a ball bearing pressed into its middle. A
-// flanged screw through the bearing holds it to the brass core, with a thick washer between gear and core. The core is the
-// solid itself, with its edges cut back so that they clear the teeth. Sizes are in units of the teeth's outer end.
+// ---- the parts, in millimeters ----
+// The real sizes. The gears are measured by their module (the pitch diameter at the teeth's outer end, divided by
+// the tooth count): 1 mm on the cube, 0.9 mm on the octahedron, both standard sizes. That sets how many
+// millimeters one unit of the picture is, a little under 10 for the cube and a little over 10 for the octahedron.
+// Each gear turns on a 681X ball bearing (1.5 mm bore, 4 mm across, 2 mm wide), bought, not made.
+export const MODULE = { cube: 1, octa: 0.9 };
+export const unitMM = (sh) => MODULE[sh.solid] * sh.teeth / (2 * Math.sin(sh.alpha));
+export const MM = {
+  bearing: { d: 1.5, D: 4, B: 2, innerOD: 2.3, outerID: 3.25, balls: 7, ball: 0.8, pitch: 2.75 },
+  spacer: { od: 2.2, id: 1.6 },
+  // a shoulder screw: slotted flange, a boss that bears on the bearing's inner ring (so the flange clears the gear),
+  // a shoulder the bearing turns on, and an M1.4 thread into the core
+  screw: { flange: 6, thick: 0.8, boss: 2.2, bossH: 0.3, shoulder: 1.5, thread: 1.4, pitch: 0.3, threadL: 2.5, slot: 0.4, slotD: 0.35, clamp: 0.05 },
+  tap: { drill: 1.1, depth: 3, drillDepth: 3.6 },
+  // the core: center to a gear's face; each edge cut back by a 45° chamfer (cube, its leg) or to a flat this wide
+  // (octahedron); and the octahedron's six corners cut flat, this far from the center
+  core: { cube: 4.5, octa: 5.5 },
+  chamfer: { cube: 0.6, octa: 1.2 },
+  corner: { octa: 7 },
+};
+// a gear blank's outline in its own frame (r out from the axis, z along it, from the solid's center), in units.
+// The teeth's outer ends lie on the back cone and their inner ends on the front cone: both square to the pitch
+// cone, as on any bevel gear. Tip: the teeth's tops; root: the bottom of the gaps.
+export function blank(sh) {
+  const pr = sh.profile, a = pr.alpha;
+  const at = (th, R) => { const rho = R / Math.cos(th - a); return { r: rho * Math.sin(th), z: rho * Math.cos(th) }; };
+  return { tipOut: at(pr.tip, R_OUT), rootOut: at(pr.root, R_OUT), tipIn: at(pr.tip, R_IN), rootIn: at(pr.root, R_IN),
+    pitchOut: at(a, R_OUT), pitchIn: at(a, R_IN) };
+}
+// distance from the center along a tooth's line at polar angle th, at the back (R_OUT) or front (R_IN) cone
+export const endAt = (pr, th, R) => R / Math.cos(th - pr.alpha);
+
+// Each gear is a thin brass disc with its teeth on the rim, turning on a ball bearing pressed into its middle
+// (flush with the outer face). A shoulder screw through the bearing holds it to the brass core, with a spacer
+// between the bearing's inner ring and the core. The core is the solid itself, its edges cut back so that they
+// clear the teeth. Sizes here are in units of the teeth's outer end; MM above has them in millimeters.
 export function parts(sh) {
-  const pr = sh.profile;
-  const front = R_OUT * Math.cos(pr.root), back = R_IN * Math.cos(pr.root);   // the gear disc's two flat faces
-  // the core's faces stay inside the teeth's inner ends, which reach below the disc; a thick washer makes up the gap
-  const core = R_IN * Math.cos(pr.tip) * 0.97;
-  return { front, back, core, rootR: R_OUT * Math.sin(pr.root),
-    bearing: { outer: 0.2, inner: 0.075, ball: 0.032, pitch: 0.138, balls: 9, width: Math.min(0.13, front - back - 0.02) },
-    washer: { outer: 0.13, inner: 0.065 }, screw: { flange: 0.3, thick: 0.05, post: 0.062, into: 0.22 } };
+  const u = unitMM(sh), b = blank(sh), B = MM.bearing, S = MM.screw;
+  const front = b.rootOut.z, back = b.rootIn.z, core = MM.core[sh.solid] / u;
+  return { u, front, back, core, rootR: b.rootOut.r,
+    bearing: { outer: B.D / 2 / u, inner: B.d / 2 / u, innerOD: B.innerOD / 2 / u, outerID: B.outerID / 2 / u, ball: B.ball / 2 / u, pitch: B.pitch / 2 / u, balls: B.balls, width: B.B / u, mid: front - B.B / 2 / u },
+    washer: { outer: MM.spacer.od / 2 / u, inner: MM.spacer.id / 2 / u, top: front - B.B / u },
+    screw: { flange: S.flange / 2 / u, thick: S.thick / u, boss: S.boss / 2 / u, bossH: S.bossH / u, post: S.shoulder / 2 / u, thread: S.thread / 2 / u,
+      shoulderEnd: core + S.clamp / u, into: S.threadL / u, slot: S.slot / u, slotD: S.slotD / u } };
 }
 export function bodyPlanes(sh) {
-  const P = parts(sh), all = [...sh.normals, ...sh.plainNormals], planes = all.map((n) => ({ n, d: P.core }));
-  // cut back every edge, across the line from the center through its middle
+  const P = parts(sh), u = P.u, all = [...sh.normals, ...sh.plainNormals], planes = all.map((n) => ({ n, d: P.core, kind: 'face' }));
+  // cut back every edge, across the line from the center through its middle. A chamfer of width w across a
+  // sharp edge at distance e from the center sits at e - (w / 2) tan(alpha), alpha being half the angle between
+  // the two faces' normals.
   const near = Math.max(...all.flatMap((a, i) => all.filter((_, j) => j !== i).map((b) => dot(a, b))));
-  for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) if (dot(all[i], all[j]) > near - 1e-9) planes.push({ n: norm(add(all[i], all[j])), d: 0.93 * P.core / Math.cos(sh.alpha) });
+  const w = sh.solid === 'cube' ? MM.chamfer.cube * Math.SQRT2 : MM.chamfer.octa;
+  const e = P.core / Math.cos(sh.alpha), d = e - w / 2 / u * Math.tan(sh.alpha);
+  for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) if (dot(all[i], all[j]) > near - 1e-9) planes.push({ n: norm(add(all[i], all[j])), d, kind: 'edge' });
+  // the octahedron's corners, cut flat: it is made from a cube of brass this size
+  if (sh.solid === 'octa') for (const n of [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]]) planes.push({ n, d: MM.corner.octa / u, kind: 'corner' });
   return planes;
 }
 export const insideBody = (planes, p) => planes.every((q) => dot(q.n, p) <= q.d + 1e-9);
@@ -195,7 +233,7 @@ export function bodyFaces(planes) {
       poly = next;
       if (poly.length < 3) break;
     }
-    if (poly.length >= 3) out.push({ n: q.n, poly });
+    if (poly.length >= 3) out.push({ n: q.n, poly, kind: q.kind });
   }
   return out;
 }

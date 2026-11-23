@@ -12,13 +12,13 @@ import path from 'node:path';
 const root = path.resolve(import.meta.dirname, '../..');
 export function stamp(check = false) {
   const dir = path.join(root, 'js/gears'), mods = fs.readdirSync(dir).filter((f) => f.endsWith('.js')).sort().map((f) => path.join(dir, f));
-  const css = path.join(root, 'css/gears.css'), html = path.join(root, 'gears/index.html');
+  const css = path.join(root, 'css/gears.css'), htmls = fs.readdirSync(path.join(root, 'gears')).filter((f) => f.endsWith('.html')).map((f) => path.join(root, 'gears', f));
   const bare = (t) => t.replace(/(\.(?:js|css))\?v=[0-9a-f]+/g, '$1');
-  const text = new Map([...mods, css, html].map((f) => [f, bare(fs.readFileSync(f, 'utf8'))]));
+  const text = new Map([...mods, css, ...htmls].map((f) => [f, bare(fs.readFileSync(f, 'utf8'))]));
   const h = createHash('sha256'); for (const f of [...mods, css]) h.update(text.get(f));
   const v = h.digest('hex').slice(0, 8), stale = [];
   for (const [f, t] of text) {
-    const out = f === html ? t.replace(/((?:js\/gears\/\w+\.js|css\/gears\.css))(?=")/g, `$1?v=${v}`) : t.replace(/(from '\.\/\w+\.js)(?=')/g, `$1?v=${v}`);
+    const out = htmls.includes(f) ? t.replace(/((?:js\/gears\/\w+\.js|css\/gears\.css))(?=")/g, `$1?v=${v}`) : t.replace(/(from '\.\/\w+\.js)(?=')/g, `$1?v=${v}`);
     if (out !== fs.readFileSync(f, 'utf8')) { stale.push(path.relative(root, f)); if (!check) fs.writeFileSync(f, out); }
   }
   return { v, stale };
