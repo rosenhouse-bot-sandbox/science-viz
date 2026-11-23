@@ -3,11 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self'; connect-src 'self'; base-uri 'none'; object-src 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self'; connect-src 'self'; base-uri 'none'; object-src 'none'; manifest-src 'self'; form-action 'none'">
 <title>Science visualizations</title>
 <meta name="description" content="Interactive explorations: how rainbows form, how a synapse releases its signal, a game of building things that bend light, two ways to draw a graph, a maple leaf's year, a car engine down to its burning fuel, the rotator cuff of the shoulder, how the eyes follow a moving target, and gears that cover an octahedron.">
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#05070F">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="img/app/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Science viz">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..700&family=Source+Sans+3:wght@400;600&display=swap">
@@ -38,5 +44,6 @@
 </main>
 <script type="module" src="js/home.js"></script>
 <script type="module" src="js/gamepad/home.js"></script>
+<script type="module" src="js/pwa.js"></script>
 </body>
 </html>

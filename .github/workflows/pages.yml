@@ -22,6 +22,8 @@ jobs:
           fetch-depth: 0
       - name: Write the landing page's dates from git history
         run: node .github/dates.mjs
+      - name: Write the service worker's file list, for working offline
+        run: node .github/sw.mjs
       - uses: actions/configure-pages@v5
         with:
           enablement: true

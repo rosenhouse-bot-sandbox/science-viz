@@ -17,6 +17,12 @@ experience is and where its code lives.
   another.
   The one thing they share is controller support, `js/gamepad/gamepad.js` and `css/gamepad.css`: each
   page gives it a short mapping onto its own camera, zoom and scale functions.
+  They also share the Home Screen app: `manifest.webmanifest`, `sw.js` and `js/pwa.js`. A new page
+  copies the block from `<link rel="manifest">` to `apple-mobile-web-app-status-bar-style` into its
+  `<head>`, adds `manifest-src 'self'` to its Content-Security-Policy, and loads `js/pwa.js` last in
+  `<body>`. The service worker keeps every file in a page's folder and under `js/`, `css/` and `img/`;
+  a file anywhere else is not available offline. Do not commit a filled-in `sw.js`: the Pages
+  workflow fills in its file list at deploy time (`.github/sw.mjs`).
 - Physics claims must be true. Numbers shown on screen come from the model in code
   (`js/v2/optics.js` for v2), not from text typed into a caption. Where a picture simplifies or
   exaggerates, say so on screen and in the README.
@@ -159,6 +165,11 @@ Before pushing:
   picture at a phone size and fails if spreading them does not zoom in, the slider does not move with
   them, the browser zooms the whole page, or the zoom and the time move in the same frame. A pinch
   must go through the same state as the page's Zoom slider. It cannot stand in for a real phone.
+- After adding a page, a file a page loads from a new place, or a change to `sw.js`, `js/pwa.js` or
+  the manifest, run `node tests/pwa/run.mjs` (about 3 minutes; `--quick` for two pages). It opens
+  every page online and then with the server stopped, and fails if a page loads a file the service
+  worker does not keep, loads anything from another host but the web fonts, or does not work
+  offline. A new page needs an entry in `PAGES` there.
 - A frozen screenshot does not show a jump. When a person reports one, first add the gesture to
   `tests/smooth/scenarios.mjs` and see the report show it, then fix it.
 - Load each affected page in a browser with the console open, at a desktop width and at a phone
