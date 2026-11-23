@@ -73,6 +73,11 @@ const PAGES = {
     look: () => window.__saccade.st.yaw, zoom: () => window.__saccade.st.z, settle: () => window.__saccade.settle(), idle: () => !window.__saccade.busy,
     stage: () => (window.__saccade.busy ? null : Math.round(window.__saccade.st.z * 1000) / 1000),
   },
+  gears: {
+    path: 'gears/?res=0.4#s=cube4', keys: ALL, ready: () => !!(window.__gears && window.__gears.drawn.shape), before: () => window.__gears.settle(),
+    look: () => window.__gears.st.yaw, zoom: () => window.__gears.st.t, settle: () => window.__gears.settle(), idle: () => !window.__gears.busy,
+    stage: () => window.__gears.st.shape,
+  },
 };
 
 let fails = 0;
@@ -315,7 +320,8 @@ async function deck() {
   const href = await page.evaluate(() => window.__gamepad.cur.getAttribute('href'));
   if (href === first) fail('deck: the ring did not move down the list of experiences');
   await set(page, 'a', 1);
-  if (!await until(page, (u) => location.href === u, base + href, 10000)) { fail(`deck: A did not open ${href}`); return; }
+  // (the page may add its state after # as soon as it opens)
+  if (!await until(page, (u) => location.href.split('#')[0] === u, base + href, 10000)) { fail(`deck: A did not open ${href}`); return; }
   // A is still held as the new page opens: it must not press anything there
   await until(page, () => !!window.__gamepad);
   await page.evaluate(() => { window.__pad.buttons[0] = { pressed: true, touched: true, value: 1 }; window.__pad.plugged = true; dispatchEvent(new Event('gamepadconnected')); });

@@ -18,6 +18,7 @@ const PAGES = {
   'engine': ['engine', 'js/engine', 'css/engine.css'],
   'shoulder': ['shoulder', 'js/shoulder', 'css/shoulder.css'],
   'saccade': ['saccade', 'js/saccade', 'css/saccade.css'],
+  'gears': ['gears', 'js/gears', 'css/gears.css'],
 };
 
 const log = (paths) => execFileSync('git', ['log', '--format=%cI', '--', ...paths], { encoding: 'utf8' })

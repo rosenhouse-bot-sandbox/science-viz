@@ -23,6 +23,7 @@ const SHOTS = {
   vesicle: { url: 'vesicle/#mode=vivo&p=0', clip: [400, 120, 880], wait: 30000 },
   shoulder: { url: 'shoulder/#z=1.00&c=healthy&lift=30&turn=0', clip: [440, 90, 840], wait: 15000 },
   saccade: { url: 'saccade/#z=0.00&c=poor', clip: [460, 250, 820], wait: 8000 },
+  gears: { url: 'gears/#s=octa', clip: [420, 110, 860], wait: 6000 },
 };
 
 const only = process.argv.slice(2);

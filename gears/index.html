@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self'; connect-src 'self'; base-uri 'none'; object-src 'none'; form-action 'none'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>Gear cube and octahedron</title>
+<meta name="description" content="Gears on the faces of a cube and an octahedron, in 3D. Drag one gear and the others turn with it. Why an octahedron can carry eight meshing gears and a cube only four.">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#05070F">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..700&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="../css/gears.css?v=5a90a021">
+</head>
+<body>
+<canvas id="view" tabindex="0" role="img" aria-label="Gears on the faces of the chosen solid. Drag a gear to turn it; drag elsewhere, or use the arrow keys, to turn the view." aria-describedby="capTitle capBody"></canvas>
+
+<a class="back" href="../" aria-label="Back to all experiences">
+  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M14.5 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+</a>
+
+<div class="oops" id="oops" role="alert" hidden>
+  <p id="oopsText">The picture could not be drawn. Loading the page again usually fixes it.</p>
+  <button type="button" id="reload">Load again</button>
+</div>
+<p class="loading" id="loading">Loading…</p>
+
+<main class="panel" id="panel">
+  <header class="title">
+    <h1>Gear cube and octahedron</h1>
+    <span>gears on every face, turning together</span>
+  </header>
+
+  <section class="answer" id="answer" aria-label="The answer">
+    <h2></h2>
+    <p></p>
+  </section>
+
+  <div class="seg shapes" role="group" aria-label="Solid and number of gears" id="shapes"></div>
+
+  <div class="transport">
+    <button type="button" class="play" id="play" aria-label="Play" aria-pressed="false">
+      <svg class="i-play" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M7 4.5v15l12-7.5z" fill="currentColor"/></svg>
+      <svg class="i-pause" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6 4.5h4v15H6zM14 4.5h4v15h-4z" fill="currentColor"/></svg>
+    </button>
+    <div class="ctl">
+      <div class="lab"><label for="turn">Turn the gears</label><b id="turnV" aria-hidden="true"></b></div>
+      <input id="turn" type="range" min="0" max="359" step="1" value="0">
+    </div>
+  </div>
+
+  <div class="ctl">
+    <label class="check"><input type="checkbox" id="color" checked> Color each gear by the way it turns</label>
+    <p class="fine" id="key"></p>
+  </div>
+
+  <div class="cap" id="cap" aria-live="polite">
+    <h3 id="capTitle"></h3>
+    <p id="capBody"></p>
+  </div>
+
+  <dl class="nums" id="nums">
+    <div><dd id="shaftV"></dd><dt>angle between the axes of two meshing gears</dt></div>
+    <div><dd id="perV"></dd><dt>gears that each gear meshes with</dt></div>
+    <div><dd id="coneV"></dd><dt>half-angle of each gear's cone</dt></div>
+    <div><dd id="teethV"></dd><dt>teeth on each gear</dt></div>
+  </dl>
+
+  <details class="sources"><summary>How the gears are made</summary><div id="how"></div></details>
+</main>
+
+<script type="module" src="../js/gears/main.js?v=5a90a021"></script>
+</body>
+</html>
