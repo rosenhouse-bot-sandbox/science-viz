@@ -16,6 +16,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { stamp } from './stamp.mjs';
+import { EX_STILL } from '../../js/shoulder/exercises.js';
 
 { const r = stamp(true); if (r.stale.length) { console.error(`The version stamp is out of date in: ${r.stale.join(', ')}. Run: node tests/shoulder/stamp.mjs`); process.exit(1); } }
 
@@ -101,10 +102,20 @@ for (const [name, width, height, motion] of quick ? SIZES.slice(0, 1) : SIZES) {
   for (const id of await page.$$eval('#exs button', (b) => b.map((x) => x.dataset.id))) {
     await page.click(`#exs button[data-id="${id}"]`); await frame();
     const playing = await page.evaluate(() => window.__shoulder.st.play);
+    // a held pose (a plank) has no Play and no slider, and must not play
+    if (EX_STILL.has(id)) {
+      if (playing) fail(`${name}: the held ${id} pose plays`);
+      if (await page.isVisible('#exPlay')) fail(`${name}: the held ${id} pose shows Play and the slider`);
+      for (const z of quick ? [0] : [0, 1]) { await put('zoom', z); await labels(`(${id}, zoom ${z})`); }
+      if (shots && width > 600) { await settle(); await page.screenshot({ path: path.join(out, `ex-${id}.png`) }); }
+      continue;
+    }
+    if (!(await page.isVisible('#exPlay'))) fail(`${name}: the ${id} exercise has no Play`);
     if (motion === 'reduce' ? playing : !playing) fail(`${name}: the ${id} exercise ${motion === 'reduce' ? 'played by itself with reduced motion' : 'did not start playing'}`);
     for (const z of quick ? [0] : [0, 1]) { await put('zoom', z); await sweep('phase', 0, 1000, n, `(${id}, zoom ${z})`); await labels(`(${id}, zoom ${z})`); }
     if (shots && width > 600) { await put('phase', 500); await settle(); await page.screenshot({ path: path.join(out, `ex-${id}.png`) }); }
   }
+  await page.click('#exs button[data-id="external"]'); await frame(); if (await page.evaluate(() => window.__shoulder.st.play)) { await page.click('#play'); await frame(); }
   await page.click('#play'); await frame(); if (!(await page.evaluate(() => window.__shoulder.st.play))) fail(`${name}: Play did not start the exercise`);
   await page.click('#play'); await frame(); if (await page.evaluate(() => window.__shoulder.st.play)) fail(`${name}: Play did not pause`);
   await fits('after the exercises');

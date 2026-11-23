@@ -24,7 +24,7 @@ await new Promise((r) => server.listen(0, r));
 const N = +(process.argv[2] || 30), SEED = +(process.argv[3] || 1);
 let seed = SEED; const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296), pick = (a) => a[Math.floor(rnd() * a.length)];
 const out = path.join(import.meta.dirname, 'out/review'); fs.mkdirSync(out, { recursive: true });
-const CONDS = ['healthy', 'tendinopathy', 'partial', 'full', 'bursitis', 'impingement'], EXS = ['pendulum', 'sleeper', 'external', 'internal', 'external90'];
+const CONDS = ['healthy', 'tendinopathy', 'partial', 'full', 'bursitis', 'impingement'], EXS = ['pendulum', 'sleeper', 'external', 'internal', 'external90', 'wiper', 'pnf', 'bentRaise', 'extension', 'highRow', 'prone', 'thoracic', 'plank', 'sidePlank'];
 const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
 page.on('pageerror', (e) => console.log('page error: ' + e.message));

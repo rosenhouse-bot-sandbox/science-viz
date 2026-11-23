@@ -1,16 +1,20 @@
 // Shoulder: checks of the model at many arm positions, with no browser. node tests/shoulder/model.mjs [count]
 // It samples arm positions at random (seeded, so a failure can be replayed with the same seed) and fails if:
 //  - a muscle at rest is not exactly the muscle fitted to the scans;
-//  - the shoulder blade enters the ribs, or the arm bone comes nearer the acromion than the model allows;
+//  - the shoulder blade or the arm enters the ribs, or the arm bone comes nearer the acromion than the model allows;
 //  - a muscle point is pushed into a bone it was not in at rest (more than a few, by more than 1 mm);
 //  - a muscle folds back on itself along its length, or its length leaves a believable range;
 //  - the bursa is not on the tendon's outer side, or impingement lights anything with the arm at rest;
 //  - a muscle lengthens or shortens the wrong way for a movement whose direction is textbook knowledge
 //    (turning out shortens infraspinatus and teres minor and lengthens subscapularis; turning in the reverse;
-//    lifting the arm out to the side shortens supraspinatus and the middle deltoid).
-import { model } from './load.mjs';
+//    lifting the arm out to the side shortens supraspinatus and the middle deltoid; taking it back shortens the back of
+//    the deltoid; turning it out with the arm forward shortens infraspinatus);
+//  - any of these fails at a pose that an exercise passes through.
+import { model, bones } from './load.mjs';
+import { solid } from '../../js/shoulder/solid.js';
 import { CLEAR, ROTS, closest } from '../../js/shoulder/model.js';
 import { V } from '../../js/shoulder/geom.js';
+import { EX_POSE } from '../../js/shoulder/exercises.js';
 
 const N = +(process.argv[2] || 120), SEED = +(process.env.SEED || 7);
 let seed = SEED; const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
@@ -31,10 +35,21 @@ const HC = model.marks.HC;
 // 2. random arm positions
 const centers = (b, pos) => b.sl.map((_, i) => { let m = [0, 0, 0]; for (let j = 0; j < 32; j++) m = V.add(m, [pos[3 * (i * 32 + j)], pos[3 * (i * 32 + j) + 1], pos[3 * (i * 32 + j) + 2]]); return V.mul(m, 1 / 32); });
 let worstNew = {}, lens = {};
+const poses = [];
 for (let n = 0; n < N; n++) {
   // the planes worked out (0, 30, 90), and every fourth position a plane between them or a little past 90 (the pendulum)
-  const P = { elev: Math.round(rnd() * 150), plane: n % 4 === 3 ? Math.round(rnd() * 102) : [0, 30, 90][Math.floor(rnd() * 3)], rot: Math.round(ROTS[0] + rnd() * (ROTS.at(-1) - ROTS[0])), elbow: 90 };
+  poses.push({ elev: Math.round(rnd() * 150), plane: n % 4 === 3 ? Math.round(rnd() * 102) : [0, 30, 90][Math.floor(rnd() * 3)], rot: Math.round(ROTS[0] + rnd() * (ROTS.at(-1) - ROTS[0])), elbow: 90 });
+}
+// and every exercise through its round, which reaches planes the random ones do not (back, and across the body)
+for (const [ex, f] of Object.entries(EX_POSE)) for (let k = 0; k < 24; k++) poses.push({ ex, ...f(k / 24) });
+// the chest's bones, and every tenth point of the arm's, for checking that the arm stays out of the chest
+const CHEST = ['rib1', 'rib2', 'rib3', 'rib4', 'rib5', 'rib6', 'rib7', 'manubrium', 'sternum'].map((r) => solid(bones[r], 1));
+const every = (b) => { const p = bones[b].pos, o = []; for (let i = 0; i < p.length; i += 30) o.push([p[i], p[i + 1], p[i + 2]]); return o; };
+const ARM = { humerus: every('humerus'), forearm: [...every('radius'), ...every('ulna')] };
+for (const P of poses) {
   const T = model.pose(P);
+  const inChest = Object.entries(ARM).reduce((n, [k, ps]) => n + ps.filter((q) => CHEST.some((c) => c.depth(applyT(T[k], q)) > 1)).length, 0);
+  if (inChest) fail(`the arm is in the chest (${inChest} points)`, P);
   if (model.ribPen({ scapula: T.scapula, clavicle: T.clavicle }) > 0) fail('the shoulder blade is in the ribs', P);
   const g = model.gap(T).mm; if (g < CLEAR - 0.05) fail(`gap ${g.toFixed(2)} mm, under ${CLEAR}`, P);
   for (const b of model.built) {
@@ -78,14 +93,21 @@ function applyT(T, p) { return V.add([V.dot(T.R[0], p), V.dot(T.R[1], p), V.dot(
 // 4. which way each muscle's length goes, against textbook directions
 const len = (P) => Object.fromEntries(model.built.map((b) => { const m = model.muscle(b, model.pose({ elbow: 90, ...P })); return [b.id, m.length / m.rest]; }));
 const rest = len({ elev: 0, plane: 30, rot: 0 }), out = len({ elev: 0, plane: 30, rot: 60 }), inn = len({ elev: 0, plane: 30, rot: -60 }), abd = len({ elev: 90, plane: 0, rot: 0 });
+const back = len({ elev: 25, plane: -90, rot: 0, elbow: 0 }), fwd90 = len({ elev: 90, plane: 90, rot: 0, elbow: 0 }), side90 = len({ elev: 90, plane: 0, rot: 0, elbow: 0 });
+const fwdIn = len({ elev: 90, plane: 90, rot: -80 }), fwdOut = len({ elev: 90, plane: 90, rot: 0 });
 const want = [
   ['turning out shortens infraspinatus', out.infra < rest.infra], ['turning out shortens teres minor', out.tminor < rest.tminor], ['turning out lengthens subscapularis', out.subscap > rest.subscap],
   ['turning in lengthens infraspinatus', inn.infra > rest.infra], ['turning in lengthens teres minor', inn.tminor > rest.tminor], ['turning in shortens subscapularis', inn.subscap < rest.subscap],
   ['lifting out to the side shortens supraspinatus', abd.supra < rest.supra], ['lifting out to the side shortens the middle deltoid', abd.deltM < rest.deltM],
+  // the movements the newer exercises add: the arm back, from forward to out to the side at shoulder height, and turning
+  // out with the arm forward
+  ['the arm back shortens the back of the deltoid', back.deltP < rest.deltP], ['the arm back lengthens the front of the deltoid', back.deltA > rest.deltA],
+  ['forward to out at shoulder height shortens the back of the deltoid', side90.deltP < fwd90.deltP], ['forward to out at shoulder height lengthens the front of the deltoid', side90.deltA > fwd90.deltA],
+  ['turning out with the arm forward shortens infraspinatus', fwdOut.infra < fwdIn.infra], ['turning out with the arm forward lengthens subscapularis', fwdOut.subscap > fwdIn.subscap],
 ];
 for (const [what, ok] of want) if (!ok) fail(what + ' (it does not)', {});
 
-console.log(`${N} random arm positions, seed ${SEED}`);
+console.log(`${N} random arm positions, seed ${SEED}, and ${poses.length - N} from the exercises`);
 for (const b of model.built) { const l = lens[b.id]; console.log(`  ${b.id.padEnd(8)} length ${Math.min(...l).toFixed(2)} to ${Math.max(...l).toFixed(2)} of rest; worst new points in bone ${(100 * worstNew[b.id]).toFixed(1)}%`); }
 console.log(`  at rest, out 60°, in 60°, out to the side 90°: ` + ['infra', 'tminor', 'subscap', 'supra', 'deltM'].map((k) => `${k} ${rest[k].toFixed(2)}/${out[k].toFixed(2)}/${inn[k].toFixed(2)}/${abd[k].toFixed(2)}`).join(', '));
 if (fails.length) { console.log(`\n${fails.length} failed:`); for (const f of fails.slice(0, 40)) console.log('  ' + f); process.exit(1); }

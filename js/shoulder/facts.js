@@ -13,6 +13,14 @@ export const SRC = {
   aaos: { name: 'AAOS OrthoInfo, Rotator Cuff and Shoulder Conditioning Program', url: 'https://www.orthoinfo.org/recovery/rotator-cuff-and-shoulder-conditioning-program' },
   inman: { name: 'Inman, Saunders and Abbott 1944, Observations on the function of the shoulder joint (2 to 1 rhythm)', url: 'https://pubmed.ncbi.nlm.nih.gov/8790188/' },
   ludewig: { name: 'Ludewig et al. 2009, Motion of the shoulder complex during multiplanar humeral elevation', url: 'https://pmc.ncbi.nlm.nih.gov/articles/PMC2657311' },
+  deltoid: { name: 'Wikipedia, Deltoid muscle (what each part does)', url: 'https://en.wikipedia.org/wiki/Deltoid_muscle' },
+  lat: { name: 'Wikipedia, Latissimus dorsi muscle', url: 'https://en.wikipedia.org/wiki/Latissimus_dorsi_muscle' },
+  teresMajor: { name: 'Wikipedia, Teres major muscle', url: 'https://en.wikipedia.org/wiki/Teres_major_muscle' },
+  trapezius: { name: 'Wikipedia, Trapezius muscle', url: 'https://en.wikipedia.org/wiki/Trapezius' },
+  pnf: { name: 'Proprioceptive neuromuscular facilitation for the upper extremity and scapula (review), Int J Sports Phys Ther', url: 'https://ijspt.scholasticahq.com/article/143176' },
+  plank: { name: 'Wikipedia, Plank (exercise): muscles worked', url: 'https://en.wikipedia.org/wiki/Plank_(exercise)' },
+  gmed: { name: 'Wikipedia, Gluteus medius', url: 'https://en.wikipedia.org/wiki/Gluteus_medius' },
+  thoracic: { name: 'Wikipedia, Thoracic vertebrae', url: 'https://en.wikipedia.org/wiki/Thoracic_vertebrae' },
   bp3d: { name: 'BodyParts3D, © The Database Center for Life Science, CC BY 4.0', url: 'https://dbarchive.biosciencedbc.jp/en/bodyparts3d/' },
 };
 
@@ -61,9 +69,11 @@ export const CONDITIONS = [
     src: ['arc', 'bursitis'] },
 ];
 
-// Exercises from the AAOS program, with the muscles it lists as targeted by each (only those this model has).
+// Exercises, with the muscles of this model that each works. The first five are from the AAOS program, which lists the
+// muscles each targets. For the rest, a muscle is marked when a source says it makes one of the exercise's movements
+// (lifting forward, out to the side or back, turning out or in). The poses are in exercises.js.
 // role: how the panel names them: 'works' (they do the work), 'stretch' (they are stretched), 'relaxed' (targeted,
-// with the arm kept relaxed).
+// with the arm kept relaxed), 'holds' (they hold a pose still).
 export const EXERCISES = [
   { id: 'pendulum', name: 'Pendulum', works: ['deltA', 'deltM', 'deltP', 'supra', 'infra', 'subscap'], role: 'relaxed',
     body: 'Lean forward with one hand on a table and let the other arm hang loose, its muscles relaxed. Swing it gently forward and back, then side to side, then in small circles. Leaning makes the hanging arm point forward from the body.',
@@ -80,6 +90,40 @@ export const EXERCISES = [
   { id: 'external90', name: 'Turn out, arm up', works: ['infra', 'tminor'], role: 'works',
     body: 'Elbow out at shoulder height and bent, hand forward, raise the hand against a band until it is level with the head. The infraspinatus and teres minor do the work.',
     src: ['aaos'] },
+  { id: 'wiper', name: 'Windshield wiper', works: ['infra', 'tminor'], role: 'works',
+    body: 'Standing, raise the upper arm in front to shoulder height and bend the elbow, so the forearm lies across the chest. Against a band, turn the forearm up until it points straight up. The infraspinatus and teres minor turn the arm outward, so they do the work.',
+    src: ['cuff'] },
+  { id: 'pnf', name: 'Diagonal lift (PNF D2)', works: ['deltA', 'deltM', 'supra', 'infra', 'tminor'], role: 'works',
+    body: 'Lying on your back, start with the hand by the other hip and the arm turned in. Against a band, lift the arm up and out past the head, turning it out. The arm lifts forward, lifts out to the side and turns out at the same time. The front of the deltoid lifts it forward, the middle of the deltoid and the supraspinatus lift it out, and the infraspinatus and teres minor turn it out.',
+    note: 'The body is not drawn lying down. The start and end of the lift are a common version of the pattern, not measured.',
+    src: ['pnf', 'deltoid', 'cuff'] },
+  { id: 'bentRaise', name: 'Bent-over raise', works: ['deltP'], role: 'works',
+    body: 'Bend forward with one hand and knee on a chair, and let the other arm hang with a weight. Lift it out to the side, straight, until it is level with the shoulder. The back of the deltoid makes this lift.',
+    note: 'The body is not drawn bent over: the arm is drawn lifted forward instead, the same pose seen from the body.',
+    src: ['deltoid'] },
+  { id: 'extension', name: 'Arm back with a band', works: ['deltP'], role: 'works',
+    body: 'Standing, hold a band anchored in front, arm straight and turned neither in nor out. Pull the arm back past the side of the body. The latissimus dorsi does this, with help from the teres major and the back of the deltoid. Only the deltoid is drawn.',
+    src: ['lat', 'teresMajor', 'deltoid'] },
+  { id: 'highRow', name: 'High row', works: ['deltP', 'infra', 'tminor'], role: 'works',
+    body: 'Hold the handles of a suspension trainer with straight arms at shoulder height, and lean back. Pull until the elbows are out to the sides and bent, hands up beside the head. The back of the deltoid pulls the arms back, and the infraspinatus and teres minor turn them up.',
+    note: 'The body is drawn upright, not leaning back.',
+    src: ['deltoid', 'cuff'] },
+  { id: 'prone', name: 'Arms out on a ball', works: ['deltM', 'deltP'], role: 'works',
+    body: 'Lie face down over a ball and let the arms hang. Lift them out to the sides, straight and level with the shoulders, thumbs turned up. The middle and back of the deltoid make this lift. The exercise is named for the middle part of the trapezius, which pulls the shoulder blades together. The trapezius is not drawn.',
+    note: 'The body is not drawn lying down: the arm is drawn lifted forward instead, the same pose seen from the body.',
+    src: ['deltoid', 'trapezius'] },
+  { id: 'thoracic', name: 'Foam roll, upper back', works: [], role: 'works',
+    body: 'Lie on your back over a foam roll across the upper back, hands behind the head to support it, and arch back over the roll. The movement is in the spine of the upper back, which is not drawn. The shoulders hold still with the hands behind the head, so no muscle is marked.',
+    note: 'The body is not drawn lying down: only the shoulder and arm, posed as they are relative to the body.',
+    src: ['thoracic'] },
+  { id: 'plank', name: 'Plank', works: ['deltA', 'deltM', 'deltP'], role: 'holds',
+    body: 'Hold the body straight, resting on the forearms and toes. The muscles of the trunk do most of the work, and none of them is drawn. The deltoid works too, holding the shoulders.',
+    note: 'The body is not drawn: only the shoulder and arm, posed as they are relative to the body.',
+    src: ['plank'] },
+  { id: 'sidePlank', name: 'Side plank, leg lift', works: [], role: 'works',
+    body: 'Lie on one side, propped on the elbow and the lower knee, and lift the hips into a straight line. Then lift the top leg. The trunk muscles hold the body up and the gluteus medius lifts the leg. None of them is drawn, so no muscle is marked. The arm drawn is the one underneath, holding still.',
+    note: 'The body is not drawn: only the shoulder and arm, posed as they are relative to the body.',
+    src: ['plank', 'gmed'] },
 ];
 
 export const MODEL_NOTE = 'Bones are one person\'s scanned right shoulder; muscles are built to match the scans of the same body (checked against them: within 1 mm over 95% of each surface). The shoulder blade turns a third of the lift (the 2 to 1 rhythm, a simplification). In this scan the acromion sits low over the ball, so as the arm lifts the model lets the ball slide down in its socket enough to keep 2 mm between the bones. That is a correction for this scan, not a motion to learn from: in a real shoulder the ball stays close to the middle of its socket. The gap is the narrowest distance between the two bones in this model, not an X-ray measurement. How a muscle bends as the arm moves follows a simple rule (each slice of it takes a share of the arm bone\'s turn, more toward the arm), not a simulation of muscle.';
