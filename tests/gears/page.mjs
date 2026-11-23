@@ -44,14 +44,14 @@ const SNAP = () => { const c = document.getElementById('view'), s = window.__sna
 const diff = (a, b) => { let s = 0; for (let i = 0; i < a.length; i += 4) s += Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]); return s / (a.length / 4) / 3; };
 const spread = (a) => { let lo = 765, hi = 0; for (let i = 0; i < a.length; i += 4) { const v = a[i] + a[i + 1] + a[i + 2]; lo = Math.min(lo, v); hi = Math.max(hi, v); } return hi - lo; };
 const SIZES = [['desktop', 1280, 800, 'no-preference'], ['phone, reduced motion', 390, 844, 'reduce']];
-const WANT = { cube4: { title: 'The cube', jam: false }, octa: { title: 'The octahedron', jam: false } };
+const WANT = { cube4: { title: 'Cube, 4', jam: false }, octa: { title: 'Octahedron, 8', jam: false } };
 
 for (const [name, width, height, motion] of quick ? SIZES.slice(0, 1) : SIZES) {
   const page = await browser.newPage({ viewport: { width, height }, reducedMotion: motion, hasTouch: width < 600 });
   page.on('console', (m) => { if (m.type() === 'error') fail(`${name}: console: ${m.text()}`); });
   page.on('pageerror', (e) => fail(`${name}: ${e.message}`));
   await page.goto(base + '?res=0.5');
-  await page.waitForFunction(() => window.__gears?.drawn.shape && document.getElementById('capTitle').textContent, null, { timeout: 120000 });
+  await page.waitForFunction(() => window.__gears?.drawn.shape && document.querySelector('#answer h2').textContent, null, { timeout: 120000 });
   if (!(await page.$eval('#oops', (e) => e.hidden))) { fail(`${name}: the picture could not start`); await page.close(); continue; }
   const frame = () => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
   const playing = () => page.evaluate(() => window.__gears.busy);
@@ -59,7 +59,7 @@ for (const [name, width, height, motion] of quick ? SIZES.slice(0, 1) : SIZES) {
   const settle = async () => { await page.evaluate(() => window.__gears.settle()); await frame(); };
   const put = async (id, v) => { await page.$eval('#' + id, (el, v) => { el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); }, v); await frame(); };
   const fits = async (when) => { const w = await page.evaluate(() => [document.documentElement.scrollWidth, document.getElementById('panel').scrollWidth, document.getElementById('panel').clientWidth]); if (w[0] > width || w[1] > w[2]) fail(`${name}: something is wider than the screen ${when} (${w.join(', ')})`); };
-  const IDS = ['answer', 'shapes', 'cap', 'play', 'turn', 'turnV', 'apart', 'color', 'key'];
+  const IDS = ['answer', 'shapes', 'play', 'turn', 'turnV', 'apart', 'color', 'key'];
   const boxes = () => page.evaluate((ids) => { const sc = document.getElementById('panel').scrollTop; return ids.map((id) => { const r = document.getElementById(id).getBoundingClientRect(); return [r.x, r.y + sc, r.width, r.height].map((v) => Math.round(v)).join(','); }).join(' | '); }, IDS);
   const moved = (a, b) => { const A = a.split(' | '), B = b.split(' | '); return IDS.filter((_, i) => A[i] !== B[i]).map((id) => `${id} ${A[IDS.indexOf(id)]} -> ${B[IDS.indexOf(id)]}`).join('; '); };
   const t = () => page.evaluate(() => window.__gears.st.t);
@@ -69,9 +69,9 @@ for (const [name, width, height, motion] of quick ? SIZES.slice(0, 1) : SIZES) {
   const b0 = await boxes();
   for (const id of ['cube4', 'octa']) {
     await page.click(`#shapes button[data-id="${id}"]`); await frame();
-    const got = await page.evaluate(() => ({ s: window.__gears.st.shape, dis: document.getElementById('turn').disabled, cap: document.getElementById('capTitle').textContent }));
+    const got = await page.evaluate(() => ({ s: window.__gears.st.shape, dis: document.getElementById('turn').disabled, cap: document.querySelector(`#shapes [aria-pressed="true"]`)?.textContent }));
     if (got.s !== id) fail(`${name}: the ${id} button chose ${got.s}`);
-    if (got.cap !== WANT[id].title) fail(`${name}: ${id} has the caption ${got.cap}`);
+    if (got.cap !== WANT[id].title) fail(`${name}: ${id} shows ${got.cap} as chosen`);
     if (got.dis !== WANT[id].jam) fail(`${name}: ${id}: the Turn slider is ${got.dis ? '' : 'not '}disabled`);
     const s = await page.evaluate(SNAP); if (spread(s) < 60) fail(`${name}: the picture of ${id} is blank`);
     { const b = await boxes(); if (b !== b0) fail(`${name}: choosing ${id} moved a control: ${moved(b0, b)}`); }

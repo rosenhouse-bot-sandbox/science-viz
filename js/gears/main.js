@@ -1,9 +1,9 @@
 // Gears on a cube and an octahedron: the controller. The state is which solid, how far the gears have turned, and
 // the camera. Dragging a gear turns it about its own axis, and every gear it meshes with follows.
-import { SHAPES, angles, dot, cross, norm, R_IN, R_OUT } from './model.js?v=5019cb4a';
-import { makeScene } from './scene.js?v=5019cb4a';
-import { ANSWER, CAPTIONS, KEY, HOW } from './facts.js?v=5019cb4a';
-import { perspective, lookAt, mul4 } from './gl.js?v=5019cb4a';
+import { SHAPES, angles, dot, cross, norm, R_IN, R_OUT } from './model.js?v=4f4725d3';
+import { makeScene } from './scene.js?v=4f4725d3';
+import { ANSWER, KEY, HOW } from './facts.js?v=4f4725d3';
+import { perspective, lookAt, mul4 } from './gl.js?v=4f4725d3';
 import { gamepad } from '../gamepad/gamepad.js';
 
 const $ = (id) => document.getElementById(id);
@@ -104,7 +104,6 @@ function sync() {
   if (shown.play !== pl) { shown.play = pl; $('play').setAttribute('aria-pressed', String(pl === 'Pause')); $('play').setAttribute('aria-label', pl); }
   $('color').checked = st.color;
   set('key', st.color ? KEY : '');
-  if (shown.cap !== st.shape) { shown.cap = st.shape; $('capTitle').textContent = CAPTIONS[st.shape].title; $('capBody').textContent = CAPTIONS[st.shape].body; }
   writeHash();
 }
 let hashTimer = 0;
@@ -134,16 +133,12 @@ function oops(e) { console.error(e); if (broken) return; broken = true; st.play 
 function choose(id) { st.shape = id; st.held = -1; st.hi = -1; touch(); }
 
 let res = +(new URLSearchParams(location.search).get('res')) || 1;
-// the story's box keeps the height of the longest story, so that changing the solid moves nothing below it
-function capHeight() {
-  const cap = $('cap'), h2 = $('capTitle'), p = $('capBody'), keep = [h2.textContent, p.textContent];
-  cap.removeAttribute('aria-live'); cap.style.minHeight = ''; let m = 0;
-  for (const c of Object.values(CAPTIONS)) { h2.textContent = c.title; p.textContent = c.body; m = Math.max(m, cap.getBoundingClientRect().height); }
-  [h2.textContent, p.textContent] = keep; cap.style.minHeight = Math.ceil(m) + 'px'; cap.setAttribute('aria-live', 'polite');
+// the key's line keeps its height when empty, so that ticking the box moves nothing below it
+function keyHeight() {
   const key = $('key'), k0 = key.textContent; key.style.minHeight = ''; key.textContent = KEY; const kh = key.getBoundingClientRect().height; key.textContent = k0; key.style.minHeight = Math.ceil(kh) + 'px';
 }
 function measure() {
-  capHeight();
+  keyHeight();
   const W = innerWidth, H = innerHeight, r = $('panel').getBoundingClientRect(), dpr = Math.min(2, devicePixelRatio || 1) * res;
   if (r.right < W * 0.7) { free.x = r.right + 12; free.y = 0; free.w = W - free.x; free.h = H; }
   else { free.x = 0; free.y = 52; free.w = W; free.h = Math.max(120, r.top - 52); }

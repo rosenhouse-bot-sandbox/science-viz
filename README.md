@@ -1000,7 +1000,7 @@ turning together like the brass fidget cube with gears on four of its six faces?
 four gears and the octahedron with eight, in 3D, built from the same kinds of parts as the toy. Drag a gear and
 the rest turn with it. A Take apart slider spreads the parts out along each gear's axis.
 
-- **The answer, on screen**: gears that touch spin opposite ways, so a loop of meshing gears turns only if its
+- **The answer, on screen**, in one line: gears that touch spin opposite ways, so a loop of meshing gears turns only if its
   count is even. Four faces meet at each corner of an octahedron, three at each corner of a cube. So an
   octahedron carries eight gears, and a cube only a ring of four. The page no longer shows the cube with six
   gears (Gabe's choice); `tests/gears/model.mjs` still checks that it jams.

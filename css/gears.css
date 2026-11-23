@@ -46,11 +46,7 @@ input[type=range]::-moz-range-progress{height:4px;border-radius:2px;background:r
 input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;margin-top:-7px;border-radius:50%;background:var(--ink);border:0;box-shadow:0 0 0 3px rgba(5,7,15,.9),0 2px 8px rgba(0,0,0,.6)}
 input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--ink);border:0;box-shadow:0 0 0 3px rgba(5,7,15,.9)}
 
-.cap{display:grid;gap:3px;align-content:start;transition:opacity .2s}
-.cap.swap{opacity:0}
 .eyebrow{font-family:var(--mono);font-size:0.6562rem;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3)}
-.cap h2{font-family:var(--display);font-weight:600;font-size:1.1875rem;letter-spacing:-.015em;line-height:1.15;margin:0;text-wrap:balance}
-.cap p{margin:0;font-size:0.875rem;line-height:1.42;color:var(--ink2);max-width:62ch}
 
 .ctl{display:grid;gap:4px}
 .check{display:flex;align-items:center;gap:10px;font-size:0.9rem;color:var(--ink);min-block-size:32px;cursor:pointer}
@@ -73,14 +69,12 @@ input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;bac
   .title{display:grid;gap:2px}
   .title h1,.title span{position:static;width:auto;height:auto;margin:0;overflow:visible;clip-path:none;white-space:normal}
 
-  .cap h2{font-size:1.375rem}
-  .cap p{font-size:0.9062rem}
 }
 /* a phone held sideways: the panel goes down the left side, so the picture keeps the full height */
 @media (max-width:899px) and (orientation:landscape) and (max-height:520px){
   .panel{left:0;right:auto;top:calc(60px + env(safe-area-inset-top));bottom:0;width:min(372px,46%);height:auto;border-top:1px solid var(--line);border-right:1px solid var(--line);border-radius:0 18px 0 0}
 }
-@media (prefers-reduced-motion:reduce){.cap{transition:none}}
+
 
 .loading{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);margin:0;color:var(--ink3);font-size:0.9rem;z-index:1}
 .credit a{color:var(--ink2)}
@@ -97,7 +91,6 @@ input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;bac
 .answer{display:grid;gap:4px;padding:12px 14px;border-radius:14px;background:rgba(255,215,115,.07);border:1px solid rgba(255,215,115,.28)}
 .answer h2{font-family:var(--display);font-weight:600;font-size:1.125rem;letter-spacing:-.015em;line-height:1.2;margin:0;color:var(--gold)}
 .answer p{margin:0;font-size:0.875rem;line-height:1.42;color:var(--ink)}
-.cap h3{font-family:var(--display);font-weight:600;font-size:1.0625rem;letter-spacing:-.01em;line-height:1.2;margin:0}
 .shapes{grid-auto-flow:row;grid-template-columns:repeat(2,1fr)}
 .shapes button{padding:8px 4px;line-height:1.2}
 .play:disabled,input[type=range]:disabled{opacity:.4;cursor:not-allowed}
@@ -105,3 +98,5 @@ input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;bac
 .check{justify-content:flex-start}
 #turnV{min-width:7ch}
 #key:empty{display:block}
+@media (max-width:899px){.panel{height:auto;max-height:47%}}
+@media (min-width:900px){.panel{bottom:auto}}
