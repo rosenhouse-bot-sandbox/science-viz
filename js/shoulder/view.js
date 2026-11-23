@@ -1,6 +1,6 @@
 // Shoulder: drawing. One WebGL2 program lights every surface; a cut plane can remove the near side of the
 // model (it fades where it is), and the cut faces of each solid are filled in with the stencil buffer.
-import { program, meshBuffers, normals, perspective, lookAt, mul4, rigid, project } from './gl.js?v=96d17a8d';
+import { program, meshBuffers, normals, perspective, lookAt, mul4, rigid, project } from './gl.js?v=27139963';
 
 const VS = `#version 300 es
 layout(location=0) in vec3 aPos; layout(location=1) in vec3 aNor; layout(location=2) in vec3 aTT;
@@ -43,10 +43,15 @@ void main(){
 const CVS = `#version 300 es
 layout(location=0) in vec3 aPos; uniform mat4 uVP; out vec3 vPos; void main(){ vPos = aPos; gl_Position = uVP * vec4(aPos, 1.0); }`;
 const CFS = `#version 300 es
-precision highp float; in vec3 vPos; out vec4 o; uniform vec3 uCol, uCol2, uG0, uG1, uWarm; uniform vec3 uW[48]; uniform int uWN;
-void main(){                                              // uCol2 toward uG1 (a muscle's cut, turning to tendon)
-  vec3 g = uG1 - uG0; float f = dot(g, g) > 0.0 ? clamp(dot(vPos - uG0, g) / dot(g, g), 0.0, 1.0) : 0.0;
-  vec3 c = mix(uCol, uCol2, smoothstep(0.0, 1.0, f));
+precision highp float; in vec3 vPos; out vec4 o; uniform vec3 uCol, uCol2, uWarm; uniform vec3 uW[48]; uniform int uWN;
+uniform vec3 uC[17]; uniform int uCN; uniform vec4 uCT;  // a muscle's middle line at uCN points from t = uCT.x to uCT.y
+void main(){                                              // its cut turns to tendon (uCol2) from t = uCT.z to uCT.w,
+  float f = 0.0;                                          // going by the nearest point of the middle line
+  if (uCN > 1) { float bd = 1e9, bt = 0.0; for (int i = 0; i < 16; i++) { if (i + 1 >= uCN) break;
+      vec3 a = uC[i], g = uC[i + 1] - a; float u = clamp(dot(vPos - a, g) / max(dot(g, g), 1e-6), 0.0, 1.0), d = distance(vPos, a + g * u);
+      if (d < bd) { bd = d; bt = (float(i) + u) / float(uCN - 1); } }
+    f = smoothstep(uCT.z, uCT.w, mix(uCT.x, uCT.y, bt)); }
+  vec3 c = mix(uCol, uCol2, f);
   float w = 0.0;                                          // near a corner of the surface lit for impingement
   for (int i = 0; i < 48; i++) { if (i >= uWN) break; w = max(w, 1.0 - smoothstep(0.8, 1.6, distance(vPos, uW[i]))); }
   o = vec4(mix(c, uWarm, w), 1.0);
@@ -128,7 +133,7 @@ export function makeView(gl, model) {
         gl.stencilFunc(gl.ALWAYS, 0, 0xff); gl.stencilOpSeparate(gl.FRONT, gl.KEEP, gl.KEEP, gl.INCR_WRAP); gl.stencilOpSeparate(gl.BACK, gl.KEEP, gl.KEEP, gl.DECR_WRAP);
         put(it, 1, 1);
         gl.colorMask(true, true, true, true); gl.depthMask(true); gl.enable(gl.DEPTH_TEST);
-        gl.useProgram(C.p); gl.uniformMatrix4fv(C.u.uVP, false, VP); gl.uniform3fv(C.u.uCol, it.capCol); gl.uniform3fv(C.u.uCol2, it.capCol2 || it.capCol); gl.uniform3fv(C.u.uG0, it.capG ? it.capG[0] : [0, 0, 0]); gl.uniform3fv(C.u.uG1, it.capG ? it.capG[1] : [0, 0, 0]);
+        gl.useProgram(C.p); gl.uniformMatrix4fv(C.u.uVP, false, VP); gl.uniform3fv(C.u.uCol, it.capCol); gl.uniform3fv(C.u.uCol2, it.capCol2 || it.capCol); gl.uniform1i(C.u.uCN, it.capG ? it.capG.pts.length / 3 : 0); if (it.capG) { gl.uniform3fv(C.u.uC, it.capG.pts); gl.uniform4fv(C.u.uCT, it.capG.t); }
         gl.uniform3fv(C.u.uWarm, WARM); gl.uniform1i(C.u.uWN, it.capWarm ? it.capWarm.length / 3 : 0); if (it.capWarm && it.capWarm.length) gl.uniform3fv(C.u.uW, it.capWarm);
         gl.stencilFunc(gl.NOTEQUAL, 0, 0xff); gl.stencilOp(gl.ZERO, gl.ZERO, gl.ZERO);
         gl.bindVertexArray(qvao); gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
@@ -137,9 +142,19 @@ export function makeView(gl, model) {
       gl.uniformMatrix4fv(P.u.uVP, false, VP); gl.uniform3fv(P.u.uEye, eye); gl.uniform4fv(P.u.uPlane, cut.plane); gl.uniform3fv(P.u.uWarm, WARM);
     }
     // 3. what is see-through: the near side of the cut, fading, and any part drawn faint
-    gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false);
-    if (cut && cut.amount < 0.998) for (const it of items) put(it, 2, (1 - cut.amount) * (it.alpha ?? 1));
-    for (const it of items) if ((it.alpha ?? 1) < 1) put(it, cut ? 1 : 0, it.alpha);
+    // Only the nearest see-through surface at each pixel is drawn: first their depths, then their colors where they
+    // are nearest. Otherwise a part behind another (the subscapularis behind the shoulder blade, the deltoid's inner
+    // faces) would be blended over it, in whatever order the parts happen to be drawn.
+    const faint = [];
+    if (cut && cut.amount < 0.998) for (const it of items) faint.push([it, 2, (1 - cut.amount) * (it.alpha ?? 1)]);
+    for (const it of items) if ((it.alpha ?? 1) < 1) faint.push([it, cut ? 1 : 0, it.alpha]);
+    if (faint.length) {
+      gl.colorMask(false, false, false, false);
+      for (const [it, side, a] of faint) put(it, side, a);
+      gl.colorMask(true, true, true, true); gl.depthMask(false);
+      gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      for (const [it, side, a] of faint) put(it, side, a);
+    }
     gl.depthMask(true); gl.disable(gl.BLEND);
     idPass(items, cut, cam);
   }

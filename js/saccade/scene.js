@@ -1,8 +1,8 @@
 // Overshoot saccades: the 3D picture. Two eyes with their six muscles and optic nerves, and the screen they
 // watch, all at true size in mm. The screen's picture (grid, target, where the eyes land) is drawn on a 2D canvas
 // and shown on the screen as a texture. Nothing here decides anything: it draws what model.js computes.
-import { program, meshBuffers, normals, perspective, lookAt, mul4 } from './gl.js?v=8664a690';
-import { EYE_R, MUSCLES, OPTIC, SCREEN, musclePath, eyeCenter, rot, onScreen } from './model.js?v=8664a690';
+import { program, meshBuffers, normals, perspective, lookAt, mul4 } from './gl.js?v=c6871684';
+import { EYE_R, MUSCLES, OPTIC, SCREEN, musclePath, eyeCenter, rot, onScreen } from './model.js?v=c6871684';
 
 const VS = `#version 300 es
 layout(location=0) in vec3 aPos; layout(location=1) in vec3 aNor; layout(location=2) in vec3 aT;
@@ -27,7 +27,7 @@ vec3 lit(vec3 base, vec3 n, float spec, float shine){
   return c + vec3(s) + rim * gRimCol;
 }
 void main(){
-  vec3 n = normalize(vN); if (!gl_FrontFacing) n = -n;
+  vec3 n = normalize(vN); if (dot(n, uCam - vW) < 0.) n = -n;   // light the side that faces the camera, whichever way its triangles wind
   if (uKind == 7) {                    // the backdrop: a dark gradient
     float y = vL.y * 0.5 + 0.5, r = length(vL.xy * vec2(0.8, 1.0));
     o = vec4(mix(vec3(0.018, 0.024, 0.05), vec3(0.05, 0.065, 0.11), y) * (1.1 - 0.35 * r), 1.); return;
@@ -258,6 +258,7 @@ export function makeScene(gl) {
   // a ring that faces along direction d
   const facing = (d, t) => { const zz = norm(d), xx = norm(Math.abs(zz[1]) < 0.9 ? cross([0, 1, 0], zz) : cross([1, 0, 0], zz)), yy = cross(zz, xx); return place([[xx[0], yy[0], zz[0]], [xx[1], yy[1], zz[1]], [xx[2], yy[2], zz[2]]], t); };
 
+  const L0 = {};                                         // each muscle's length with the eye looking straight ahead
   // build the eyes' moving parts for this frame. f.eyes: [{ side, R, P, drive: {id: 0..1} }]
   function build(f) {
     let k = 0;
@@ -265,12 +266,15 @@ export function makeScene(gl) {
       const ctr = eyeCenter(e.side);
       for (const m of MUSCLES) {
         const path = musclePath(m, e.R, e.side, EYE_R + 0.45), L = path.L, at0 = along(path.parts), at = (s) => add(at0(s), ctr);
-        const drv = e.drive[m.id], swell = 1 + 0.12 * (drv - 0.25);
+        // a muscle keeps its volume: as it shortens its belly grows wider and thicker, as it lengthens it thins. (It used
+        // to swell with its nerve signal, so that it bulged during the burst of a saccade without changing length.)
+        const key = m.id + e.side; if (!(key in L0)) L0[key] = musclePath(m, I3, e.side, EYE_R + 0.45).L;
+        const drv = e.drive[m.id], swell = Math.sqrt(L0[key] / L);
         const wrapPart = path.parts[path.parts.length - 1], nW = wrapPart.normal;
         const frame = (s) => nW;
         frame.center = ctr;
         const tag = e.pick === m.id ? -1 : drv;
-        fillTube(tubes[k++], at, L, frame, (s, ee) => { const [w, h] = profile(m, s, ee); const hh = ee > m.tendon + 3 ? h * swell : h; return [w, hh, Math.max(0, hh - 0.35)]; }, (s, ee) => [ee, tag, m.tendon]);
+        fillTube(tubes[k++], at, L, frame, (s, ee) => { const [w, h] = profile(m, s, ee), g = ee > m.tendon + 3 ? swell : 1, hh = h * g; return [w * g, hh, Math.max(0, hh - 0.35)]; }, (s, ee) => [ee, tag, m.tendon]);
       }
       // the optic nerve: from the back of the eye, a little toward the nose, to the back of the orbit, with slack
       const mir = (p) => [e.side * p[0], p[1], p[2]], ex = rot(e.R, mir(OPTIC.exit)), nOut = norm(ex), ap = mir(OPTIC.apex);

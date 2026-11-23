@@ -1,8 +1,8 @@
 // Overshoot saccades: the controller. The state is the zoom (0 Screen, 1 Eyes, 2 Muscles), healthy or poor pursuit,
 // how fast time runs, and the target. The simulation in model.js moves the eyes; scene.js draws them.
-import { makeSim, STEP, INSET_DEG, CATCHUP, SCREEN, MUSCLES, PURSUIT, onScreen, gazeOf, eyeGaze, listing, turnOf, rate, musclePath, rot } from './model.js?v=8664a690';
-import { makeScene, camera } from './scene.js?v=8664a690';
-import { SRC, CONDITIONS, SACCADES, CAPTIONS, NOTE, NOTE_SRC, MODEL, MODEL_SRC, INSET } from './facts.js?v=8664a690';
+import { makeSim, STEP, INSET_DEG, CATCHUP, SCREEN, MUSCLES, PURSUIT, onScreen, gazeOf, eyeGaze, listing, turnOf, rate, musclePath, rot } from './model.js?v=c6871684';
+import { makeScene, camera } from './scene.js?v=c6871684';
+import { SRC, CONDITIONS, SACCADES, CAPTIONS, NOTE, NOTE_SRC, MODEL, MODEL_SRC, INSET } from './facts.js?v=c6871684';
 import { gamepad } from '../gamepad/gamepad.js';
 
 const $ = (id) => document.getElementById(id);
@@ -66,7 +66,9 @@ function mainCam(c) {
 // the inset: what the right eye sees, from its center along its line of sight
 function insetBox() {
   const w = Math.round(clamp(free.w * (free.w < 600 ? 0.3 : 0.34), 112, 300)), h = Math.round(w * 0.62);
-  return { x: free.x + free.w - w - 14, y: free.y + 14, w, h };
+  // in the lower right corner, under the eyes' side of the picture: at the top it hid the screen's right half, where
+  // the target swings to
+  return { x: free.x + free.w - w - 14, y: free.y + free.h - h - 30, w, h };
 }
 function eyeCam(box) {
   const e = frame.eyes[0], c = [31.5, 0, 0], up = rot(e.R, [0, 1, 0]), at = c.map((x, i) => x + e.dir[i] * 100);

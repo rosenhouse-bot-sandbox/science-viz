@@ -9,7 +9,7 @@
 //    (turning out shortens infraspinatus and teres minor and lengthens subscapularis; turning in the reverse;
 //    lifting the arm out to the side shortens supraspinatus and the middle deltoid).
 import { model } from './load.mjs';
-import { CLEAR, ROTS } from '../../js/shoulder/model.js';
+import { CLEAR, ROTS, closest } from '../../js/shoulder/model.js';
 import { V } from '../../js/shoulder/geom.js';
 
 const N = +(process.argv[2] || 120), SEED = +(process.env.SEED || 7);
@@ -32,7 +32,8 @@ const HC = model.marks.HC;
 const centers = (b, pos) => b.sl.map((_, i) => { let m = [0, 0, 0]; for (let j = 0; j < 32; j++) m = V.add(m, [pos[3 * (i * 32 + j)], pos[3 * (i * 32 + j) + 1], pos[3 * (i * 32 + j) + 2]]); return V.mul(m, 1 / 32); });
 let worstNew = {}, lens = {};
 for (let n = 0; n < N; n++) {
-  const P = { elev: Math.round(rnd() * 150), plane: [0, 30, 90][Math.floor(rnd() * 3)], rot: Math.round(ROTS[0] + rnd() * (ROTS.at(-1) - ROTS[0])), elbow: 90 };
+  // the planes worked out (0, 30, 90), and every fourth position a plane between them or a little past 90 (the pendulum)
+  const P = { elev: Math.round(rnd() * 150), plane: n % 4 === 3 ? Math.round(rnd() * 102) : [0, 30, 90][Math.floor(rnd() * 3)], rot: Math.round(ROTS[0] + rnd() * (ROTS.at(-1) - ROTS[0])), elbow: 90 };
   const T = model.pose(P);
   if (model.ribPen({ scapula: T.scapula, clavicle: T.clavicle }) > 0) fail('the shoulder blade is in the ribs', P);
   const g = model.gap(T).mm; if (g < CLEAR - 0.05) fail(`gap ${g.toFixed(2)} mm, under ${CLEAR}`, P);
@@ -49,6 +50,17 @@ for (let n = 0; n < N; n++) {
     for (const k of Object.keys(model.SOL)) { const f = model.SOL[k], inv = model.invT(T[k]); p.forEach((q, i) => { if (!b.restIn[k][i] && f.depth(applyT(inv, q)) > 1) deep++; }); }
     worstNew[b.id] = Math.max(worstNew[b.id] || 0, deep / p.length);
     if (deep / p.length > 0.02) fail(`${b.id}: ${(100 * deep / p.length).toFixed(1)}% of its corners are more than 1 mm inside a bone they were not in at rest`, P);
+  }
+  // the bursa lies on the tendon as posed, whatever the condition: no corner of its underside more than 2 mm from the
+  // tendon's top face (it once lifted off at a high lift, and a worn tendon came up through it)
+  const su = model.built[0];
+  for (const [cond, shape] of [['healthy', null], ['tendinopathy', (t) => (t > 0.72 ? { thick: 1.5 } : null)]]) {
+    const tp = pts(model.muscle(su, T, shape ? { shape } : {}).pos), bu = model.bursa(0.8), tris = [];
+    for (let i = Math.floor(0.6 * (su.S - 1)); i + 1 < su.S; i++) for (let j = 0; j + 1 < 16; j++) { const a = tp[i * 32 + j], b = tp[i * 32 + j + 1], c = tp[(i + 1) * 32 + j], d = tp[(i + 1) * 32 + j + 1]; tris.push([a, b, c], [b, d, c]); }
+    // its underside within the tendon's width (past the edges it carries on beyond the tendon)
+    const bp = pts(model.bursaOn(bu, tp.flat()).pos).filter((_, i) => bu.at[i].cap === undefined && !bu.at[i].top && bu.at[i].s > 0.1 && bu.at[i].s < 0.9);
+    const off = Math.max(...bp.map((q) => Math.min(...tris.map(([a, b, c]) => V.len(V.sub(q, closest(q, a, b, c)))))));
+    if (off > 2) fail(`the bursa (${cond}) is ${off.toFixed(1)} mm off the tendon`, P);
   }
 }
 function applyT(T, p) { return V.add([V.dot(T.R[0], p), V.dot(T.R[1], p), V.dot(T.R[2], p)], T.t); }
