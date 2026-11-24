@@ -119,3 +119,9 @@ input.big::-moz-range-thumb{width:22px;height:22px}
   .panel{left:0;right:auto;top:calc(60px + env(safe-area-inset-top));bottom:0;width:min(372px,46%);height:auto;border-top:1px solid var(--line);border-right:1px solid var(--line);border-radius:0 18px 0 0}
 }
 @media (prefers-reduced-motion:reduce){.cap{transition:none}}
+
+/* ---- tablets and touch (see CLAUDE.md, "Tablets") ---- */
+/* A finger needs a 44px target (WCAG 2.5.5). */
+@media (pointer:coarse){.stops{height:44px}.stops button{min-block-size:44px;min-inline-size:44px;padding:12px 6px}.stops button:first-child{text-align:left}.stops button:last-child{text-align:right}input[type=range]{height:44px}.check{min-block-size:44px}}
+/* A tablet held upright, or a wide split view, gets the phone's sheet. Its contents keep to a 640px column in the middle, so lines and controls stay one length. */
+@media (min-width:700px) and (max-width:899px) and (min-height:521px){.panel{padding-left:calc((100% - 640px) / 2);padding-right:calc((100% - 640px) / 2)}}

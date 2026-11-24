@@ -403,6 +403,8 @@ every push to `main`. In the repository settings, set Pages → Source to
 - `drafts/`: review boards from each design round.
 - `tests/vesicle/placement.mjs`: steps Vesicle fusion through every frame without a GPU and fails if a
   protein is on the wrong side of a membrane or pushed into one.
+- `tests/ipad/run.mjs`: opens every page with touch at iPad sizes (upright, sideways, split view) and fails on
+  anything off the screen or covered, a control smaller than a finger, cut-off text, or a page that stops zooming.
 - `tests/smooth/`: the smooth-interaction tests for Rainbows (`run.mjs` drives the page, `inject.js` is the
   stepped clock and the probes, `scenarios.mjs` the gestures, `analyze.mjs` the checks and the report).
 

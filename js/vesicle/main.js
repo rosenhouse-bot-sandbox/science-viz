@@ -367,7 +367,8 @@ function setCamera() {
 
 // ---- labels and scale bar ------------------------------------------------------------------------
 const tags = {};
-let hoverTag = false;
+let hoverTag = false, openTag = null;
+const tapCards = matchMedia('(hover: none) and (min-width: 600px)');
 for (const [id, text] of Object.entries(LABELS)) {
   const t = document.createElement('div'); t.className = 'tag' + (FAR.has(id) ? ' far' : '');
   const sp = document.createElement('span'); sp.textContent = text; t.append(sp);
@@ -379,8 +380,16 @@ for (const [id, text] of Object.entries(LABELS)) {
   pop.append(h, d, a); t.append(pop);
   t.addEventListener('mouseenter', () => { hoverTag = true; t.classList.toggle('up', t.getBoundingClientRect().top > innerHeight - 230); });
   t.addEventListener('mouseleave', () => { hoverTag = false; });
+  t.addEventListener('click', (e) => {   // a finger cannot hover: on a tablet, a tap opens the card
+    if (!tapCards.matches || e.target.closest('a')) return;
+    const was = openTag === t; closeCard();
+    if (!was) { openTag = t; hoverTag = true; t.classList.add('open'); t.classList.toggle('up', t.getBoundingClientRect().top > innerHeight - 230); }
+  });
   $('labels').append(t); tags[id] = t;
 }
+// A tap anywhere but on the open card closes it.
+document.addEventListener('pointerdown', (e) => { if (openTag && !openTag.contains(e.target)) closeCard(); }, true);
+function closeCard() { if (openTag) { openTag.classList.remove('open'); openTag = null; hoverTag = false; } }
 function placeLabels() {
   if (hoverTag) return;
   const V = cam.view, P = cam.proj, cw = canvas.clientWidth, ch = canvas.clientHeight, pr = $('panel').getBoundingClientRect();

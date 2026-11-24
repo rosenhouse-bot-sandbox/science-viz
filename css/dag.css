@@ -109,3 +109,7 @@ input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;bac
   .stages button{font-size:0.6875rem}
 }
 @media (prefers-reduced-motion:reduce){.stages button i{transition:none}}
+
+/* ---- tablets and touch (see CLAUDE.md, "Tablets") ---- */
+/* A tablet held upright, or a wide split view, gets the phone's sheet. Its contents keep to a 640px column in the middle, so lines and controls stay one length. */
+@media (min-width:700px) and (max-width:899px) and (min-height:521px){.panel{padding-left:calc((100% - 640px) / 2);padding-right:calc((100% - 640px) / 2)}.panel>.step{margin-left:0;margin-right:0;padding-left:0;padding-right:0}}

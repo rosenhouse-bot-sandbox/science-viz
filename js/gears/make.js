@@ -1,15 +1,15 @@
 // Gears on a cube and an octahedron, the workshop: for each part, its dimensioned drawing, and how it is made on a
 // lathe and a mill, step by step. The state is which toy, which part, which view, the machine time, and the camera.
-import { MM, parts, unitMM } from './model.js?v=8d116acc';
-import { planOf, startOf, MANDREL, PARTS, NAMES, by, SHOWN } from './plan.js?v=8d116acc';
-import { stockOf, gearSpec, screwSpec } from './spec.js?v=8d116acc';
-import { timeline, makeReplay, DZ } from './cut.js?v=8d116acc';
-import { makeShop, M4, turnedMesh, milledMesh, holeMesh, slotMesh } from './shop.js?v=8d116acc';
-import { grow, lathe, box, gearMesh, smallParts, sphere } from './mesh.js?v=8d116acc';
-import { collisions, turnedEnvelope } from './collide.js?v=8d116acc';
-import { drawing } from './drawing.js?v=8d116acc';
-import { perspective, lookAt, mul4 } from './gl.js?v=8d116acc';
-import { dot, cross, norm, bodyFaces } from './model.js?v=8d116acc';
+import { MM, parts, unitMM } from './model.js?v=04d3d5af';
+import { planOf, startOf, MANDREL, PARTS, NAMES, by, SHOWN } from './plan.js?v=04d3d5af';
+import { stockOf, gearSpec, screwSpec } from './spec.js?v=04d3d5af';
+import { timeline, makeReplay, DZ } from './cut.js?v=04d3d5af';
+import { makeShop, M4, turnedMesh, milledMesh, holeMesh, slotMesh } from './shop.js?v=04d3d5af';
+import { grow, lathe, box, gearMesh, smallParts, sphere } from './mesh.js?v=04d3d5af';
+import { collisions, turnedEnvelope } from './collide.js?v=04d3d5af';
+import { drawing } from './drawing.js?v=04d3d5af';
+import { perspective, lookAt, mul4 } from './gl.js?v=04d3d5af';
+import { dot, cross, norm, bodyFaces } from './model.js?v=04d3d5af';
 import { gamepad } from '../gamepad/gamepad.js';
 
 const $ = (id) => document.getElementById(id);

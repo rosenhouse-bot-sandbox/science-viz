@@ -74,6 +74,26 @@ What that guidance has meant here so far, and should keep meaning:
   add a host to it only when a page really needs one.
 - Never build HTML from text that came from the URL or the user. Readouts are built from numbers.
 
+## Tablets
+
+Every page must work on an iPad, held upright and sideways, in split view, and as a Home Screen app.
+A new page is not done until it does.
+
+- Lay out for three widths. Under 900px the panel is a sheet along the foot of the screen; from 900px it is a
+  column on the left. An iPad held upright (744 to 834px wide) gets the sheet, and from 700px the sheet's
+  contents keep to a 640px column in the middle. An iPad Pro held upright (1024px) and every iPad held
+  sideways get the column. A split view can be as narrow as a phone (375px).
+- A finger needs 44 × 44 px. Under `@media (pointer:coarse)` make every button, slider, tick box (through its
+  label), stop on a slider and `<summary>` at least that big. Where a row of them cannot fit, let the row run
+  into the panel's padding.
+- A finger cannot hover. Anything shown on hover must also open with a tap (Vesicle's label cards do this),
+  and nothing may need a right click, a double click or a key held down.
+- Do not stop the visitor zooming: no `user-scalable=no` or `maximum-scale`. The picture's `touch-action`
+  follows the pinch rules under Checking a change.
+- Pad everything fixed to an edge by `env(safe-area-inset-*)`: a Home Screen app runs under the status bar.
+- Turning the iPad must not need a reload: lay out from the current size, and redraw on `resize`.
+- Run `node tests/ipad/run.mjs <page>`, and add a new page to `PAGES` there.
+
 ## Checking a change
 
 Before pushing:
@@ -170,8 +190,15 @@ Before pushing:
   every page online and then with the server stopped, and fails if a page loads a file the service
   worker does not keep, loads anything from another host but the web fonts, or does not work
   offline. A new page needs an entry in `PAGES` there.
+- After changing a page's layout, its panel or its controls, run `node tests/ipad/run.mjs` (or with page
+  names: `home`, `rainbows`, `vesicle`, `optics`, `graph`, `maple`, `engine`, `shoulder`, `saccade`, `gears`,
+  `gearsmake`; `--quick` for the iPad Air only; `--shots` writes pictures to `tests/ipad/out/`). It opens the
+  page with touch at eight iPad sizes, upright, sideways and in split view, and turns it without a reload. It
+  fails if the page is wider than the screen, a control is off the screen or under something, a control is
+  smaller than a finger, text is cut off, the page stops zooming, or the console shows an error. It cannot
+  see Safari's toolbars or the status bar; look at a real iPad as well.
 - A frozen screenshot does not show a jump. When a person reports one, first add the gesture to
   `tests/smooth/scenarios.mjs` and see the report show it, then fix it.
-- Load each affected page in a browser with the console open, at a desktop width and at a phone
-  width (390 × 844), and step through every scale and control.
+- Load each affected page in a browser with the console open, at a desktop width, at a phone
+  width (390 × 844) and at an iPad width held upright (820 × 1180), and step through every scale and control.
 - For v2, also check with reduced motion switched on, and with only the keyboard.
