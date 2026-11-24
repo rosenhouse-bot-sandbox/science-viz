@@ -7,6 +7,7 @@ import drop, { eyeAngle, bowTrack, crossAngle, CROSSINGS } from './stages/drop.j
 import surface, { presetAngle, maxAngle } from './stages/surface.js';
 import atoms from './stages/atoms.js';
 import { gamepad } from '../gamepad/gamepad.js';
+import { touchSliders } from '../touch/slider.js';
 
 const STAGES = [orbit, rain, drop, surface, atoms];
 const RAIN = STAGES.indexOf(rain), DROP = STAGES.indexOf(drop), SURFACE = STAGES.indexOf(surface), ATOMS = STAGES.indexOf(atoms);
@@ -372,6 +373,8 @@ window.addEventListener('keydown', e => {
 });
 // A controller: the right stick turns the camera as the arrow keys do, the triggers zoom within the
 // scale, and the bumpers step between scales.
+// Sliders a finger can work (see js/touch/slider.js).
+touchSliders();
 gamepad({
   look: { label: 'Turn the camera', move: (x, y, dt) => nudge(x * 1.8 * dt, -y * 1.3 * dt, 1) },
   zoom: { label: ['Zoom out, within this scale', 'Zoom in, within this scale'], move: (v, dt) => nudge(0, 0, Math.exp(-v * 1.6 * dt)) },

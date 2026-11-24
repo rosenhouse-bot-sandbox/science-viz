@@ -1,9 +1,9 @@
 // Gears on a cube and an octahedron: the 3D picture. The parts are the ones the brass toy is made of: a core block,
 // and on each face a washer, a toothed gear with a ball bearing pressed into it, and a flanged screw. Sizes come
 // from model.js; nothing here decides how the gears move.
-import { program, meshBuffers } from './gl.js?v=04d3d5af';
-import { bodyPlanes, bodyFaces, parts } from './model.js?v=04d3d5af';
-import { grow, gearMesh, smallParts } from './mesh.js?v=04d3d5af';
+import { program, meshBuffers } from './gl.js?v=e184e11b';
+import { bodyPlanes, bodyFaces, parts } from './model.js?v=e184e11b';
+import { grow, gearMesh, smallParts } from './mesh.js?v=e184e11b';
 
 const VS = `#version 300 es
 layout(location=0) in vec3 aPos; layout(location=1) in vec3 aNor; layout(location=2) in vec3 aT;

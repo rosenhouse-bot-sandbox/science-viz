@@ -14,7 +14,7 @@
 // so it takes three times the room: the dots are moved out from the plug, so that the burned gas fills the flame's
 // sphere and the unburned gas is squeezed into what is left (see expand).
 // Not modeled: turbulence, the tumble and swirl of a real intake, and pressure waves in the pipes.
-import * as M from './model.js?v=bd8f23e1';
+import * as M from './model.js?v=13c53602';
 
 const { clamp, mix, DECK, BORE, ROOF, ROOF_SLOPE, EVO, IVC, SPARK } = M;
 export const FUEL_SHARE = 1 / 15;                                    // fuel to air, by mass

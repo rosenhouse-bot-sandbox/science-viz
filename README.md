@@ -398,6 +398,9 @@ every push to `main`. In the repository settings, set Pages → Source to
 - `shoulder/index.html`, `css/shoulder.css`, `js/shoulder/*.js`, `shoulder/data/`: Shoulder (see its section below).
 - `gears/index.html`, `css/gears.css`, `js/gears/*.js`: Gear fidget (see its section below).
 - `js/gamepad/`, `css/gamepad.css`: controller support, shared by every page (see Controller above).
+- `css/slider.css`, `js/touch/slider.js`: every slider on every page. A finger can take hold anywhere on a
+  slider's row (iPad Safari's own slider only grabs on its knob), a press away from the knob glides there, the
+  knob grows while held, and a long press does not select text.
 - `manifest.webmanifest`, `sw.js`, `js/pwa.js`, `img/app/`, `.github/sw.mjs`: the Home Screen app
   and its offline copy, shared by every page (see On an iPad above).
 - `drafts/`: review boards from each design round.
@@ -405,6 +408,8 @@ every push to `main`. In the repository settings, set Pages → Source to
   protein is on the wrong side of a membrane or pushed into one.
 - `tests/ipad/run.mjs`: opens every page with touch at iPad sizes (upright, sideways, split view) and fails on
   anything off the screen or covered, a control smaller than a finger, cut-off text, or a page that stops zooming.
+- `tests/touch/run.mjs`: works every slider on every page with a finger at an iPad size, and fails if a tap or
+  a drag does not land where the finger is, the knob jumps, or a drag scrolls the panel.
 - `tests/smooth/`: the smooth-interaction tests for Rainbows (`run.mjs` drives the page, `inject.js` is the
   stepped clock and the probes, `scenarios.mjs` the gestures, `analyze.mjs` the checks and the report).
 

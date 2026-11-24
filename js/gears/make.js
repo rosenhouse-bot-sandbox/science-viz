@@ -1,16 +1,17 @@
 // Gears on a cube and an octahedron, the workshop: for each part, its dimensioned drawing, and how it is made on a
 // lathe and a mill, step by step. The state is which toy, which part, which view, the machine time, and the camera.
-import { MM, parts, unitMM } from './model.js?v=04d3d5af';
-import { planOf, startOf, MANDREL, PARTS, NAMES, by, SHOWN } from './plan.js?v=04d3d5af';
-import { stockOf, gearSpec, screwSpec } from './spec.js?v=04d3d5af';
-import { timeline, makeReplay, DZ } from './cut.js?v=04d3d5af';
-import { makeShop, M4, turnedMesh, milledMesh, holeMesh, slotMesh } from './shop.js?v=04d3d5af';
-import { grow, lathe, box, gearMesh, smallParts, sphere } from './mesh.js?v=04d3d5af';
-import { collisions, turnedEnvelope } from './collide.js?v=04d3d5af';
-import { drawing } from './drawing.js?v=04d3d5af';
-import { perspective, lookAt, mul4 } from './gl.js?v=04d3d5af';
-import { dot, cross, norm, bodyFaces } from './model.js?v=04d3d5af';
+import { MM, parts, unitMM } from './model.js?v=e184e11b';
+import { planOf, startOf, MANDREL, PARTS, NAMES, by, SHOWN } from './plan.js?v=e184e11b';
+import { stockOf, gearSpec, screwSpec } from './spec.js?v=e184e11b';
+import { timeline, makeReplay, DZ } from './cut.js?v=e184e11b';
+import { makeShop, M4, turnedMesh, milledMesh, holeMesh, slotMesh } from './shop.js?v=e184e11b';
+import { grow, lathe, box, gearMesh, smallParts, sphere } from './mesh.js?v=e184e11b';
+import { collisions, turnedEnvelope } from './collide.js?v=e184e11b';
+import { drawing } from './drawing.js?v=e184e11b';
+import { perspective, lookAt, mul4 } from './gl.js?v=e184e11b';
+import { dot, cross, norm, bodyFaces } from './model.js?v=e184e11b';
 import { gamepad } from '../gamepad/gamepad.js';
+import { touchSliders } from '../touch/slider.js';
 
 const $ = (id) => document.getElementById(id);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -501,6 +502,8 @@ function controls() {
   addEventListener('hashchange', () => { readHash(); load(); touch(); });
   document.addEventListener('visibilitychange', () => { last = 0; });
   const cycle = (k) => { const i = PARTS.indexOf(st.part); choose('part', PARTS[(i + k + PARTS.length) % PARTS.length]); };
+  // Sliders a finger can work (see js/touch/slider.js).
+  touchSliders();
   gamepad({
     look: { label: 'Turn the view', move(x, y, dt) { orbit(-x * 1.6 * dt, -y * 1.2 * dt); } },
     zoom: { label: ['Machine time back', 'Machine time on'], move(v, dt) { if (st.view === 'draw') { zoomSheet(Math.exp(v * dt * 1.5)); return; } if (!cur.replay) return; st.play = false; st.t = clamp(st.t + v * dt * cur.rate * 2, 0, cur.tl.T); touch(); } },

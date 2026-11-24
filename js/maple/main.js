@@ -1,10 +1,11 @@
 // Japanese maple: the controller. Two numbers drive the page: the zoom (0 = tree ... 4 = molecules)
 // and the season (0 = late March ... 1 = late December). The picture is redrawn only when one changes.
-import { dayOf, dateOf, dayLength, sunAt, takenIn, PHASES, phaseAt, LAT, clamp, smooth, mix, css, leafRGB } from './model.js?v=993a76f0';
-import { makeWorld, TARGETS, CUT as LEAF_CUT } from './world.js?v=993a76f0';
-import { quatOf, qmul, qrot, slerp, add, mul, unit, cross, lerp3 } from './gl.js?v=993a76f0';
-import { drawSpectrum, drawStalk, drawChain } from './figs.js?v=993a76f0';
+import { dayOf, dateOf, dayLength, sunAt, takenIn, PHASES, phaseAt, LAT, clamp, smooth, mix, css, leafRGB } from './model.js?v=12fecabb';
+import { makeWorld, TARGETS, CUT as LEAF_CUT } from './world.js?v=12fecabb';
+import { quatOf, qmul, qrot, slerp, add, mul, unit, cross, lerp3 } from './gl.js?v=12fecabb';
+import { drawSpectrum, drawStalk, drawChain } from './figs.js?v=12fecabb';
 import { gamepad } from '../gamepad/gamepad.js';
+import { touchSliders } from '../touch/slider.js';
 
 const $ = (id) => document.getElementById(id);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -307,6 +308,8 @@ cv.addEventListener('pointermove', (e) => {
 for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) cv.addEventListener(type, (e) => { fingers.delete(e.pointerId); span = 0; });
 $('reload').addEventListener('click', () => location.reload());
 // A controller: the triggers zoom as the wheel does (the same change of scale each second everywhere), and the bumpers fly to the scale before or after.
+// Sliders a finger can work (see js/touch/slider.js): a press on the Zoom line away from its knob glides there, as a press on a scale's name does.
+touchSliders({ zoom: { glideTo: zoomTo } });
 gamepad({
   zoom: { move(v, dt) { if (hop) return; fly = null; zoomAt = performance.now(); zNew = true; st.z = zOf(clamp(uOf(st.z) + v * 3 * dt, KN.U[0], KN.U[LAST])); touch(); } },
   prev: { label: 'Zoom out to the scale before', press: () => zoomTo(Math.ceil((fly ? fly.to : st.z) - 1e-6) - 1) },

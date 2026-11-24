@@ -8,6 +8,7 @@ import { gridSearch } from './search.js';
 import { measure, midLabels, labelsCovered } from './common.js';
 import { runReal, cancelD2, realLayout } from './real.js';
 import { gamepad } from '../gamepad/gamepad.js';
+import { touchSliders } from '../touch/slider.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('view'), ctx = canvas.getContext('2d');
@@ -474,6 +475,8 @@ canvas.addEventListener('keydown', (e) => {
 });
 // A controller: the right stick picks out a node as the arrow keys do, B lets go of it, and the
 // bumpers step through the layout.
+// Sliders a finger can work (see js/touch/slider.js).
+touchSliders();
 gamepad({
   look: { label: 'Pick out a node and its edges', step(dx, dy) { if (graph) setHot((hot + (dx + dy > 0 ? 1 : graph.n - 1 + (hot < 0 ? 1 : 0))) % graph.n); } },
   back() { if (hot < 0) return false; setHot(-1); return true; },
