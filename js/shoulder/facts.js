@@ -30,9 +30,9 @@ export const DOES = {
   infra: { text: 'turns the arm outward', src: ['cuff', 'uw'] },
   tminor: { text: 'turns the arm outward', src: ['cuff', 'uw'] },
   subscap: { text: 'on the front of the shoulder blade; turns the arm inward', src: ['cuff', 'uw'] },
-  deltA: { text: 'part of the big muscle over the shoulder that lifts the arm', src: ['uw'] },
-  deltM: { text: 'part of the big muscle over the shoulder that lifts the arm', src: ['uw'] },
-  deltP: { text: 'part of the big muscle over the shoulder that lifts the arm', src: ['uw'] },
+  deltA: { text: 'lifts the arm forward and turns it in', src: ['deltoid'] },
+  deltM: { text: 'lifts the arm out to the side', src: ['deltoid'] },
+  deltP: { text: 'takes the arm back and turns it out', src: ['deltoid'] },
 };
 
 // The conditions. show: what the model does for it (model.js and main.js read these, and say on screen what
@@ -126,5 +126,5 @@ export const EXERCISES = [
     src: ['plank', 'gmed'] },
 ];
 
-export const MODEL_NOTE = 'Bones are one person\'s scanned right shoulder; muscles are built to match the scans of the same body (checked against them: within 1 mm over 95% of each surface). The shoulder blade turns a third of the lift (the 2 to 1 rhythm, a simplification). In this scan the acromion sits low over the ball, so as the arm lifts the model lets the ball slide down in its socket enough to keep 2 mm between the bones. That is a correction for this scan, not a motion to learn from: in a real shoulder the ball stays close to the middle of its socket. The gap is the narrowest distance between the two bones in this model, not an X-ray measurement. How a muscle bends as the arm moves follows a simple rule (each slice of it takes a share of the arm bone\'s turn, more toward the arm), not a simulation of muscle.';
+export const MODEL_NOTE = 'Bones are one person\'s scanned right shoulder; muscles are built to match the scans of the same body (checked against them: within 1 mm over 95% of each surface). The shoulder blade turns a third of the lift (the 2 to 1 rhythm, a simplification). In this scan the acromion sits low over the ball, so as the arm lifts the model lets the ball slide down in its socket enough to keep 2 mm between the bones. That is a correction for this scan, not a motion to learn from: in a real shoulder the ball stays close to the middle of its socket. The gap is the narrowest distance between the two bones in this model, not an X-ray measurement. How a muscle bends as the arm moves follows a simple rule (each slice of it takes a share of the arm bone\'s turn, more toward the arm), not a simulation of muscle. A muscle that pulls on its own turns the arm 40°, a degree at a time, the way that shortens it fastest in this model. The arm\'s weight and the muscles that would steady it are left out. The arm stops at 150° up, 60° in and 90° out, and the elbow does not go into the side of the body.';
 export const MODEL_SRC = ['bp3d', 'inman', 'ludewig'];

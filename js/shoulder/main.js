@@ -1,13 +1,13 @@
 // Shoulder: the controller. The state is the zoom (0 Shoulder, 1 Joint, 2 Tendon), a condition or an exercise,
 // and the arm's lift and turn. Everything drawn and every number shown comes from model.js.
-import { unpack, makeModel, MUSCLES, clamp, smooth, apply, turn as turnDir } from './model.js?v=d5629277';
-import { V } from './geom.js?v=d5629277';
-import { makeView, COL } from './view.js?v=d5629277';
-import { SRC, DOES, CONDITIONS, EXERCISES, MODEL_NOTE, MODEL_SRC } from './facts.js?v=d5629277';
-import { EX_POSE, EX_STILL, EX_SECONDS } from './exercises.js?v=d5629277';
+import { unpack, makeModel, MUSCLES, clamp, smooth, apply, turn as turnDir } from './model.js?v=5bd476fd';
+import { V } from './geom.js?v=5bd476fd';
+import { makeView, COL } from './view.js?v=5bd476fd';
+import { SRC, DOES, CONDITIONS, EXERCISES, MODEL_NOTE, MODEL_SRC } from './facts.js?v=5bd476fd';
+import { EX_POSE, EX_STILL, EX_SECONDS } from './exercises.js?v=5bd476fd';
 import { gamepad } from '../gamepad/gamepad.js';
 
-const STAMP = 'd5629277';                                        // written by tests/shoulder/stamp.mjs: the data files' version
+const STAMP = '5bd476fd';                                        // written by tests/shoulder/stamp.mjs: the data files' version
 const $ = (id) => document.getElementById(id);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const cv = $('view'), gl = cv.getContext('webgl2', { antialias: true, alpha: false, stencil: true, powerPreference: 'high-performance' });
@@ -15,10 +15,14 @@ let model = null, view = null, broken = false;
 
 const STOPS = [{ id: 'shoulder', name: 'Shoulder' }, { id: 'joint', name: 'Joint' }, { id: 'tendon', name: 'Tendon' }];
 const LAST = STOPS.length - 1;
-const st = { z: 0, mode: 'explore', cond: 'healthy', ex: 'external', lift: 0, turn: 0, phase: 0, play: false, yaw: 0, pitch: 0, pick: null };
+// flex: the muscle pulling alone, if any ({ id, c }: c from 0, where the pull starts, to 1, the end of its pull)
+const st = { z: 0, mode: 'explore', cond: 'healthy', ex: 'external', lift: 0, turn: 0, phase: 0, play: false, yaw: 0, pitch: 0, pick: null, flex: null };
 const FOV = 30 * Math.PI / 180;
 const free = { x: 0, y: 0, w: 1, h: 1 }, cam = { W: 1, H: 1, dpr: 1 };
-let dirty = true, raf = 0, last = 0, fly = null;
+// look: while a muscle pulls, the Shoulder view stands back to show the elbow (wide), and the deltoid fades where
+// it is when it hides the muscle that pulls (see); each eases from 0 to 1
+const look = { wide: 0, see: 0 };
+let dirty = true, raf = 0, last = 0, fly = null, pull = null;   // pull: the flex easing from one c to another
 const drawn = { n: 0 };
 
 // ---- what each condition does to the model (drawn sizes are said on screen in facts.js) ----
@@ -35,11 +39,32 @@ const RIDE_UP = 3;                                       // mm the ball rides up
 
 const exSeconds = () => EX_SECONDS[st.ex] || 6;
 
-function poseNow() {
+function basePose() {
   if (st.mode === 'exercise') {
     const e = EX_POSE[st.ex](st.phase); return { elev: e.elev, plane: e.plane, rot: e.rot, elbow: e.elbow };
   }
   return { elev: st.lift, plane: 30, rot: st.turn, elbow: 90, up: st.cond === 'full' ? RIDE_UP : 0 };
+}
+// One muscle pulling alone moves the arm from where the sliders or the exercise put it (model.contract). The path
+// is worked out again only when that starting pose changes.
+const PULL_DEG = 40;                                     // how far the arm turns at the end of a pull, in degrees
+let pathMemo = { key: '', path: null };
+function pathFor(id, P0) {
+  const key = id + JSON.stringify(P0);
+  if (pathMemo.key !== key) pathMemo = { key, path: model.contract(model.built.find((b) => b.id === id), P0, PULL_DEG) };
+  return pathMemo.path;
+}
+function along(path, c) {
+  const x = clamp(c) * (path.length - 1), i = Math.min(path.length - 2, Math.floor(x)), f = x - i, a = path[Math.max(0, i)], b = path[Math.min(path.length - 1, i + 1)];
+  if (path.length < 2) return { ...path[0] };
+  const mix = (k) => a[k] + (b[k] - a[k]) * f;
+  return { ...a, elev: mix('elev'), plane: mix('plane'), rot: mix('rot'), len: mix('len') };
+}
+function poseNow() {
+  const P = basePose();
+  if (!st.flex || !model) return P;
+  const q = along(pathFor(st.flex.id, P), st.flex.c);
+  return { elev: q.elev, plane: q.plane, rot: q.rot, elbow: P.elbow, up: P.up };
 }
 
 // ---- the scene ----
@@ -49,13 +74,14 @@ function compute() {
   const P = poseNow();
   const T = model.pose(P), cond = st.mode === 'explore' ? st.cond : 'healthy';
   const soft = [], len = {};
-  const deltFade = 1 - smooth((st.z - 0.3) / 0.55);      // the deltoid fades away where it is as the view goes in
+  const deltFade = (1 - smooth((st.z - 0.3) / 0.55)) * (1 - 0.8 * smooth(look.see));   // the deltoid fades away where it is as the view goes in
   for (const b of model.built) {
     if (hidden.has(b.id)) continue;
     const shape = b.id === 'supra' ? SHAPE[cond] : null, m = model.muscle(b, T, shape ? { shape } : {});
     len[b.id] = m.length / m.rest;
     const delt = !b.cuff, works = st.mode === 'exercise' && EXERCISES.find((x) => x.id === st.ex).works.includes(b.id);
-    const glow = st.pick === b.id ? 0.35 : works ? 0.16 : 0;
+    const pulls = st.flex && st.flex.id === b.id ? 0.12 + 0.23 * clamp(st.flex.c) : 0;
+    const glow = Math.max(st.pick === b.id ? 0.35 : works ? 0.16 : 0, pulls);
     if (delt && deltFade < 0.01) continue;
     const col = delt ? COL.deltoid : COL[b.id];
     soft.push({ key: b.id, b, pos: m.pos, col, col2: COL.tendon, blend: delt ? [0.93, 1.0] : [0.74, 0.88], glow,
@@ -107,7 +133,7 @@ function aimAt(z) {
     // in the exercises the view stands back far enough to show the elbow, wherever the arm is, so that the arm's
     // movement can be seen; it does not follow the arm
     st.mode === 'exercise' ? { at: V.mul(V.add(V.add(ball, blade), [0, -40, 0]), 0.5), size: 520, dir: V.norm([-1, 0.45, -0.4]) }
-      : { at: V.mul(V.add(V.add(ball, blade), [0, -40, 0]), 0.5), size: 300, dir: V.norm([-1, 0.45, -0.4]) },
+      : { at: V.mul(V.add(V.add(ball, blade), [0, -40, 0]), 0.5), size: Math.exp(Math.log(300) + (Math.log(520) - Math.log(300)) * smooth(look.wide)), dir: V.norm([-1, 0.45, -0.4]) },
     { at: V.add(V.mul(V.add(ball, blade), 0.5), [0, 10, 0]), size: 170, dir: V.norm([-1, 0.6, -0.45]) },
     { at: frame.view0 || V.add(ball, V.mul(up, 22)), size: 60, dir: cutN() },
   ];
@@ -251,9 +277,24 @@ function sync() {
     li.querySelector('b').textContent = l ? `${l >= 1 ? '+' : '−'}${Math.abs(Math.round((l - 1) * 100))}%` : '';
     const on = ex && it.works && it.works.includes(id);
     li.classList.toggle('works', on); li.classList.toggle('stretch', on && it.role === 'stretch'); li.classList.toggle('relaxed', on && it.role === 'relaxed'); li.classList.toggle('holds', on && it.role === 'holds');
-    li.querySelector('button').setAttribute('aria-pressed', String(st.pick === id));
+    li.querySelector('button').setAttribute('aria-pressed', String(st.flex?.id === id));
   }
+  flexSync();
   scaleBar(); writeHash();
+}
+// the Contract slider sits under the muscle that pulls
+function flexSync() {
+  const box = $('flexCtl'), f = st.flex;
+  if (!f) { if (!box.hidden) box.hidden = true; return; }
+  const li = [...$('muscleList').children].find((x) => x.dataset.id === f.id);
+  if (box.parentNode !== li) li.append(box);
+  if (box.hidden) box.hidden = false;
+  const path = pathFor(f.id, basePose()), q = along(path, f.c), el = $('flex');
+  if (Math.abs(el.value - f.c * 100) > 0.5) el.value = Math.round(f.c * 100);
+  el.style.setProperty('--v', (f.c * 100) + '%');
+  const short = Math.round((1 - q.len / path[0].len) * 100);
+  const txt = path.length < 2 ? 'at the limit' : `${short}% shorter`;
+  el.setAttribute('aria-valuetext', txt); set('flexV', txt);
 }
 // which way the arm is lifted, in words, for the readout
 const toward = (pl) => (pl > 120 ? 'across the body' : pl > 60 ? 'forward' : pl > 20 ? 'forward and out' : pl > -20 ? 'out to the side' : pl > -60 ? 'out and back' : 'back');
@@ -265,7 +306,9 @@ function sources(it) {
 let hashTimer = 0;
 function writeHash() {
   clearTimeout(hashTimer);
-  hashTimer = setTimeout(() => history.replaceState(null, '', '#' + new URLSearchParams(st.mode === 'explore' ? { z: st.z.toFixed(2), c: st.cond, lift: Math.round(st.lift), turn: Math.round(st.turn) } : { z: st.z.toFixed(2), ex: st.ex, p: st.phase.toFixed(3) })), 400);
+  const q = st.mode === 'explore' ? { z: st.z.toFixed(2), c: st.cond, lift: Math.round(st.lift), turn: Math.round(st.turn) } : { z: st.z.toFixed(2), ex: st.ex, p: st.phase.toFixed(3) };
+  if (st.flex) { q.m = st.flex.id; q.k = st.flex.c.toFixed(2); }
+  hashTimer = setTimeout(() => history.replaceState(null, '', '#' + new URLSearchParams(q)), 400);
 }
 function readHash() {
   const q = new URLSearchParams(location.hash.slice(1));
@@ -275,6 +318,7 @@ function readHash() {
   if (q.has('lift')) st.lift = clamp(parseFloat(q.get('lift')) || 0, 0, 150);
   if (q.has('turn')) st.turn = clamp(parseFloat(q.get('turn')) || 0, -60, 60);
   if (q.has('p')) st.phase = clamp(parseFloat(q.get('p')) || 0);
+  st.flex = MUSCLES.some((m) => m.id === q.get('m')) ? { id: q.get('m'), c: clamp(parseFloat(q.get('k')) || 0) } : null;
   return q.has('z');
 }
 
@@ -286,14 +330,35 @@ function tick(now) {
   if (broken || !model) return;
   const dt = Math.min(0.05, last ? (now - last) / 1000 : 0.016); last = now;
   if (st.play) { st.phase = (st.phase + dt / exSeconds()) % 1; dirty = true; }
+  const want = { wide: st.flex ? 1 : 0, see: st.flex && MUSCLES.find((m) => m.id === st.flex.id).cuff ? 1 : 0 };
+  for (const k of ['wide', 'see']) if (look[k] !== want[k]) { look[k] = reduced ? want[k] : want[k] > look[k] ? Math.min(want[k], look[k] + dt / 0.5) : Math.max(want[k], look[k] - dt / 0.5); dirty = true; }
+  if (pull) {
+    pull.u = Math.min(1, pull.u + dt / pull.s); st.flex.c = pull.c0 + (pull.c1 - pull.c0) * smooth(pull.u); dirty = true;
+    if (pull.u >= 1) { const then = pull.then; pull = null; if (then) then(); }
+  }
   if (fly) {
     const d = fly.to - st.z, step = Math.sign(d) * Math.min(Math.abs(d), dt * (0.6 + 3 * Math.abs(d)));
     st.z += step; if (Math.abs(fly.to - st.z) < 0.002) { st.z = fly.to; fly = null; } dirty = true;
   }
   if (dirty) { dirty = false; try { compute(); draw(); labels(); sync(); } catch (e) { oops(e); } }
-  if (st.play || fly) kick(); else last = 0;
+  const easing = look.wide !== (st.flex ? 1 : 0) || look.see !== (st.flex && MUSCLES.find((m) => m.id === st.flex.id).cuff ? 1 : 0);
+  if (st.play || fly || pull || easing) kick(); else last = 0;
 }
 function oops(e) { console.error(e); if (broken) return; broken = true; st.play = false; fly = null; $('oops').hidden = false; }
+// the muscle pulls to the end of its pull, or lets go back to where it started; at the speed of an unhurried
+// movement, about 45° a second (at once with reduced motion)
+function pullTo(c1, then) {
+  const f = st.flex, s = Math.max(0.25, Math.abs(c1 - f.c) * PULL_DEG / 45);
+  if (reduced) { f.c = c1; pull = null; touch(); if (then) then(); return; }
+  pull = { c0: f.c, c1, u: 0, s, then }; touch();
+}
+function tapMuscle(id) {
+  st.play = false;
+  const start = () => { st.flex = { id, c: 0 }; pullTo(1); };
+  if (!st.flex) start();
+  else if (st.flex.id === id) { if ((pull ? pull.c1 : st.flex.c) > 0) pullTo(0, () => { st.flex = null; touch(); }); else pullTo(1); }   // a second tap lets go
+  else pullTo(0, start);                                  // the other muscle lets go first, so that the arm does not jump
+}
 function zoomTo(z) { z = clamp(z, 0, LAST); if (reduced) { st.z = z; fly = null; } else fly = { to: z }; touch(); }
 
 function measure() {
@@ -311,13 +376,14 @@ function controls() {
   STOPS.forEach((s, i) => { const t = document.createElement('i'); t.style.left = (i / LAST * 100) + '%'; $('zticks').append(t); });
   const chip = (list, box, pick) => list.forEach((c) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = c.name; b.dataset.id = c.id; b.addEventListener('click', () => pick(c.id)); $(box).append(b); });
   chip(CONDITIONS, 'conds', (id) => { st.cond = id; touch(); });
-  chip(EXERCISES, 'exs', (id) => { st.ex = id; st.phase = 0; st.play = !reduced && !EX_STILL.has(id); touch(); });
-  for (const b of document.querySelectorAll('[data-mode]')) b.addEventListener('click', () => { st.mode = b.dataset.mode; st.play = st.mode === 'exercise' && !reduced && !EX_STILL.has(st.ex); if (st.mode === 'explore') st.phase = 0; touch(); });
+  chip(EXERCISES, 'exs', (id) => { st.ex = id; st.phase = 0; st.play = !reduced && !EX_STILL.has(id); st.flex = null; pull = null; touch(); });
+  for (const b of document.querySelectorAll('[data-mode]')) b.addEventListener('click', () => { st.mode = b.dataset.mode; st.flex = null; pull = null; st.play = st.mode === 'exercise' && !reduced && !EX_STILL.has(st.ex); if (st.mode === 'explore') st.phase = 0; touch(); });
   $('zoom').addEventListener('input', (e) => { fly = null; st.z = clamp(+e.target.value, 0, LAST); touch(); });
   $('lift').addEventListener('input', (e) => { st.lift = +e.target.value; touch(); });
   $('turn').addEventListener('input', (e) => { st.turn = +e.target.value; touch(); });
   $('phase').addEventListener('input', (e) => { st.phase = e.target.value / 1000; st.play = false; touch(); });
   $('play').addEventListener('click', () => { st.play = !st.play; touch(); });
+  $('flex').addEventListener('input', (e) => { if (!st.flex) return; pull = null; st.flex.c = e.target.value / 100; touch(); });
   for (const [id, step] of [['zoom', 0.05]]) $(id).addEventListener('keydown', (e) => {
     const d = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 }[e.key]; if (!d) return;
     e.preventDefault(); e.target.value = +e.target.value + d * step; e.target.dispatchEvent(new Event('input', { bubbles: true }));
@@ -325,7 +391,7 @@ function controls() {
   for (const m of MUSCLES) {
     const li = document.createElement('li'), b = document.createElement('button'), name = document.createElement('span'), v = document.createElement('b'), sm = document.createElement('small');
     li.dataset.id = m.id; b.type = 'button'; name.textContent = m.name; sm.textContent = DOES[m.id].text; b.append(name, v, sm); li.append(b); $('muscleList').append(li);
-    b.addEventListener('click', () => { st.pick = st.pick === m.id ? null : m.id; touch(); });
+    b.addEventListener('click', () => tapMuscle(m.id));
     b.addEventListener('pointerenter', () => { st.pick = m.id; touch(); }); b.addEventListener('pointerleave', () => { st.pick = null; touch(); });
   }
   // drag on the picture turns the view; the wheel and two fingers zoom, as the Zoom slider does
@@ -379,6 +445,7 @@ async function start() {
 }
 controls(); makeLabels(); readHash(); measure();
 start().then(() => { measure(); }).catch(oops);
-window.__shoulder = { st, hidden, drawn, free, stops: STOPS, get model() { return model; }, get frame() { return frame; }, get busy() { return !!(fly || st.play); },
-  settle() { if (fly) { st.z = fly.to; fly = null; } st.play = false; touch(); }, res(k) { res = k; measure(); },
+window.__shoulder = { st, hidden, drawn, free, stops: STOPS, get model() { return model; }, get frame() { return frame; }, get busy() { return !!(fly || st.play || pull); },
+  settle() { if (fly) { st.z = fly.to; fly = null; } while (pull) { const p = pull; pull = null; st.flex.c = p.c1; if (p.then) p.then(); }
+    look.wide = st.flex ? 1 : 0; look.see = st.flex && MUSCLES.find((m) => m.id === st.flex.id).cuff ? 1 : 0; st.play = false; touch(); }, tapMuscle, res(k) { res = k; measure(); },
   redraw() { compute(); draw(); labels(); sync(); gl.finish(); } };

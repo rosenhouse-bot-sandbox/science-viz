@@ -4,7 +4,8 @@
 //    before: a step that changes the picture far more than the steps either side of it is reported as a jump;
 //  - checks that no slider or button moves or changes size during a sweep;
 //  - checks the labels on the picture: on the screen, clear of the panel and of each other;
-//  - checks that with reduced motion an exercise does not play by itself.
+//  - checks that with reduced motion an exercise does not play by itself;
+//  - taps each muscle, sweeps its Contract slider, sweeps the arm's sliders with it pulling, and taps it again to let go.
 // Fails on a console error, a jump, a control that moved, a blank picture, labels that overlap, or a panel wider
 // than the screen.
 //
@@ -63,7 +64,7 @@ for (const [name, width, height, motion] of quick ? SIZES.slice(0, 1) : SIZES) {
     for (const t of r.tags) { if (t[0] < -1 || t[1] < -1 || t[2] > width + 1 || t[3] > height + 1) fail(`${name}: label "${t[4]}" is off the screen ${when}`); if (over(t, r.panel)) fail(`${name}: label "${t[4]}" is under the panel ${when}`); }
     for (let i = 0; i < r.tags.length; i++) for (let j = i + 1; j < r.tags.length; j++) if (over(r.tags[i], r.tags[j])) fail(`${name}: labels "${r.tags[i][4]}" and "${r.tags[j][4]}" overlap ${when}`);
   };
-  const boxes = () => page.evaluate(() => ['zoom', 'lift', 'turn', 'phase', 'play'].map((id) => { const e = document.getElementById(id); if (e.closest('[hidden]')) return '-'; const r = e.getBoundingClientRect(); return [r.x, r.y, r.width, r.height].map((v) => Math.round(v)).join(','); }).join(' | '));
+  const boxes = () => page.evaluate(() => ['zoom', 'lift', 'turn', 'phase', 'play', 'flex'].map((id) => { const e = document.getElementById(id); if (e.closest('[hidden]')) return '-'; const r = e.getBoundingClientRect(); return [r.x, r.y, r.width, r.height].map((v) => Math.round(v)).join(','); }).join(' | '));
   // a sweep: each step's change of the picture against the median step; also the controls must stay put
   async function sweep(id, from, to, steps, when) {
     const b0 = await boxes(); let prev = null; const ds = [];
@@ -96,6 +97,23 @@ for (const [name, width, height, motion] of quick ? SIZES.slice(0, 1) : SIZES) {
   await put('lift', 45); for (const z of [0, 2]) { await put('zoom', z); await sweep('turn', -60, 60, n, `at zoom ${z}`); }
   await put('lift', 0); await put('turn', 0);
   for (const c of ['healthy', 'full']) { await page.click(`#conds button[data-id="${c}"]`); await sweep('zoom', 0, 2, n * 2, `(${c})`); }
+
+  // each muscle pulling on its own: a tap pulls it, the Contract slider sweeps the pull, a second tap lets go; and
+  // with a muscle pulling, the arm's sliders move where the pull starts from, smoothly
+  await page.click('#each summary'); await frame();
+  for (const id of await page.$$eval('#muscleList li', (l) => l.map((x) => x.dataset.id))) {
+    await page.click(`#muscleList li[data-id="${id}"] button`); await settle();
+    const st = await page.evaluate(() => ({ flex: window.__shoulder.st.flex, inLi: document.getElementById('flexCtl').parentNode.dataset.id, shown: !document.getElementById('flexCtl').hidden }));
+    if (st.flex?.id !== id || st.flex.c !== 1) fail(`${name}: tapping ${id} did not pull it all the way (${JSON.stringify(st.flex)})`);
+    if (!st.shown || st.inLi !== id) fail(`${name}: the Contract slider is not under ${id}`);
+    for (const z of quick ? [0] : [0, 1]) { await put('zoom', z); await sweep('flex', 0, 100, n, `(${id}, zoom ${z})`); await labels(`(${id} pulling, zoom ${z})`); }
+    await put('zoom', 0);
+    if (id === 'deltM' || id === 'infra') { await sweep('lift', 0, 150, n, `with ${id} pulling`); await sweep('turn', -60, 60, n, `with ${id} pulling`); await put('lift', 0); await put('turn', 0); }
+    await page.click(`#muscleList li[data-id="${id}"] button`); await settle();
+    if (await page.evaluate(() => window.__shoulder.st.flex)) fail(`${name}: a second tap on ${id} did not let go`);
+    if (await page.isVisible('#flexCtl')) fail(`${name}: the Contract slider stays after ${id} let go`);
+  }
+  await fits('after the muscles');
 
   // exercises
   await page.click('[data-mode="exercise"]'); await frame();

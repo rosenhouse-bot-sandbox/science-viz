@@ -9,7 +9,8 @@
 //    (turning out shortens infraspinatus and teres minor and lengthens subscapularis; turning in the reverse;
 //    lifting the arm out to the side shortens supraspinatus and the middle deltoid; taking it back shortens the back of
 //    the deltoid; turning it out with the arm forward shortens infraspinatus);
-//  - any of these fails at a pose that an exercise passes through.
+//  - any of these fails at a pose that an exercise passes through, or where one muscle pulling alone takes the arm;
+//  - one muscle pulling alone moves the arm another way than the sources say it does, or lengthens along its pull.
 import { model, bones } from './load.mjs';
 import { solid } from '../../js/shoulder/solid.js';
 import { CLEAR, ROTS, closest } from '../../js/shoulder/model.js';
@@ -42,6 +43,14 @@ for (let n = 0; n < N; n++) {
 }
 // and every exercise through its round, which reaches planes the random ones do not (back, and across the body)
 for (const [ex, f] of Object.entries(EX_POSE)) for (let k = 0; k < 24; k++) poses.push({ ex, ...f(k / 24) });
+// and where one muscle pulling alone takes the arm (model.contract), from a spread of starting poses
+const STARTS = [{ elev: 0, plane: 30, rot: 0 }, { elev: 0, plane: 30, rot: -60 }, { elev: 0, plane: 30, rot: 60 }, { elev: 90, plane: 30, rot: 0 }, { elev: 150, plane: 30, rot: 0 },
+  ...Object.entries(EX_POSE).map(([ex, f]) => ({ ex, ...f(0.5) }))];
+const pulls = [];
+for (const S of STARTS) for (const b of model.built) {
+  const path = model.contract(b, { elbow: 90, ...S }); pulls.push({ b, S, path });
+  for (const k of [Math.floor((path.length - 1) / 2), path.length - 1]) if (k > 0) poses.push({ pull: b.id, ...path[k], len: undefined });
+}
 // the chest's bones, and every tenth point of the arm's, for checking that the arm stays out of the chest
 const CHEST = ['rib1', 'rib2', 'rib3', 'rib4', 'rib5', 'rib6', 'rib7', 'manubrium', 'sternum'].map((r) => solid(bones[r], 1));
 const every = (b) => { const p = bones[b].pos, o = []; for (let i = 0; i < p.length; i += 30) o.push([p[i], p[i + 1], p[i + 2]]); return o; };
@@ -105,6 +114,20 @@ const want = [
   ['forward to out at shoulder height shortens the back of the deltoid', side90.deltP < fwd90.deltP], ['forward to out at shoulder height lengthens the front of the deltoid', side90.deltA > fwd90.deltA],
   ['turning out with the arm forward shortens infraspinatus', fwdOut.infra < fwdIn.infra], ['turning out with the arm forward lengthens subscapularis', fwdOut.subscap > fwdIn.subscap],
 ];
+// 5. one muscle pulling alone, from the arm hanging, moves it the way the sources say that muscle does; and along
+// every pull the muscle only ever shortens
+const end = Object.fromEntries(pulls.filter((p) => p.S === STARTS[0]).map((p) => [p.b.id, p.path.at(-1)]));
+want.push(
+  ['the supraspinatus lifts the arm out to the side', end.supra.elev > 20 && Math.abs(end.supra.plane) < 60],
+  ['the infraspinatus turns the arm out', end.infra.rot > 20], ['the teres minor turns the arm out', end.tminor.rot > 20],
+  ['the subscapularis turns the arm in', end.subscap.rot < -20],
+  ['the front of the deltoid lifts the arm forward and turns it in', end.deltA.elev > 15 && end.deltA.plane > 45 && end.deltA.plane < 135 && end.deltA.rot < 0],
+  ['the middle of the deltoid lifts the arm out to the side', end.deltM.elev > 20 && Math.abs(end.deltM.plane) < 30],
+  ['the back of the deltoid takes the arm back and turns it out', end.deltP.elev > 10 && end.deltP.plane < -45 && end.deltP.rot > 0]);
+for (const { b, S, path } of pulls) {
+  if (path.some((q, i) => i && q.len > path[i - 1].len + 1e-6)) fail(`${b.id} lengthens somewhere along its own pull`, S);
+  if (S === STARTS[0] && path.length < 30) fail(`${b.id} pulls the arm only ${path.length - 1}° from hanging`, S);
+}
 for (const [what, ok] of want) if (!ok) fail(what + ' (it does not)', {});
 
 console.log(`${N} random arm positions, seed ${SEED}, and ${poses.length - N} from the exercises`);
