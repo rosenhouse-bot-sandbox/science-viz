@@ -8,8 +8,8 @@
 //   rot    turning the arm about its own length: + turns out (the forearm swings out), - turns in
 //   elbow  elbow bend, in degrees (0 straight, 90 the forearm level)
 //   up     how far the ball of the arm bone has moved up toward the acromion, in mm (a large cuff tear)
-import { V, K, bandMesh, binU } from './geom.js?v=3896650a';
-import { solid } from './solid.js?v=3896650a';
+import { V, K, bandMesh, binU } from './geom.js?v=823d925a';
+import { solid } from './solid.js?v=823d925a';
 
 // ---- reading the packed meshes -------------------------------------------------------------------
 export function unpack(json, buf) {
@@ -130,7 +130,7 @@ export function makeModel(bones, musclesJson, table = null) {
     // (with a large tear the ball rides up where there is room, but never nearer the acromion than CLEAR, which
     // leaves room for the tendon and bursa drawn between them)
     const keep = CLEAR;
-    if (P.auto !== false) for (let k = 0; k < 3; k++) { const g = gap({ scapula: scap, humerus: moved(glide) }).mm; if (g >= keep - 0.01) break; glide += keep - g + 0.03; }
+    if (P.auto !== false && !P.quick) for (let k = 0; k < 3; k++) { const g = gap({ scapula: scap, humerus: moved(glide) }).mm; if (g >= keep - 0.01) break; glide += keep - g + 0.03; }
     if (glide || up) hum = moved(glide);
     const fore = compose(hum, about(EL, ELB, rad(P.elbow ?? 0)));
     return { scapula: scap, clavicle: clav, humerus: hum, forearm: fore, rest: I3(), fit, glide };
@@ -327,8 +327,9 @@ export function makeModel(bones, musclesJson, table = null) {
   const TWIST = { cuff: FOLLOW.cuff, deltoid: [0, 1] };
   // A built mesh at a pose. opts.shape(t, s, top) may return { thick, lift }: the outline's half thickness is
   // multiplied by thick, and lift (a share of the full thickness) raises the bottom face (a tear from below).
-  function muscle(b, T, opts = {}) {
-    const O = T[b.from], H = T.humerus, ball = apply(H, HC), into = Object.keys(SOL).map((k) => [k, SOL[k], T[k], invT(T[k])]);
+  // where each slice's middle and frame go at a pose (muscle() places the outline round them)
+  function frames(b, T) {
+    const O = T[b.from], H = T.humerus;
     const tOf = b.tOf || ((i) => i / (b.S - 1)), kind = b.cuff === false ? 'deltoid' : 'cuff', follow = (t) => sstep(...FOLLOW[kind], t), twistOf = (t) => sstep(...TWIST[kind], t);
     // The arm bone's turn as seen from the muscle's origin bone. Each slice of the muscle keeps its own shape and
     // takes the share follow(t) of that turn, about the ball's middle, keeping its own shape (so that a muscle twists
@@ -339,15 +340,21 @@ export function makeModel(bones, musclesJson, table = null) {
     const Tw = mm(tr(axisR(sax, sw)), Rr), tw = Math.atan2(V.dot(a0, [Tw[2][1] - Tw[1][2], Tw[0][2] - Tw[2][0], Tw[1][0] - Tw[0][1]]), Tw[0][0] + Tw[1][1] + Tw[2][2] - 1);
     const turnAt = (w, wt) => mm(axisR(sax, sw * w), axisR(a0, tw * wt));
     const slideRel = V.sub(apply(rel, HC), HC);
-    const frames = b.sl.map((s, i) => {
+    return b.sl.map((s, i) => {
       const w = follow(tOf(i)), wt = twistOf(tOf(i));
       if (w <= 0 && wt <= 0) return { c: apply(O, s.c), R: O.R };
       if (w >= 1 && wt >= 1) return { c: apply(H, s.c), R: H.R };
       const Rw = turnAt(w, wt);                                    // turned about the ball's middle: it keeps its distance
       return { c: apply(O, V.add(V.add(HC, mv(Rw, V.sub(s.c, HC))), V.mul(slideRel, w))), R: mm(O.R, Rw) };
     });
+  }
+  // a muscle's length at a pose, along the middles of its slices, as a share of its length at rest
+  const length = (b, T) => arc(frames(b, T).map((f) => f.c)) / b.L0;
+  function muscle(b, T, opts = {}) {
+    const H = T.humerus, ball = apply(H, HC), into = Object.keys(SOL).map((k) => [k, SOL[k], T[k], invT(T[k])]);
+    const fr = frames(b, T);
     // a muscle keeps its volume: its cross-section grows as it shortens
-    const L = arc(frames.map((f) => f.c)), k = Math.sqrt(b.L0 / L);
+    const L = arc(fr.map((f) => f.c)), k = Math.sqrt(b.L0 / L);
     const out = new Float32Array(b.rest.length * 3), pressed = new Float32Array(b.rest.length);
     b.rest.forEach((p0, i) => {
       const c = b.at[i], t = b.t[i];
@@ -358,7 +365,7 @@ export function makeModel(bones, musclesJson, table = null) {
         if (sh?.lift && !c.top) v = Math.min(c.mid + c.h - 0.3, v + sh.lift * 2 * c.h);
         p = V.add(s.c, V.add(V.mul(s.U, c.u), V.mul(s.W, v)));
       }
-      const si = c.cap !== undefined ? c.cap : c.i, s = b.sl[si], f = frames[si];
+      const si = c.cap !== undefined ? c.cap : c.i, s = b.sl[si], f = fr[si];
       let q = V.add(f.c, mv(f.R, V.mul(V.sub(p, s.c), k)));
       // wrapped over the ball: never closer to its middle than at rest
       const d = V.sub(q, ball), l = V.len(d); if (l < b.wrap) q = V.add(ball, V.mul(d, b.wrap / l));
@@ -373,7 +380,64 @@ export function makeModel(bones, musclesJson, table = null) {
     return { pos: out, length: L, rest: b.L0, pressed };
   }
 
-  return { marks: mk, headR, NS, DOWN, pose, bodyOf, gap, stored, glideAt, makeTable, PLANES, built, muscle, bursa, bursaOn, bones, SOL, invT, ribPen };
+  // ---- one muscle pulling alone ----
+  // The arm bone's turn at a pose, and back: a pose is a swing of the arm bone's length from hanging (elev, toward
+  // plane) after a turn about its length (rot), as in pose().
+  const orient = (P) => { const pl = rad(P.plane ?? 30), H = V.norm([-Math.cos(pl), 0, Math.sin(pl)]); return mm(axisR(V.norm(V.cross(DOWN, H)), rad(P.elev ?? 0)), axisR(DOWN, rad(P.rot ?? 0))); };
+  function poseOf(R, prev) {
+    const a1 = mv(R, DOWN), c = clamp(V.dot(a1, DOWN), -1, 1), elev = Math.acos(c) / rad(1);
+    let plane = prev.plane ?? 30;
+    if (elev > 0.5) {                                           // hanging straight down, the direction of the lift is kept
+      const ap = V.norm(V.sub(a1, V.mul(DOWN, c))); plane = Math.atan2(ap[2], -ap[0]) / rad(1);
+      for (let n = 0; n < 4; n++) { const pl = rad(plane), H = [-Math.cos(pl), 0, Math.sin(pl)], hp = V.norm(V.sub(H, V.mul(DOWN, V.dot(H, DOWN)))); plane -= Math.atan2(V.dot(DOWN, V.cross(hp, ap)), V.dot(hp, ap)) / rad(1); }
+      while (plane - (prev.plane ?? 30) > 180) plane -= 360; while (plane - (prev.plane ?? 30) < -180) plane += 360;
+    }
+    const pl = rad(plane), H = V.norm([-Math.cos(pl), 0, Math.sin(pl)]), Tw = mm(tr(axisR(V.norm(V.cross(DOWN, H)), rad(elev))), R);
+    const rot = Math.atan2(V.dot(DOWN, [Tw[2][1] - Tw[1][2], Tw[0][2] - Tw[2][0], Tw[1][0] - Tw[0][1]]), Tw[0][0] + Tw[1][1] + Tw[2][2] - 1) / rad(1);
+    return { ...prev, elev, plane, rot };
+  }
+  // Where the elbow may not go: into the side of the body. Below the shoulder, and between the back of the shoulder
+  // blade and the front of the breastbone, the elbow comes no nearer the body's middle than it is with the arm hanging
+  // (it hangs against the side).
+  const zMax = (m) => { let z = -1e9; for (let i = 2; i < m.pos.length; i += 3) z = Math.max(z, m.pos[i]); return z; };
+  const zMin = (m) => { let z = 1e9; for (let i = 2; i < m.pos.length; i += 3) z = Math.min(z, m.pos[i]); return z; };
+  const SIDE = { x: apply(pose({ elev: 0, plane: 30, rot: 0, quick: true }).humerus, EL)[0], back: zMin(bones.scapula), front: zMax(bones.sternum), top: HC[1] - 30 };
+  const besideBody = (e) => e[1] < SIDE.top && e[2] > SIDE.back && e[2] < SIDE.front;
+  // The limits of a pull: lifted up to 150°, turned up to 60° in and 90° out (the reach of the page's sliders and
+  // exercises), or further only where the pull starts.
+  const LIMIT = { elev: 150, rotIn: -60, rotOut: 90 };
+  // How the arm moves when one muscle pulls alone, from the pose P0: a degree at a time, the arm bone turns about
+  // its ball the way that shortens the muscle fastest (the way the muscle's pull turns it), until it has turned deg
+  // degrees, or reaches a limit, or the muscle can shorten no further. The arm's weight and the other muscles that
+  // steady it are left out. Returns the poses a degree apart, each with the muscle's length (share of rest).
+  function contract(b, P0, deg = 40) {
+    const quick = (P) => pose({ ...P, quick: true }), lenAt = (P) => length(b, quick(P)), d = rad(0.5), AX = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+    const lim = { elev: Math.max(LIMIT.elev, P0.elev ?? 0), lo: Math.min(LIMIT.rotIn, P0.rot ?? 0), hi: Math.max(LIMIT.rotOut, P0.rot ?? 0) };
+    const elbowOf = (P) => apply(quick(P).humerus, EL), e0 = elbowOf(P0), xMax = Math.max(SIDE.x, besideBody(e0) ? e0[0] : -1e9);
+    const intoBody = (e) => besideBody(e) && e[0] > xMax + 1e-6;
+    let P = { ...P0, elev: P0.elev ?? 0, plane: P0.plane ?? 30, rot: P0.rot ?? 0 };
+    const out = [{ ...P, len: lenAt(P) }];
+    for (let k = 0; k < deg; k++) {
+      const R = orient(P), g = AX.map((a) => (lenAt(poseOf(mm(axisR(a, d), R), P)) - lenAt(poseOf(mm(axisR(a, -d), R), P))) / (2 * d)), n = V.len(g);
+      if (n < 1e-3) break;
+      let w = V.mul(g, -1 / n), Q = poseOf(mm(axisR(w, rad(1)), R), P);
+      const e = elbowOf(Q);
+      if (intoBody(e)) {
+        // slide along the side of the body: take away the part of the turn that moves the elbow in
+        const r = V.sub(elbowOf(P), apply(quick(P).humerus, HC)), nc = V.cross(r, [1, 0, 0]), into = V.dot(w, nc);
+        if (into > 0) w = V.sub(w, V.mul(nc, into / V.dot(nc, nc)));
+        const wl = V.len(w); if (wl < 1e-6 || -V.dot(w, g) / (wl * n) < 0.2) break;   // barely shortens that way: it stops
+        w = V.mul(w, 1 / wl); Q = poseOf(mm(axisR(w, rad(1)), R), P);
+        if (intoBody(elbowOf(Q))) break;
+      }
+      if (Q.elev > lim.elev || Q.rot < lim.lo || Q.rot > lim.hi) break;
+      const len = lenAt(Q); if (len >= out.at(-1).len) break;      // it can shorten no further
+      P = Q; out.push({ ...P, len });
+    }
+    return out;
+  }
+
+  return { marks: mk, headR, NS, DOWN, pose, length, contract, orient, poseOf, LIMIT, bodyOf, gap, bodyOf, gap, stored, glideAt, makeTable, PLANES, built, muscle, bursa, bursaOn, bones, SOL, invT, ribPen };
 }
 
 export function arc(cs) { let L = 0; for (let i = 1; i < cs.length; i++) L += V.len(V.sub(cs[i], cs[i - 1])); return L; }
