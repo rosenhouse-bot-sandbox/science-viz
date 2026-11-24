@@ -114,12 +114,13 @@ input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;bac
 .each li button{display:grid;grid-template-columns:1fr auto;gap:2px 10px;width:100%;text-align:left;padding:6px 8px;border-radius:8px;border:0;background:transparent;color:var(--ink2);font:inherit;font-size:0.8125rem;cursor:pointer}
 .each li button:hover,.each li button[aria-pressed="true"]{background:rgba(255,215,115,.12);color:var(--ink)}
 .each li b{font-family:var(--mono);font-weight:500;font-size:0.75rem;color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap}
+.each .flex{display:grid;padding:2px 8px 8px}
 .each li small{grid-column:1/-1;color:var(--ink3);font-size:0.7188rem;line-height:1.3}
 .each li.works button{color:var(--ink)}
-.each li.works b::before{content:'working · ';color:var(--gold);font-family:var(--body)}
-.each li.works.stretch b::before{content:'stretched · '}
-.each li.works.relaxed b::before{content:'targeted, relaxed · '}
-.each li.works.holds b::before{content:'holding · '}
+.each li.works > button b::before{content:'working · ';color:var(--gold);font-family:var(--body)}
+.each li.works.stretch > button b::before{content:'stretched · '}
+.each li.works.relaxed > button b::before{content:'targeted, relaxed · '}
+.each li.works.holds > button b::before{content:'holding · '}
 .credit a{color:var(--ink2)}
 .sources{border-top:1px solid var(--line);padding-top:10px}
 .sources summary{cursor:pointer;font-size:0.8125rem;color:var(--ink2)}
