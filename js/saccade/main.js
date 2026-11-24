@@ -1,9 +1,12 @@
 // Overshoot saccades: the controller. The state is the zoom (0 Screen, 1 Eyes, 2 Muscles), healthy or poor pursuit,
 // how fast time runs, and the target. The simulation in model.js moves the eyes; scene.js draws them.
-import { makeSim, STEP, INSET_DEG, CATCHUP, SCREEN, MUSCLES, PURSUIT, onScreen, gazeOf, eyeGaze, listing, turnOf, rate, musclePath, rot } from './model.js?v=0c109ece';
-import { makeScene, camera } from './scene.js?v=0c109ece';
-import { SRC, CONDITIONS, SACCADES, CAPTIONS, NOTE, NOTE_SRC, MODEL, MODEL_SRC, INSET } from './facts.js?v=0c109ece';
+import { makeSim, STEP, INSET_DEG, CATCHUP, SCREEN, MUSCLES, PURSUIT, onScreen, gazeOf, eyeGaze, listing, turnOf, rate, musclePath, rot } from './model.js?v=5527e4ae';
+import { makeScene, camera } from './scene.js?v=5527e4ae';
+import { SRC, CONDITIONS, SACCADES, CAPTIONS, NOTE, NOTE_SRC, MODEL, MODEL_SRC, INSET } from './facts.js?v=5527e4ae';
 import { gamepad } from '../gamepad/gamepad.js';
+import { touchSliders } from '../touch/slider.js';
+
+const PINCH = 0.9;   // scales of zoom for each e-fold of finger spread: one full spread is about one scale, as on Maple and Engine
 
 const $ = (id) => document.getElementById(id);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -275,7 +278,7 @@ function controls() {
   cv.addEventListener('pointermove', (e) => {
     if (!fingers.has(e.pointerId)) return;
     fingers.set(e.pointerId, [e.clientX, e.clientY]);
-    if (fingers.size === 2) { if (pageZoomed()) { span = 0; return; } const d = spanOf(); if (span) zoomBy(st.z + Math.log(d / span) * 2); span = d; return; }
+    if (fingers.size === 2) { if (pageZoomed()) { span = 0; return; } const d = spanOf(); if (span) zoomBy(st.z + Math.log(d / span) * PINCH); span = d; return; }
     if (drag === 'target') { const g = pick(e.clientX, e.clientY); if (g) held = g; return; }
     if (drag) { st.yaw = clamp(st.yaw - (e.clientX - drag[0]) * 0.005, -1.2, 1.2); st.pitch = clamp(st.pitch + (e.clientY - drag[1]) * 0.005, -0.6, 0.6); drag = [e.clientX, e.clientY]; touch(); }
   });
@@ -286,6 +289,8 @@ function controls() {
   addEventListener('resize', measure);
   addEventListener('hashchange', () => { if (readHash()) { fly = null; touch(); } });
   document.addEventListener('visibilitychange', () => { last = 0; });
+  // Sliders a finger can work (see js/touch/slider.js): a press on the Zoom line away from its knob glides there, as a press on a scale's name does.
+  touchSliders({ zoom: { glideTo: zoomTo } });
   gamepad({
     look: { label: 'Turn the view', move(x, y, dt) { st.yaw = clamp(st.yaw - x * 1.4 * dt, -1.2, 1.2); st.pitch = clamp(st.pitch - y * 1.0 * dt, -0.6, 0.6); touch(); } },
     zoom: { move(v, dt) { zoomBy(st.z + v * 1.2 * dt); } },

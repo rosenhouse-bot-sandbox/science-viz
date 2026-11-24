@@ -1,0 +1,32 @@
+/* Sliders and touch, shared by every page. Load it before the page's own stylesheet, which may change a slider's colors.
+   js/touch/slider.js works the sliders: a press anywhere on a slider's row takes hold of it, and while held it has the
+   class `held`. The knob keeps its drawn size of 18px for layout (the scale names under the Zoom sliders line up with
+   it); it is only scaled up on screen, larger under a finger, and larger again while held. */
+input[type=range]{--v:0%;--knob:18px;-webkit-appearance:none;appearance:none;width:100%;height:var(--range-h,26px);margin:0;padding:0;border:0;background:transparent;cursor:pointer;touch-action:pinch-zoom;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:linear-gradient(90deg,rgba(234,240,255,.62) var(--v),rgba(234,240,255,.17) var(--v))}
+input[type=range]::-moz-range-track{height:4px;border-radius:2px;background:rgba(234,240,255,.17)}
+input[type=range]::-moz-range-progress{height:4px;border-radius:2px;background:rgba(234,240,255,.62)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;margin-top:-7px;border-radius:50%;background:var(--ink);border:0;box-shadow:0 0 0 3px rgba(5,7,15,.9),0 2px 8px rgba(0,0,0,.6);transition:transform .12s ease-out,box-shadow .12s ease-out}
+input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--ink);border:0;box-shadow:0 0 0 3px rgba(5,7,15,.9);transition:transform .12s ease-out,box-shadow .12s ease-out}
+input[type=range].held::-webkit-slider-thumb{transform:scale(1.4);box-shadow:0 0 0 2px rgba(5,7,15,.9),0 0 0 7px rgba(234,240,255,.28),0 2px 8px rgba(0,0,0,.6)}
+input[type=range].held::-moz-range-thumb{transform:scale(1.4);box-shadow:0 0 0 2px rgba(5,7,15,.9),0 0 0 7px rgba(234,240,255,.28)}
+input[type=range]:disabled{cursor:not-allowed}
+
+/* A press on a button shows at once. (iPad Safari shows :active only because slider.js listens for touches.) */
+:where(button,summary,.btn,.chip):active{filter:brightness(1.35)}
+
+@media (pointer:coarse){
+  /* a finger-high row, and a knob a finger can see around: 18px drawn, 26px on screen, 34px while held */
+  input[type=range]{height:44px}
+  input[type=range]::-webkit-slider-thumb{transform:scale(1.45)}
+  input[type=range]::-moz-range-thumb{transform:scale(1.45)}
+  input[type=range].held::-webkit-slider-thumb{transform:scale(1.9)}
+  input[type=range].held::-moz-range-thumb{transform:scale(1.9)}
+  /* no text selection or callout from a long press: the pages work as an app. Text fields stay selectable. */
+  body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+  :where(input:not([type=range],[type=checkbox],[type=radio],[type=button]),textarea,[contenteditable]){-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
+}
+@media (prefers-reduced-motion:reduce){
+  input[type=range]::-webkit-slider-thumb{transition:none}
+  input[type=range]::-moz-range-thumb{transition:none}
+}

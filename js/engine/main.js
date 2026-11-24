@@ -1,11 +1,12 @@
 // Engine: the controller. Two numbers drive the page: the zoom (0 = car ... 4 = molecules) and the crank
 // angle of the cylinder we follow (0 to 720 degrees, one cycle). Time runs slower the further in the zoom is.
 // The picture is redrawn only when something changes.
-import * as M from './model.js?v=bd8f23e1';
-import { makeGroup, place, centre, tiles, copies, LAYERS, MAX_COPIES, MAX_ATOMS } from './mol.js?v=bd8f23e1';
-import { WORLD_FS, FULL_VS, BLIT_FS, BALL_VS, BALL_FS, DOT_VS, DOT_FS } from './shaders.js?v=bd8f23e1';
-import * as Flow from './flow.js?v=bd8f23e1';
+import * as M from './model.js?v=13c53602';
+import { makeGroup, place, centre, tiles, copies, LAYERS, MAX_COPIES, MAX_ATOMS } from './mol.js?v=13c53602';
+import { WORLD_FS, FULL_VS, BLIT_FS, BALL_VS, BALL_FS, DOT_VS, DOT_FS } from './shaders.js?v=13c53602';
+import * as Flow from './flow.js?v=13c53602';
 import { gamepad } from '../gamepad/gamepad.js';
+import { touchSliders } from '../touch/slider.js';
 
 const { clamp, smooth, mix, wrap } = M;
 const $ = (id) => document.getElementById(id);
@@ -567,18 +568,7 @@ STOPS.forEach((s, i) => {
   dialBox.addEventListener('pointermove', (e) => { if (held) turn(e); });
   for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) dialBox.addEventListener(type, () => { held = false; });
 }
-// A press on the Zoom line away from its knob glides there, as a press on a scale's name does, and the knob glides with
-// the picture. A drag of the knob follows the finger directly; so does a drag that began on the line, once the glide has caught up with it.
-let glide = false;
-$('zoom').addEventListener('pointerdown', (e) => {
-  const r = e.currentTarget.getBoundingClientRect(), knob = 18, x = r.left + knob / 2 + st.z / LAST * (r.width - knob);
-  glide = !reduced && Math.abs(e.clientX - x) > knob / 2 + 8;
-});
-for (const type of ['pointerup', 'pointercancel']) addEventListener(type, () => { glide = false; });
-$('zoom').addEventListener('input', (e) => {
-  const v = +e.target.value;
-  if (glide && (fly || Math.abs(v - st.z) > 0.03)) { zoomTo(v); e.target.value = st.z; } else { glide = false; setZoom(v); }
-});
+$('zoom').addEventListener('input', (e) => setZoom(+e.target.value));
 $('cycle').addEventListener('input', (e) => { st.phi = +e.target.value; shown.pv = +e.target.value; st.play = false; phiSet = true; touch(); });
 $('play').addEventListener('click', togglePlay);
 { const rb = $('real'); rb.addEventListener('click', () => { realSpeed = !realSpeed; rb.setAttribute('aria-pressed', String(realSpeed)); touch(); }); }
@@ -607,6 +597,8 @@ cv.addEventListener('pointermove', (e) => {
 for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) cv.addEventListener(type, (e) => { fingers.delete(e.pointerId); span = 0; });
 $('reload').addEventListener('click', () => location.reload());
 // A controller: the triggers zoom, and the bumpers fly to the scale before or after.
+// Sliders a finger can work (see js/touch/slider.js): a press on the Zoom line away from its knob glides there, as a press on a scale's name does.
+touchSliders({ zoom: { glideTo: zoomTo } });
 gamepad({
   zoom: { move(v, dt) { setZoom(st.z + v * 0.9 * dt); } },
   prev: { label: 'Zoom out to the scale before', press: () => zoomTo(Math.ceil((fly ? fly.to : st.z) - 1e-6) - 1) },

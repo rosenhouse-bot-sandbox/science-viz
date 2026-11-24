@@ -8,6 +8,7 @@ import { IrmCamera, irmOptics, orangeBlur, orangeDefocus, moment, contrastCurve,
 import { Dashboard } from './inferui.js';
 import { Camera, CAM, optics, THETA_MAX, LAMBDA_EX, LAMBDA_EM, LAMBDA_EM_O, QUENCH, QUENCH_O, PKA_O, PH_IN, EV, GAP } from './vitro.js';
 import { gamepad } from '../gamepad/gamepad.js';
+import { touchSliders } from '../touch/slider.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('view');
@@ -326,6 +327,8 @@ function toStage(d) {
   if (st.infer) st.t = clamp(Math.ceil(at + tr[0]), 0, T_TOTAL); else st.p = clamp(at, -ARRIVE, 1);
   syncUI();
 }
+// Sliders a finger can work (see js/touch/slider.js).
+touchSliders();
 gamepad({
   look: { label: 'Orbit the camera', move(x, y, dt) { st.az = ((st.az + x * 130 * dt) % 360 + 360) % 360; st.el = clamp(st.el - y * 90 * dt, -85, 88); stopSpin(); hideHint(); syncUI(); } },
   zoom: { move(v, dt) { st.dist = clamp(st.dist * Math.exp(-v * (st.vitro ? 3.2 : 1.6) * dt), 38, maxDist()); hideHint(); syncUI(); } },

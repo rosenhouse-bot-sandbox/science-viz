@@ -1,10 +1,11 @@
 // Gears on a cube and an octahedron: the controller. The state is which solid, how far the gears have turned, and
 // the camera. Dragging a gear turns it about its own axis, and every gear it meshes with follows.
-import { SHAPES, angles, dot, cross, norm, R_IN, R_OUT, MM } from './model.js?v=04d3d5af';
-import { makeScene } from './scene.js?v=04d3d5af';
-import { KEY } from './facts.js?v=04d3d5af';
-import { perspective, lookAt, mul4 } from './gl.js?v=04d3d5af';
+import { SHAPES, angles, dot, cross, norm, R_IN, R_OUT, MM } from './model.js?v=06eceb5a';
+import { makeScene } from './scene.js?v=06eceb5a';
+import { KEY } from './facts.js?v=06eceb5a';
+import { perspective, lookAt, mul4 } from './gl.js?v=06eceb5a';
 import { gamepad } from '../gamepad/gamepad.js';
+import { touchSliders } from '../touch/slider.js';
 
 const $ = (id) => document.getElementById(id);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -189,6 +190,8 @@ function controls() {
   addEventListener('hashchange', () => { readHash(); touch(); });
   document.addEventListener('visibilitychange', () => { last = 0; });
   const step = (k) => { const i = SHOWN.findIndex((s) => s.id === st.shape); choose(SHOWN[(i + k + SHOWN.length) % SHOWN.length].id); };
+  // Sliders a finger can work (see js/touch/slider.js).
+  touchSliders();
   gamepad({
     look: { label: 'Turn the view', move(x, y, dt) { orbit(-x * 1.6 * dt, -y * 1.2 * dt); } },
     zoom: { label: ['Turn the gears back', 'Turn the gears on'], move(v, dt) { st.play = false; turnBy(v * 1.5 * dt); } },

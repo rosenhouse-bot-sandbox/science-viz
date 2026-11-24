@@ -17,6 +17,12 @@ experience is and where its code lives.
   another.
   The one thing they share is controller support, `js/gamepad/gamepad.js` and `css/gamepad.css`: each
   page gives it a short mapping onto its own camera, zoom and scale functions.
+  They also share their sliders: `css/slider.css` draws every `<input type="range">` (loaded before the page's
+  own stylesheet, which only adds its colors) and `js/touch/slider.js` works them, so that a finger can take
+  hold anywhere on a slider's row (iPad Safari's own slider grabs only on its small knob). Each page calls
+  `touchSliders()` once; a page with a Zoom line passes `{ zoom: { glideTo: zoomTo } }` so that a press away
+  from the knob flies there as a press on a scale's name does. Do not add slider styling or pointer handling
+  for sliders to a page; change the shared files and run `node tests/touch/run.mjs`.
   They also share the Home Screen app: `manifest.webmanifest`, `sw.js` and `js/pwa.js`. A new page
   copies the block from `<link rel="manifest">` to `apple-mobile-web-app-status-bar-style` into its
   `<head>`, adds `manifest-src 'self'` to its Content-Security-Policy, and loads `js/pwa.js` last in
@@ -88,11 +94,17 @@ A new page is not done until it does.
   into the panel's padding.
 - A finger cannot hover. Anything shown on hover must also open with a tap (Vesicle's label cards do this),
   and nothing may need a right click, a double click or a key held down.
+- Put every `:hover` look inside `@media (hover:hover)`, or it stays lit after a tap. Give `html,body`
+  `touch-action:manipulation`, so that two quick taps do not zoom the page. A press must show at once:
+  `css/slider.css` gives buttons a pressed look and grows a held slider's knob.
 - Do not stop the visitor zooming: no `user-scalable=no` or `maximum-scale`. The picture's `touch-action`
   follows the pinch rules under Checking a change.
 - Pad everything fixed to an edge by `env(safe-area-inset-*)`: a Home Screen app runs under the status bar.
 - Turning the iPad must not need a reload: lay out from the current size, and redraw on `resize`.
 - Run `node tests/ipad/run.mjs <page>`, and add a new page to `PAGES` there.
+- Sliders come from `css/slider.css` and `js/touch/slider.js` (see Ground rules). A press anywhere on a
+  slider's row takes hold, a press on the knob never moves it, a press away glides there, and a drag never
+  scrolls the panel. Run `node tests/touch/run.mjs <page>`, and add a new page to `PAGES` there.
 
 ## Checking a change
 
@@ -190,6 +202,13 @@ Before pushing:
   every page online and then with the server stopped, and fails if a page loads a file the service
   worker does not keep, loads anything from another host but the web fonts, or does not work
   offline. A new page needs an entry in `PAGES` there.
+- After changing `css/slider.css`, `js/touch/slider.js`, or a page's sliders, run `node tests/touch/run.mjs` (or
+  with page names: `home`, `rainbows`, `vesicle`, `optics`, `graph`, `maple`, `engine`, `shoulder`, `saccade`, `gears`;
+  `--quick` for one slider a page). It works every slider with a finger at an iPad size, with and without reduced
+  motion, and fails if a tap away from the knob does not take hold, jumps, turns back or ends away from the finger,
+  a finger on the knob moves it, a drag does not follow or scrolls the panel, letting go does not send one `change`,
+  or a mouse press on the line stops working. On every page it also fails if two quick taps can zoom the page, a
+  long press can select text, or a `:hover` rule is outside `@media (hover:hover)`. Its touches are Chromium's, not iPad Safari's: look at a real iPad too.
 - After changing a page's layout, its panel or its controls, run `node tests/ipad/run.mjs` (or with page
   names: `home`, `rainbows`, `vesicle`, `optics`, `graph`, `maple`, `engine`, `shoulder`, `saccade`, `gears`,
   `gearsmake`; `--quick` for the iPad Air only; `--shots` writes pictures to `tests/ipad/out/`). It opens the

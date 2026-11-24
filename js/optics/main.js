@@ -9,6 +9,7 @@ import { drawPicture } from './picture.js';
 import { drawScene, ringTaps, sliceTaps } from './scene.js';
 import { WHITE } from './glass.js';
 import { gamepad } from '../gamepad/gamepad.js';
+import { touchSliders } from '../touch/slider.js';
 
 const $ = (id) => document.getElementById(id);
 const cv = $('view'), g = cv.getContext('2d');
@@ -188,6 +189,8 @@ $('reset').addEventListener('click', () => {
   update();
 });
 // A controller: the bumpers are the two buttons of the bar (the right one is Submit while that is on offer).
+// Sliders a finger can work (see js/touch/slider.js).
+touchSliders();
 gamepad({
   prev: { label: 'Previous challenge', press: () => $('prev').click() },
   next: { label: () => ($('submit').hidden ? 'Next challenge, once this one is solved' : 'Submit'), press: () => ($('submit').hidden ? $('next') : $('submit')).click() },

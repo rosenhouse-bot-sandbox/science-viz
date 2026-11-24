@@ -4,7 +4,8 @@
 //  - pinching back by as much as was spread comes back to where it started;
 //  - the browser's own zoom of the whole page never comes in;
 //  - on Japanese maple and Engine, with Play on, no frame moves both the zoom and the date or crank angle;
-//  - one finger alone does not zoom.
+//  - one finger alone does not zoom;
+//  - one spread of the fingers (40 to 150 px apart) goes about one scale, not through all of them.
 // Fails on any of those not holding, or on a console error.
 //
 //   node tests/pinch/run.mjs [maple engine shoulder vesicle rainbows]   # needs Node 22 and Playwright, installed outside the repository
@@ -103,6 +104,8 @@ for (const name of names) {
   const sIn = await pinch(40, P.wide || 150, 'fingers spread');
   if (shots) await page.screenshot({ timeout: 300000, path: path.join(out, `${name}-1-spread.png`) });
   if (!((where(sIn) - where(s1)) * P.dir > (range ? (range[1] - range[0]) * 0.02 : 1e-3))) fail(`${name}: spreading the fingers did not zoom in (${where(s1)} to ${where(sIn)})`);
+  // a spread to nearly four times as far apart is about one scale (one unit of a Zoom slider), not a race through all of them
+  if (P.slider && P.slider === 'zoom' && name !== 'vesicle' && Math.abs(where(sIn) - where(s1)) > 1.5) fail(`${name}: one spread of the fingers went ${Math.abs(where(sIn) - where(s1)).toFixed(2)} scales; it should be about one`);
   const sOut = await pinch(P.wide || 150, 40, 'fingers pinched');
   if (shots) await page.screenshot({ timeout: 300000, path: path.join(out, `${name}-2-pinched-back.png`) });
   if (!((where(sOut) - where(sIn)) * P.dir < 0)) fail(`${name}: pinching the fingers did not zoom out (${where(sIn)} to ${where(sOut)})`);

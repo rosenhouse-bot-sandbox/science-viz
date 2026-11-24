@@ -1,13 +1,16 @@
 // Shoulder: the controller. The state is the zoom (0 Shoulder, 1 Joint, 2 Tendon), a condition or an exercise,
 // and the arm's lift and turn. Everything drawn and every number shown comes from model.js.
-import { unpack, makeModel, MUSCLES, clamp, smooth, apply, turn as turnDir } from './model.js?v=823d925a';
-import { V } from './geom.js?v=823d925a';
-import { makeView, COL } from './view.js?v=823d925a';
-import { SRC, DOES, CONDITIONS, EXERCISES, MODEL_NOTE, MODEL_SRC } from './facts.js?v=823d925a';
-import { EX_POSE, EX_STILL, EX_SECONDS } from './exercises.js?v=823d925a';
+import { unpack, makeModel, MUSCLES, clamp, smooth, apply, turn as turnDir } from './model.js?v=37e89f4d';
+import { V } from './geom.js?v=37e89f4d';
+import { makeView, COL } from './view.js?v=37e89f4d';
+import { SRC, DOES, CONDITIONS, EXERCISES, MODEL_NOTE, MODEL_SRC } from './facts.js?v=37e89f4d';
+import { EX_POSE, EX_STILL, EX_SECONDS } from './exercises.js?v=37e89f4d';
 import { gamepad } from '../gamepad/gamepad.js';
+import { touchSliders } from '../touch/slider.js';
 
-const STAMP = '823d925a';                                        // written by tests/shoulder/stamp.mjs: the data files' version
+const PINCH = 0.9;   // scales of zoom for each e-fold of finger spread: one full spread is about one scale, as on Maple and Engine
+
+const STAMP = '37e89f4d';                                        // written by tests/shoulder/stamp.mjs: the data files' version
 const $ = (id) => document.getElementById(id);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const cv = $('view'), gl = cv.getContext('webgl2', { antialias: true, alpha: false, stencil: true, powerPreference: 'high-performance' });
@@ -405,7 +408,7 @@ function controls() {
   cv.addEventListener('pointermove', (e) => {
     if (!fingers.has(e.pointerId)) return;
     fingers.set(e.pointerId, [e.clientX, e.clientY]);
-    if (fingers.size === 2) { if (pageZoomed()) { span = 0; return; } const d = spanOf(); if (span) { fly = null; st.z = clamp(st.z + Math.log(d / span) * 2, 0, LAST); touch(); } span = d; return; }
+    if (fingers.size === 2) { if (pageZoomed()) { span = 0; return; } const d = spanOf(); if (span) { fly = null; st.z = clamp(st.z + Math.log(d / span) * PINCH, 0, LAST); touch(); } span = d; return; }
     if (drag) { st.yaw = clamp(st.yaw - (e.clientX - drag[0]) * 0.006, -1.4, 1.4); st.pitch = clamp(st.pitch + (e.clientY - drag[1]) * 0.006, -0.9, 0.9); drag = [e.clientX, e.clientY]; touch(); }
   });
   for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) cv.addEventListener(type, (e) => { fingers.delete(e.pointerId); span = 0; drag = null; });
@@ -415,6 +418,8 @@ function controls() {
   cv.addEventListener('webglcontextrestored', () => location.reload());
   addEventListener('resize', measure);
   addEventListener('hashchange', () => { if (readHash()) { st.play = false; fly = null; touch(); } });
+  // Sliders a finger can work (see js/touch/slider.js): a press on the Zoom line away from its knob glides there, as a press on a scale's name does.
+  touchSliders({ zoom: { glideTo: zoomTo } });
   gamepad({
     look: { label: 'Turn the view', move(x, y, dt) { st.yaw = clamp(st.yaw - x * 1.6 * dt, -1.4, 1.4); st.pitch = clamp(st.pitch - y * 1.2 * dt, -0.9, 0.9); touch(); } },
     zoom: { move(v, dt) { fly = null; st.z = clamp(st.z + v * 1.2 * dt, 0, LAST); touch(); } },

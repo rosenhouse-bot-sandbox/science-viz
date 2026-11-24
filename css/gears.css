@@ -18,11 +18,11 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family
 :focus-visible{outline:2px solid var(--focus);outline-offset:3px}
 
 .back{position:fixed;top:calc(12px + env(safe-area-inset-top));left:calc(12px + env(safe-area-inset-left));width:40px;height:40px;border-radius:50%;display:grid;place-items:center;color:var(--ink);background:var(--glass);border:1px solid var(--line);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);z-index:3}
-.back:hover{background:rgba(234,240,255,.16)}
+@media (hover:hover){.back:hover{background:rgba(234,240,255,.16)}}
 .oops{position:fixed;top:calc(64px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);width:min(320px,calc(100% - 32px));box-sizing:border-box;padding:14px 16px;border-radius:14px;background:rgba(10,14,28,.92);border:1px solid var(--line);color:var(--ink);z-index:4;display:grid;gap:10px;justify-items:start}
 .oops p{margin:0;font-size:0.95rem}
 .oops button{font:inherit;font-weight:600;color:var(--ink);background:rgba(234,240,255,.14);border:1px solid var(--line);border-radius:10px;padding:10px 16px;min-block-size:44px;cursor:pointer}
-.oops button:hover{background:rgba(234,240,255,.22)}
+@media (hover:hover){.oops button:hover{background:rgba(234,240,255,.22)}}
 
 .panel{grid-auto-rows:max-content;position:fixed;left:0;right:0;bottom:0;z-index:2;height:47%;display:grid;gap:12px;align-content:start;padding:12px max(14px,env(safe-area-inset-right)) calc(14px + env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left));background:var(--glass);backdrop-filter:blur(18px) saturate(1.2);-webkit-backdrop-filter:blur(18px) saturate(1.2);border-top:1px solid var(--line);border-radius:20px 20px 0 0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
 .title h1,.title span{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
@@ -36,15 +36,9 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family
 .transport{display:grid;grid-template-columns:46px 1fr;gap:12px;align-items:center}
 .segs{display:grid;gap:6px;min-width:0}
 .play{width:46px;height:46px;border-radius:50%;border:1px solid var(--line);background:rgba(234,240,255,.09);color:var(--ink);display:grid;place-items:center;cursor:pointer;padding:0}
-.play:hover{background:rgba(234,240,255,.18)}
+@media (hover:hover){.play:hover{background:rgba(234,240,255,.18)}}
 .play .i-pause{display:none}.play[aria-pressed="true"] .i-play{display:none}.play[aria-pressed="true"] .i-pause{display:block}
 
-input[type=range]{--v:0%;-webkit-appearance:none;appearance:none;width:100%;height:26px;margin:0;padding:0;border:0;background:transparent;cursor:pointer;touch-action:pan-y pinch-zoom}
-input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:linear-gradient(90deg,rgba(234,240,255,.62) var(--v),rgba(234,240,255,.17) var(--v))}
-input[type=range]::-moz-range-track{height:4px;border-radius:2px;background:rgba(234,240,255,.17)}
-input[type=range]::-moz-range-progress{height:4px;border-radius:2px;background:rgba(234,240,255,.62)}
-input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;margin-top:-7px;border-radius:50%;background:var(--ink);border:0;box-shadow:0 0 0 3px rgba(5,7,15,.9),0 2px 8px rgba(0,0,0,.6)}
-input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--ink);border:0;box-shadow:0 0 0 3px rgba(5,7,15,.9)}
 
 .eyebrow{font-family:var(--mono);font-size:0.6562rem;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3)}
 
@@ -53,19 +47,19 @@ input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;bac
 .check input{width:20px;height:20px;margin:0;accent-color:#e9efff}
 .seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:3px;padding:3px;border-radius:12px;background:rgba(234,240,255,.06);border:1px solid var(--line)}
 .seg button{padding:7px 4px;border-radius:9px;border:0;background:transparent;color:var(--ink2);font:inherit;font-size:0.8438rem;font-weight:600;cursor:pointer;min-width:0}
-.seg button:hover{color:var(--ink)}
+@media (hover:hover){.seg button:hover{color:var(--ink)}}
 .seg button[aria-pressed="true"]{background:rgba(234,240,255,.18);color:var(--ink);box-shadow:inset 0 0 0 1.5px rgba(234,240,255,.7)}
 
 /* a row keeps its size whatever its number says */
 .fine{margin:0;font-size:0.75rem;line-height:1.4;color:var(--ink3)}
 .fine:empty{display:none}
 .more{display:flex;align-items:center;justify-content:center;min-block-size:40px;border-radius:10px;border:1px solid var(--line,rgba(255,255,255,.14));color:var(--ink);text-decoration:none;font-size:0.9rem;font-weight:600}
-.more:hover{background:rgba(255,255,255,.06)}
+@media (hover:hover){.more:hover{background:rgba(255,255,255,.06)}}
 .more:focus-visible{outline:2px solid #e9efff;outline-offset:2px}
 
 
 @media (forced-colors:active){.seg button[aria-pressed="true"]{outline:2px solid Highlight;outline-offset:-2px}.chips button[aria-pressed="true"]{outline:2px solid Highlight;outline-offset:-2px}}
-@media (pointer:coarse){.back{width:44px;height:44px}.seg button{min-block-size:44px}input[type=range]{height:40px}.stops{height:40px}.stops button{min-block-size:40px;padding:10px 6px}}
+@media (pointer:coarse){.back{width:44px;height:44px}.seg button{min-block-size:44px}.stops{height:40px}.stops button{min-block-size:40px;padding:10px 6px}}
 
 @media (min-width:900px){
   .panel{left:calc(16px + env(safe-area-inset-left));right:auto;top:calc(64px + env(safe-area-inset-top));bottom:max(16px,env(safe-area-inset-bottom));width:372px;height:auto;padding:18px 18px 16px;border:1px solid var(--line);border-radius:18px;gap:14px}
@@ -113,7 +107,7 @@ input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;bac
 .makebox .eyebrow{margin:0}
 .stepnav{display:grid;grid-template-columns:40px 1fr 40px;gap:8px;align-items:center}
 .stepnav .nav{width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:rgba(234,240,255,.07);color:var(--ink);display:grid;place-items:center;cursor:pointer;padding:0}
-.stepnav .nav:hover{background:rgba(234,240,255,.16)}
+@media (hover:hover){.stepnav .nav:hover{background:rgba(234,240,255,.16)}}
 .stepnav .nav:disabled{opacity:.35;cursor:not-allowed}
 .steptext{min-width:0;display:grid;gap:2px;min-height:5.6em;align-content:start}
 .steptext h2{margin:0;font-family:var(--display);font-weight:600;font-size:1.0625rem;letter-spacing:-.01em;line-height:1.2}
@@ -151,6 +145,6 @@ input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;bac
 
 /* ---- tablets and touch (see CLAUDE.md, "Tablets") ---- */
 /* A finger needs a 44px target (WCAG 2.5.5). */
-@media (pointer:coarse){.stops{height:44px}.stops button{min-block-size:44px;min-inline-size:44px;padding:12px 6px}.stops button:first-child{text-align:left}.stops button:last-child{text-align:right}input[type=range]{height:44px}.check,.more{min-block-size:44px}.stepnav .nav{width:44px;height:44px}}
+@media (pointer:coarse){.stops{height:44px}.stops button{min-block-size:44px;min-inline-size:44px;padding:12px 6px}.stops button:first-child{text-align:left}.stops button:last-child{text-align:right}.check,.more{min-block-size:44px}.stepnav .nav{width:44px;height:44px}}
 /* A tablet held upright, or a wide split view, gets the phone's sheet. Its contents keep to a 640px column in the middle, so lines and controls stay one length. */
 @media (min-width:700px) and (max-width:899px) and (min-height:521px){.panel{padding-left:calc((100% - 640px) / 2);padding-right:calc((100% - 640px) / 2)}}
