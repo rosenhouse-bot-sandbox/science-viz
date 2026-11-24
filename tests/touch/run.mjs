@@ -12,7 +12,7 @@
 // no :hover look is left to stick after a tap (every :hover rule is inside @media (hover:hover)).
 // Fails on any of those not holding, or on a console error.
 //
-//   node tests/touch/run.mjs [home rainbows vesicle optics graph maple engine shoulder saccade gears] [--quick]
+//   node tests/touch/run.mjs [home rainbows vesicle optics graph maple engine shoulder saccade gears gearsmake] [--quick]
 //   (--quick: only the first visible slider of each page). Needs Node 22 and Playwright, installed outside the repository.
 //
 // What it cannot see: these are Chromium's touches, not iPad Safari's. Safari's own slider grabs only on the knob and
@@ -48,6 +48,7 @@ const PAGES = {
   shoulder: { url: 'shoulder/?res=0.25', ready: () => !!window.__shoulder && !!window.__shoulder.frame, own: { zoom: '__shoulder' } },
   saccade: { url: 'saccade/?res=0.3', ready: () => !!window.__saccade && !!window.__saccade.frame, own: { zoom: '__saccade' } },
   gears: { url: 'gears/', ready: () => document.querySelectorAll('input[type=range]').length > 0 },
+  gearsmake: { url: 'gears/make.html', ready: () => !!document.getElementById('timeV')?.textContent },
 };
 const args = process.argv.slice(2), quick = args.includes('--quick');
 const only = args.filter((a) => !a.startsWith('--'));

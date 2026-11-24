@@ -203,7 +203,7 @@ Before pushing:
   worker does not keep, loads anything from another host but the web fonts, or does not work
   offline. A new page needs an entry in `PAGES` there.
 - After changing `css/slider.css`, `js/touch/slider.js`, or a page's sliders, run `node tests/touch/run.mjs` (or
-  with page names: `home`, `rainbows`, `vesicle`, `optics`, `graph`, `maple`, `engine`, `shoulder`, `saccade`, `gears`;
+  with page names: `home`, `rainbows`, `vesicle`, `optics`, `graph`, `maple`, `engine`, `shoulder`, `saccade`, `gears`, `gearsmake`;
   `--quick` for one slider a page). It works every slider with a finger at an iPad size, with and without reduced
   motion, and fails if a tap away from the knob does not take hold, jumps, turns back or ends away from the finger,
   a finger on the knob moves it, a drag does not follow or scrolls the panel, letting go does not send one `change`,
