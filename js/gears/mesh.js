@@ -1,7 +1,7 @@
 // Gears on a cube and an octahedron: building the parts as triangle meshes, for the assembled toy (scene.js) and
 // for the workshop (shop.js). Every size comes from model.js. A mesh is plain arrays: positions, normals, and three
 // numbers per corner for the shader (the first says which material).
-import { R_IN, R_OUT, endAt } from './model.js?v=e184e11b';
+import { R_IN, R_OUT, endAt } from './model.js?v=e35e505e';
 
 export function grow() {
   const P = [], N = [], T = [], I = [];
@@ -148,4 +148,48 @@ export function smallParts(P) {
   lathe(screw, [[S.thread, tEnd + c], [S.thread, S.shoulderEnd]], 5);
   lathe(screw, [[0, tEnd], [S.thread - c, tEnd], [S.thread, tEnd + c]], 1);
   return { outer, inner, ball, washer, screw, mid };
+}
+
+// ---- a tapped hole in a flat face ----
+// a plane's two directions across it, a × b = n
+export function across(n) {
+  const a = unit(Math.abs(n[0]) < 0.9 ? crs(n, [1, 0, 0]) : crs(n, [0, 1, 0]));
+  return [a, crs(n, a)];
+}
+// a flat convex face (corners counterclockwise seen from n) with a round hole of radius r at c: the ring between
+// the outline and the hole, in strips that meet every corner
+export function faceWithHole(g, poly, n, c, r, t) {
+  const [a, b] = across(n), ang = (p) => { const d = sub(p, c); return Math.atan2(d[0] * b[0] + d[1] * b[1] + d[2] * b[2], d[0] * a[0] + d[1] * a[1] + d[2] * a[2]); };
+  const th = poly.map(ang);
+  for (let k = 0; k < 96; k++) th.push(-Math.PI + k * 2 * Math.PI / 96);
+  th.sort((x, y) => x - y);
+  // where a ray from c at angle t leaves the outline
+  const out = (t) => {
+    const d = [Math.cos(t) * a[0] + Math.sin(t) * b[0], Math.cos(t) * a[1] + Math.sin(t) * b[1], Math.cos(t) * a[2] + Math.sin(t) * b[2]];
+    let best = Infinity;
+    for (let k = 0; k < poly.length; k++) {
+      const p = sub(poly[k], c), q = sub(poly[(k + 1) % poly.length], c), e = sub(q, p), m = crs(e, n);   // m: the edge's outward normal in the plane
+      const den = m[0] * d[0] + m[1] * d[1] + m[2] * d[2];
+      if (den > 1e-12) best = Math.min(best, (m[0] * p[0] + m[1] * p[1] + m[2] * p[2]) / den);
+    }
+    return [c[0] + d[0] * best, c[1] + d[1] * best, c[2] + d[2] * best];
+  };
+  const inn = (t) => [0, 1, 2].map((k) => c[k] + r * (Math.cos(t) * a[k] + Math.sin(t) * b[k]));
+  for (let k = 0; k < th.length; k++) {
+    const t0 = th[k], t1 = k + 1 < th.length ? th[k + 1] : th[0] + 2 * Math.PI;
+    if (t1 - t0 < 1e-9) continue;
+    const ids = [inn(t0), out(t0), out(t1), inn(t1)].map((p) => g.v(p, n, t));
+    g.I.push(ids[0], ids[1], ids[2], ids[0], ids[2], ids[3]);
+  }
+}
+// the hole's walls, going in from c along -n: pts are [radius, depth] pairs, kinds the material of each stretch.
+// A thread's stretch carries its depth in millimeters (u: millimeters a unit) as the shader's second number.
+export function holeWalls(g, n, c, pts, kinds, u = 1) {
+  const [a, b] = across(n), from = g.P.length / 3;
+  for (let k = 0; k + 1 < pts.length; k++) { lathe(g, [[pts[k][0], -pts[k][1]], [pts[k + 1][0], -pts[k + 1][1]]], kinds[k], 48); }
+  for (let i = from; i < g.P.length / 3; i++) {
+    const x = g.P[3 * i], y = g.P[3 * i + 1], z = g.P[3 * i + 2], nx = g.N[3 * i], ny = g.N[3 * i + 1], nz = g.N[3 * i + 2];
+    for (let k = 0; k < 3; k++) { g.P[3 * i + k] = c[k] + x * a[k] + y * b[k] + z * n[k]; g.N[3 * i + k] = nx * a[k] + ny * b[k] + nz * n[k]; }
+    g.T[3 * i + 1] = -z * u;
+  }
 }

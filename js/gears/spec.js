@@ -1,6 +1,6 @@
 // Gears on a cube and an octahedron: every part's real size in millimeters, for the workshop's drawings and for
 // the machining plans. Everything here is worked out from model.js; nothing is typed in twice.
-import { SHAPES, MM, MODULE, PRESSURE, R_IN, R_OUT, unitMM, blank, parts, bodyPlanes, bodyFaces } from './model.js?v=e184e11b';
+import { SHAPES, MM, MODULE, PRESSURE, R_IN, R_OUT, unitMM, blank, parts, bodyPlanes, bodyFaces } from './model.js?v=e35e505e';
 
 const D = Math.PI / 180;
 export const by = Object.fromEntries(SHAPES.map((s) => [s.id, s]));

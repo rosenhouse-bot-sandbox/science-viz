@@ -1,15 +1,16 @@
 // Gears on a cube and an octahedron, the workshop: for each part, its dimensioned drawing, and how it is made on a
 // lathe and a mill, step by step. The state is which toy, which part, which view, the machine time, and the camera.
-import { MM, parts, unitMM } from './model.js?v=e184e11b';
-import { planOf, startOf, MANDREL, PARTS, NAMES, by, SHOWN } from './plan.js?v=e184e11b';
-import { stockOf, gearSpec, screwSpec } from './spec.js?v=e184e11b';
-import { timeline, makeReplay, DZ } from './cut.js?v=e184e11b';
-import { makeShop, M4, turnedMesh, milledMesh, holeMesh, slotMesh } from './shop.js?v=e184e11b';
-import { grow, lathe, box, gearMesh, smallParts, sphere } from './mesh.js?v=e184e11b';
-import { collisions, turnedEnvelope } from './collide.js?v=e184e11b';
-import { drawing } from './drawing.js?v=e184e11b';
-import { perspective, lookAt, mul4 } from './gl.js?v=e184e11b';
-import { dot, cross, norm, bodyFaces } from './model.js?v=e184e11b';
+import { MM, parts, unitMM } from './model.js?v=e35e505e';
+import { planOf, startOf, MANDREL, PARTS, NAMES, by, SHOWN } from './plan.js?v=e35e505e';
+import { stockOf, gearSpec, screwSpec } from './spec.js?v=e35e505e';
+import { timeline, makeReplay, DZ } from './cut.js?v=e35e505e';
+import { makeShop, M4, turnedMesh, milledMesh, holeMesh, slotMesh } from './shop.js?v=e35e505e';
+import { grow, lathe, box, gearMesh, smallParts, sphere } from './mesh.js?v=e35e505e';
+import { collisions, turnedEnvelope } from './collide.js?v=e35e505e';
+import { cutting, chipMesh, rnd } from './chips.js?v=e35e505e';
+import { drawing } from './drawing.js?v=e35e505e';
+import { perspective, lookAt, mul4 } from './gl.js?v=e35e505e';
+import { dot, cross, norm, bodyFaces } from './model.js?v=e35e505e';
 import { gamepad } from '../gamepad/gamepad.js';
 import { touchSliders } from '../touch/slider.js';
 
@@ -34,18 +35,19 @@ function load() {
   const steps = []; plan.forEach((op, oi) => op.steps.forEach((s, si) => steps.push({ op: oi, si, s, t0: s.t0, t1: s.t1 })));
   // a speed that shows the whole part in about a minute and a half
   const rate = Math.max(4, Math.round(tl.T / 90));
-  cur = { sh, plan, tl, replay, steps, rate, key: st.shape + st.part };
+  cur = { sh, plan, tl, replay, steps, rate, key: st.shape + st.part, spans: plan.map((_, oi) => cutting(plan, tl, oi)) };
   st.t = clamp(st.t, 0, tl.T);
 }
 
 // ---- the camera: it circles the part ----
 // where the camera starts for each way of holding the part
-const VIEWS = { chuck: { yaw: 0.45, pitch: 1.05, zoom: 0.55 }, collet: { yaw: 0.45, pitch: 1.05, zoom: 0.4 }, mandrel: { yaw: 0.45, pitch: 1.05, zoom: 0.5 },
+// (on the lathe, from out past the free end, so that a drilled or bored hole shows)
+const VIEWS = { chuck: { yaw: 0.95, pitch: 0.85, zoom: 0.55 }, collet: { yaw: 0.95, pitch: 0.85, zoom: 0.4 }, mandrel: { yaw: 0.95, pitch: 0.85, zoom: 0.5 },
   vise: { yaw: -0.8, pitch: 0.28, zoom: 0.62 }, indexer: { yaw: 0.8, pitch: 0.42, zoom: 0.5 }, dividing: { yaw: 1.35, pitch: 0.32, zoom: 0.5 }, colletblock: { yaw: 0.75, pitch: 0.75, zoom: 0.5 },
   bench: { yaw: 0.5, pitch: 0.45, zoom: 1 } };
 let target = [0, 0, 0], frameDist = 100, upAxis = [0, 1, 0];
 // what turns in this frame, for the collision check: the lathe's spindle, or the mill's tool; and the cutting edge
-let spinAxis = null, cutTip = null;
+let spinAxis = null, cutTip = null, slide = null, viseW = 0;
 function camera() {
   const p = st.pitch, y = st.yaw, R = frameDist * st.zoom;
   // the lathe's world has y up; the mill's has z up
@@ -64,7 +66,7 @@ function camera() {
 // ---- building the picture ----
 const meshCache = new Map();
 function cached(key, make) { if (!meshCache.has(key)) meshCache.set(key, shop.mesh(make())); return meshCache.get(key); }
-let partKey = '', holeKey = '', slotKey = '';
+let partKey = '', holeKey = '', slotKey = '', chipKey = '';
 function dynSet(m, key, prevKey, make) { if (key !== prevKey) m.set(make()); return key; }
 const P_LATHE = (dir) => new Float32Array([0, dir, 0, 0, 0, 0, 1, 0, dir, 0, 0, 0, 0, 0, 0, 1]);
 
@@ -98,7 +100,7 @@ function frameOf() {
     const postZ = tail ? 40 : tr;
     const tx = tail ? 30 : tipX + (tool.type === 'boring' ? 38 : 0);   // a boring bar's holder sits out toward the tailstock
     items.push({ name: 'carriage', role: 'move', mesh: L.carriage, M: M4.t(tx, 0, 0) });
-    items.push({ name: 'cross slide', role: 'move', mesh: L.cross, M: M4.t(tx, 0, postZ) });
+    items.push({ name: 'cross slide', role: 'move', mesh: L.cross, M: M4.t(tx, 0, postZ) }); slide = { tx, z: postZ };
     items.push({ name: 'compound', role: 'move', mesh: L.compound, M: M4.mul(M4.t(tx, 0, postZ + 14), M4.ry(tool.compound || 0)) });
     // the post sits behind the bit, so the bit reaches past it toward the chuck (or away, for a left-hand bit)
     const px = tail || tool.type === 'boring' ? 0 : tool.left ? -7 : 7;
@@ -123,7 +125,36 @@ function frameOf() {
     target = [Math.max(free - 8, 4), -4, 4];
     frameDist = 210;
   } else millFrame(items, r, op, step, tool, p);
+  items.push(chipsOf(r, op, step, tool));
   return { items, cutting, axis: spinAxis, tip: cutTip };
+}
+// the chips: flying off the tool while it cuts, and piled below the work (see chips.js)
+const SMALL = ['center', 'drill', 'reamer', 'spot', 'saw', 'part', 'boring', 'tap', 'die'];
+function chipsOf(r, op, step, tool) {
+  const lathe = op.machine === 'lathe', size = SMALL.includes(tool.type) ? 1 : 2, tail = ['center', 'drill', 'reamer', 'die'].includes(tool.type);
+  let src = null, floor, pile;
+  if (lathe) {
+    // off a turning tool: down and out toward the operator; out of a drilled hole: out round the drill, along it
+    const L = r.lathe, end = Math.max(op.dir * (L.z0 - op.zJaw), op.dir * (L.z0 + (L.n - 1) * DZ - op.zJaw));
+    if (cutTip) src = tail ? { at: [end + 0.5, 0, 0], size, vel: (i) => { const a = rnd(i, 1) * 6.283, v = 150 + 250 * rnd(i, 2); return [80 + 200 * rnd(i, 9), v * Math.cos(a), v * Math.sin(a)]; } }
+      : { at: cutTip, size, vel: (i) => [(rnd(i, 1) - 0.5) * 300, -100 - 350 * rnd(i, 2), 150 + 400 * rnd(i, 9)] };
+    // they land on the cross slide (it carries them along), the compound, or the bed (sizes from shop.js)
+    const sl = slide, top = -65, bed = -113.5;
+    floor = (q) => { const dx = q[0] - sl.tx, dz = q[2] - sl.z; return Math.abs(dx) < 18 && dz > -8 && dz < 40 ? -53 : Math.abs(dx) < 26 && dz > -40 && dz < 44 ? top : bed; };
+    pile = (i) => ({ p: [sl.tx + (rnd(i, 11) - 0.5) * 50, top + 0.3, sl.z - 39 + 30 * rnd(i, 12)], size });
+  } else {
+    // off a milling cutter: out round it, a little up its axis
+    const s = spinAxis ? spinAxis.s : [0, 0, 1], e = norm(Math.abs(s[2]) < 0.9 ? cross(s, [0, 0, 1]) : cross(s, [1, 0, 0])), f = cross(s, e);
+    if (cutTip) src = { at: cutTip, size, vel: (i) => { const a = rnd(i, 1) * 6.283, v = 250 + 600 * rnd(i, 2), u = 80 + 250 * rnd(i, 9); return [0, 1, 2].map((k) => v * (Math.cos(a) * e[k] + Math.sin(a) * f[k]) + u * s[k]); } };
+    // they land in the vise, on its jaws, or on the table (sizes from shop.js)
+    const vise = op.hold === 'vise' || op.hold === 'colletblock', o = viseW / 2;
+    floor = (q) => (!vise || Math.abs(q[0]) > 52 || q[1] < -95 || q[1] > 75 ? 0 : Math.abs(q[1]) > o + 0.5 && Math.abs(q[1]) < o + 28 ? 56 : 30);
+    const c = target;
+    pile = (i) => { const a = rnd(i, 11) * 6.283, d = 12 + 40 * Math.sqrt(rnd(i, 12)), q = [c[0] + d * Math.cos(a), c[1] + d * Math.sin(a), 0]; q[2] = floor(q) + 0.3; return { p: q, size }; };
+  }
+  const key = 'C' + cur.key + st.t.toFixed(3) + (cutTip ? cutTip.map((x) => x.toFixed(2)).join() : '');
+  chipKey = dynSet(shop.dyn.chips, key, chipKey, () => chipMesh({ spans: cur.spans[r.op], t: st.t, rate: cur.rate, src, up: lathe ? 1 : 2, floor, pile }));
+  return { name: 'chips', role: 'skip', mesh: shop.dyn.chips, M: M4.id() };
 }
 // how far out the jaws close: the bar's radius where they grip
 function gripRadius(S, op) {
@@ -165,7 +196,7 @@ function millFrame(items, r, op, step, tool, p) {
     // the part stands 4 above the jaws, more for a big chamfer mill, whose cone reaches down past the edge it cuts
     const top = 55 + Math.max(4, step.tool.type === 'chamfer' ? step.tool.d / 2 + 1 : 0), hp = Math.max(4, top - (box0.z1 - box0.z0) - 30);
     O = [0, -(box0.y0 + box0.y1) / 2, 30 + hp - box0.z0];
-    const w = box0.y1 - box0.y0;
+    const w = box0.y1 - box0.y0; viseW = w;
     items.push({ name: 'vise', role: 'static', mesh: cached('vise' + w.toFixed(2), () => shop.millVise(w)), M: M4.id() });
     items.push({ name: 'parallels', role: 'static', mesh: cached('par' + w.toFixed(2) + hp.toFixed(2), () => parallels(w, hp)), M: M4.id() });
   } else if (op.hold === 'indexer') {
@@ -517,7 +548,7 @@ function start() {
   if (!gl) throw new Error('This browser does not offer WebGL 2.');
   shop = makeShop(gl);
   cv.addEventListener('webglcontextlost', (e) => { e.preventDefault(); shop = null; });
-  cv.addEventListener('webglcontextrestored', () => { shop = makeShop(gl); meshCache.clear(); partKey = holeKey = slotKey = ''; touch(); });
+  cv.addEventListener('webglcontextrestored', () => { shop = makeShop(gl); meshCache.clear(); partKey = holeKey = slotKey = chipKey = ''; touch(); });
   $('loading').hidden = true;
   touch();
 }
