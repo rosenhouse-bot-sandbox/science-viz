@@ -12,35 +12,21 @@
 //   node tests/engine/page.mjs            # needs Node 22 and Playwright, installed outside the repository
 //   node tests/engine/page.mjs --shots    # also writes pictures of each scale to tests/engine/out/
 //   node tests/engine/page.mjs --quick    # desktop only, coarser sweeps
-import { createRequire } from 'node:module';
-import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
-import { stamp } from './stamp.mjs';
+import { staleStamp } from '../stamp.mjs';
+import { findChromium, serve, SOFT_GL } from '../lib/serve.mjs';
 
-{ const r = stamp(true); if (r.stale.length) { console.error(`The version stamp is out of date in: ${r.stale.join(', ')}. Run: node tests/engine/stamp.mjs`); process.exit(1); } }
+{ const e = staleStamp('engine'); if (e) { console.error(e); process.exit(1); } }
 
-const root = path.resolve(import.meta.dirname, '../..');
-let chromium;
-for (const from of [import.meta.url, '/opt/node-tools/', process.execPath, '/']) { try { chromium = createRequire(from)('playwright').chromium; break; } catch { /* try the next place */ } }
-if (!chromium) { console.error('Playwright is not installed. Install it outside the repository: npm install -g playwright && npx playwright install chromium'); process.exit(2); }
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' };
-const server = http.createServer((req, res) => {
-  let p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
-  if (p.endsWith('/')) p += 'index.html';
-  const file = path.join(root, p);
-  if (!file.startsWith(root) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); res.end(); return; }
-  res.writeHead(200, { 'content-type': TYPES[path.extname(file)] || 'application/octet-stream' }); res.end(fs.readFileSync(file));
-});
-await new Promise((r) => server.listen(0, r));
-const base = `http://localhost:${server.address().port}/engine/`;
+const { server, base } = await serve({ at: 'engine/' });
 const shots = process.argv.includes('--shots'), quick = process.argv.includes('--quick'), out = path.join(import.meta.dirname, 'out');
 if (shots) fs.mkdirSync(out, { recursive: true });
 
 let fails = 0;
 const fail = (what) => { fails++; console.log('FAIL ' + what); };
 // The picture is WebGL. Without a graphics card Chromium draws it in software, which these switches allow.
-const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const browser = await findChromium().launch({ args: SOFT_GL });
 
 // In the page: a small copy of the picture, as numbers.
 const SNAP = () => { const c = document.getElementById('view'), s = window.__snap || (window.__snap = document.createElement('canvas')); s.width = 64; s.height = 40; const x = s.getContext('2d', { willReadFrequently: true }); window.__engine.redraw(); x.drawImage(c, 0, 0, 64, 40); return Array.from(x.getImageData(0, 0, 64, 40).data); };

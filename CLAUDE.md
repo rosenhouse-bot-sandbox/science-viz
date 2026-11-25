@@ -29,6 +29,16 @@ experience is and where its code lives.
   `<body>`. The service worker keeps every file in a page's folder and under `js/`, `css/` and `img/`;
   a file anywhere else is not available offline. Do not commit a filled-in `sw.js`: the Pages
   workflow fills in its file list at deploy time (`.github/sw.mjs`).
+  The 3D pages also share WebGL helpers and matrices, `js/gl/gl.js`. Put a helper there only when two
+  pages use it as it is; anything one page needs for itself stays in its own folder.
+- The browser tests share `tests/lib/serve.mjs` (the web server, Playwright and the software-WebGL flags) and
+  `tests/lib/pages.mjs` (every page of the site by name). A new page goes in `PAGES` in `pages.mjs`; then the
+  iPad, touch, gamepad and Home Screen tests stop and say so until each has an entry for it.
+- Maple, Engine, Shoulder, Overshoot saccades and Gear fidget are version-stamped: every address that loads a
+  file of one of these pages ends in `?v=...`, so that a browser never pairs a new file with an old cached copy
+  of another. After changing a file one of these pages loads (the page's `js/` folder, stylesheet or `data/`, or a
+  shared module the page imports, such as `js/gl/gl.js` or `js/touch/slider.js`), run `node tests/stamp.mjs`.
+  The page's tests fail if the stamp is out of date.
 - Physics claims must be true. Numbers shown on screen come from the model in code
   (`js/v2/optics.js` for v2), not from text typed into a caption. Where a picture simplifies or
   exaggerates, say so on screen and in the README.
@@ -101,10 +111,10 @@ A new page is not done until it does.
   follows the pinch rules under Checking a change.
 - Pad everything fixed to an edge by `env(safe-area-inset-*)`: a Home Screen app runs under the status bar.
 - Turning the iPad must not need a reload: lay out from the current size, and redraw on `resize`.
-- Run `node tests/ipad/run.mjs <page>`, and add a new page to `PAGES` there.
+- Run `node tests/ipad/run.mjs <page>`. A new page goes in `tests/lib/pages.mjs`.
 - Sliders come from `css/slider.css` and `js/touch/slider.js` (see Ground rules). A press anywhere on a
   slider's row takes hold, a press on the knob never moves it, a press away glides there, and a drag never
-  scrolls the panel. Run `node tests/touch/run.mjs <page>`, and add a new page to `PAGES` there.
+  scrolls the panel. Run `node tests/touch/run.mjs <page>`, and give a new page an entry in `PAGES` there.
 
 ## Checking a change
 
@@ -142,10 +152,7 @@ Before pushing:
   The page is one 3D model: never fade one picture into another or swap one for another between
   scales; move the camera or the object. The test draws WebGL in software, so it is slow; on a
   machine with a graphics card look at the page itself as well.
-  After changing any file under `js/maple/` or `css/maple.css`, run `node tests/maple/stamp.mjs`: it
-  writes one shared version into every address that loads one of them (`model.js?v=...`), so that a
-  browser never pairs a new file with an old cached copy of another. Both tests fail if the stamp is
-  out of date.
+  After changing any file under `js/maple/` or `css/maple.css`, run `node tests/stamp.mjs maple`.
 - For Engine, run `node tests/engine/model.mjs` (no browser needed) after changing the engine's sizes, the
   valve timing, the burn, the pressure model or the molecules: it fails if a valve is open in the wrong
   stroke or reaches the piston, a camshaft is not at half speed, the burning order is wrong, the peak
@@ -159,7 +166,7 @@ Before pushing:
   the one before, and fails on a jump, a control that moved, labels that overlap, or a console error.
   Numbers on screen must stay computed from `js/engine/model.js`. The page is one 3D model, as the maple
   is, and no picture is swapped for another. A cut piece fades away where it is and does not move (Gabe's
-  rule for this page: motion is kept for what really moves). Moving parts are never cut. After changing any file under `js/engine/` or `css/engine.css`, run `node tests/engine/stamp.mjs`.
+  rule for this page: motion is kept for what really moves). Moving parts are never cut. After changing any file under `js/engine/` or `css/engine.css`, run `node tests/stamp.mjs engine`.
   The picture is ray-marched in a fragment shader, which is slow in software; on a machine with a
   graphics card look at the page itself as well, and on a phone.
 - For Shoulder, run `node tests/shoulder/model.mjs` (no browser needed) after changing the pose, the muscles
@@ -170,13 +177,13 @@ Before pushing:
   (`--quick` for the desktop only). Gabe's rule for this page: wrong information is far worse than missing
   information. Every sentence on screen is in `js/shoulder/facts.js` with its source; numbers come from the
   model; anything drawn larger than life says so under the picture. After changing any file under
-  `js/shoulder/`, `css/shoulder.css` or `shoulder/data/`, run `node tests/shoulder/stamp.mjs`.
+  `js/shoulder/`, `css/shoulder.css` or `shoulder/data/`, run `node tests/stamp.mjs shoulder`.
 - For Overshoot saccades, run `node tests/saccade/model.mjs` (no browser needed) after changing the model: it fails if
   saccade timing leaves the measured main sequence, a measured gain is not the gain set, a saccade's kind does not fit
   its definition, a muscle pulls or shortens the wrong way, a muscle enters the eye, or the eyes twist. Then
   `node tests/saccade/page.mjs` (`--quick` for the desktop only). Numbers on screen come from `js/saccade/model.js`;
   anything that is the page's own choice, not a measured value, says so in `js/saccade/facts.js`. After changing any
-  file under `js/saccade/` or `css/saccade.css`, run `node tests/saccade/stamp.mjs`.
+  file under `js/saccade/` or `css/saccade.css`, run `node tests/stamp.mjs saccade`.
 - For Gear fidget, run `node tests/gears/model.mjs` (no browser needed) after changing the solids, the tooth
   shape or how the gears are set: it turns every meshing pair and fails if a tooth enters another, if the teeth do
   not engage, if the cube with six gears can turn or another set cannot, or if the body touches a gear. Then
@@ -185,7 +192,7 @@ Before pushing:
   how cuts are replayed, run `node tests/gears/make.mjs` (no browser; the finished part must match its drawing) and
   `node tests/gears/collide.mjs` (about 5 minutes; nothing in the shop may run into anything), then
   `node tests/gears/makepage.mjs` (`--quick` for the desktop only). After changing any file under `js/gears/` or
-  `css/gears.css`, run `node tests/gears/stamp.mjs`.
+  `css/gears.css`, run `node tests/stamp.mjs gears`.
 - After changing `js/gamepad/`, `css/gamepad.css`, a page's `gamepad({ ... })` mapping, or which
   controls a page has, run `node tests/gamepad/run.mjs` (or with page names: `home`, `rainbows`,
   `vesicle`, `optics`, `graph`, `maple`, `engine`, `shoulder`, `saccade`, `gears`, `gearsmake`, `deck`). It drives each page with a simulated Xbox

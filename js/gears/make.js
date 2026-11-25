@@ -1,19 +1,19 @@
 // Gears on a cube and an octahedron, the workshop: for each part, its dimensioned drawing, and how it is made on a
 // lathe and a mill, step by step. The state is which toy, which part, which view, the machine time, and the camera.
-import { MM, parts, unitMM } from './model.js?v=286eb78e';
-import { planOf, startOf, MANDREL, PARTS, NAMES, by, SHOWN } from './plan.js?v=286eb78e';
-import { stockOf, gearSpec, screwSpec } from './spec.js?v=286eb78e';
-import { timeline, makeReplay, DZ } from './cut.js?v=286eb78e';
-import { makeLook } from './look.js?v=286eb78e';
-import { makeShop, M4, turnedMesh, milledMesh, holeMesh, slotMesh } from './shop.js?v=286eb78e';
-import { grow, lathe, box, gearMesh, smallParts, sphere } from './mesh.js?v=286eb78e';
-import { collisions, turnedEnvelope } from './collide.js?v=286eb78e';
-import { cutting, chipMesh, rnd } from './chips.js?v=286eb78e';
-import { drawing } from './drawing.js?v=286eb78e';
-import { perspective, lookAt, mul4 } from './gl.js?v=286eb78e';
-import { dot, cross, norm, bodyFaces } from './model.js?v=286eb78e';
-import { gamepad } from '../gamepad/gamepad.js';
-import { touchSliders } from '../touch/slider.js';
+import { MM, parts, unitMM } from './model.js?v=6ca5dca9';
+import { planOf, startOf, MANDREL, PARTS, NAMES, by, SHOWN } from './plan.js?v=6ca5dca9';
+import { stockOf, gearSpec, screwSpec } from './spec.js?v=6ca5dca9';
+import { timeline, makeReplay, DZ } from './cut.js?v=6ca5dca9';
+import { makeLook } from './look.js?v=6ca5dca9';
+import { makeShop, M4, turnedMesh, milledMesh, holeMesh, slotMesh } from './shop.js?v=6ca5dca9';
+import { grow, lathe, box, gearMesh, smallParts, sphere } from './mesh.js?v=6ca5dca9';
+import { collisions, turnedEnvelope } from './collide.js?v=6ca5dca9';
+import { cutting, chipMesh, rnd } from './chips.js?v=6ca5dca9';
+import { drawing } from './drawing.js?v=6ca5dca9';
+import { perspective, lookAt, mul4 } from '../gl/gl.js?v=6ca5dca9';
+import { dot, cross, norm, bodyFaces } from './model.js?v=6ca5dca9';
+import { gamepad } from '../gamepad/gamepad.js?v=6ca5dca9';
+import { touchSliders } from '../touch/slider.js?v=6ca5dca9';
 
 const $ = (id) => document.getElementById(id);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -403,8 +403,8 @@ function toolText(s) {
 }
 let hashTimer = 0;
 function writeHash() { clearTimeout(hashTimer); hashTimer = setTimeout(() => history.replaceState(null, '', '#' + new URLSearchParams({ s: st.shape, p: st.part, v: st.view })), 400); }
-function readHash() {
-  const q = new URLSearchParams(location.hash.slice(1));
+function readHash(hash = location.hash) {
+  const q = new URLSearchParams(hash.slice(1));
   if (SHOWN.includes(q.get('s'))) st.shape = q.get('s');
   if (PARTS.includes(q.get('p'))) st.part = q.get('p');
   if (q.get('v') === 'draw' || q.get('v') === 'make') st.view = q.get('v');
@@ -535,7 +535,8 @@ function controls() {
   });
   $('reload').addEventListener('click', () => location.reload());
   addEventListener('resize', measure);
-  addEventListener('hashchange', () => { readHash(); load(); touch(); });
+  // read the address the event names: a slow frame can let writeHash's timer replace it before this runs
+  addEventListener('hashchange', (e) => { clearTimeout(hashTimer); readHash(new URL(e.newURL).hash); load(); touch(); });
   document.addEventListener('visibilitychange', () => { last = 0; });
   const cycle = (k) => { const i = PARTS.indexOf(st.part); choose('part', PARTS[(i + k + PARTS.length) % PARTS.length]); };
   // Sliders a finger can work (see js/touch/slider.js).

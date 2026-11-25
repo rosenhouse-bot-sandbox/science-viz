@@ -13,25 +13,20 @@
 //      arrive, on a console error, or if a page's own text is missing.
 //   4. The server comes back with one file changed. Fails if the page does not get the new file at
 //      once, or if the service worker does not install the new version and drop the old copy.
-import { createRequire } from 'node:module';
-import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { build } from '../../.github/sw.mjs';
+import { root, findChromium, serve, SOFT_GL } from '../lib/serve.mjs';
+import { PAGES as SITE, covers } from '../lib/pages.mjs';
 
-const root = path.resolve(import.meta.dirname, '../..');
-let chromium;
-for (const from of [import.meta.url, '/opt/node-tools/', process.execPath]) { try { chromium = createRequire(from)('playwright').chromium; break; } catch { /* try the next place */ } }
-if (!chromium) { console.error('Playwright is not installed. Install it outside the repository: npm install -g playwright && npx playwright install chromium'); process.exit(2); }
-
-// The pages, and a piece of each one's own text to look for once it has loaded.
-const PAGES = [
-  ['', 'Science visualizations'], ['v2/', 'Rainbows'], ['vesicle/', 'Vesicle'], ['optics/', 'Optics'],
-  ['dag/', 'Graph layout'], ['maple/', 'maple'], ['engine/', 'Engine'], ['shoulder/', 'Shoulder'],
-  ['saccade/', 'saccade'], ['gears/', 'Gear'], ['gears/make.html', 'Gear'],
-];
+// A piece of each page's own text to look for once it has loaded.
+const TEXT = {
+  home: 'Science visualizations', rainbows: 'Rainbows', vesicle: 'Vesicle', optics: 'Optics', graph: 'Graph layout',
+  maple: 'maple', engine: 'Engine', shoulder: 'Shoulder', saccade: 'saccade', gears: 'Gear', gearsmake: 'Gear',
+};
+covers(TEXT, 'tests/pwa/run.mjs');
+const PAGES = Object.entries(TEXT).map(([name, text]) => [SITE[name], text]);
 const FONT_HOSTS = /^fonts\.(googleapis|gstatic)\.com$/, CDN = /^cdn\.jsdelivr\.net$/;
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.webp': 'image/webp', '.yaml': 'text/yaml', '.bin': 'application/octet-stream' };
 
 const QUICK = process.argv.includes('--quick'); // home and Rainbows only
 let fails = 0;
@@ -44,22 +39,18 @@ process.on('exit', () => { if (madeDates) fs.rmSync(path.join(root, 'dates.json'
 
 let sw = build(), changed = null, up = true;
 const kept = new Set(JSON.parse(sw.text.match(/^const FILES = (.*);$/m)[1]));
-const server = http.createServer((req, res) => {
-  if (!up) { req.socket.destroy(); return; }
-  let p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
-  if (p === '/sw.js') { res.writeHead(200, { 'content-type': 'text/javascript', 'cache-control': 'no-cache' }); res.end(sw.text); return; }
-  if (p.endsWith('/')) p += 'index.html';
-  const file = path.join(root, p);
-  if (!file.startsWith(root) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); res.end(); return; }
-  let body = fs.readFileSync(file);
-  if (changed && p === changed.path) body = Buffer.from(changed.body);
-  res.writeHead(200, { 'content-type': TYPES[path.extname(file)] || 'application/octet-stream', 'cache-control': 'no-cache' }); res.end(body);
+const { server, base } = await serve({
+  host: '127.0.0.1', headers: { 'cache-control': 'no-cache' },
+  handle(p, req, res) {
+    if (!up) { req.socket.destroy(); return true; }
+    if (p === '/sw.js') { res.writeHead(200, { 'content-type': 'text/javascript', 'cache-control': 'no-cache' }); res.end(sw.text); return true; }
+    return false;
+  },
+  body: (p, data) => (changed && p === changed.path ? Buffer.from(changed.body) : data),
 });
 // Connections are kept open between requests; "stopping" the server must close them too.
 const sockets = new Set(); server.on('connection', (s) => { sockets.add(s); s.on('close', () => sockets.delete(s)); });
 const down = () => { up = false; for (const s of sockets) s.destroy(); };
-await new Promise((r) => server.listen(0, '127.0.0.1', r));
-const base = `http://127.0.0.1:${server.address().port}/`;
 
 // 1. The manifest and its icons.
 const man = JSON.parse(fs.readFileSync(path.join(root, 'manifest.webmanifest'), 'utf8'));
@@ -72,7 +63,7 @@ for (const ic of man.icons) {
   if (!kept.has(ic.src)) fail(`manifest: ${ic.src} is not kept`);
 }
 
-const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const browser = await findChromium().launch({ args: SOFT_GL });
 const ctx = await browser.newContext({ viewport: { width: 1180, height: 820 }, serviceWorkers: 'allow' });
 
 async function open(url, name, offline) {

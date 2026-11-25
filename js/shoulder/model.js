@@ -8,8 +8,8 @@
 //   rot    turning the arm about its own length: + turns out (the forearm swings out), - turns in
 //   elbow  elbow bend, in degrees (0 straight, 90 the forearm level)
 //   up     how far the ball of the arm bone has moved up toward the acromion, in mm (a large cuff tear)
-import { V, K, bandMesh, binU } from './geom.js?v=37e89f4d';
-import { solid } from './solid.js?v=37e89f4d';
+import { V, K, bandMesh, binU } from './geom.js?v=a7948fcd';
+import { solid } from './solid.js?v=a7948fcd';
 
 // ---- reading the packed meshes -------------------------------------------------------------------
 export function unpack(json, buf) {

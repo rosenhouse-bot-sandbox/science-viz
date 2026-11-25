@@ -956,12 +956,12 @@ wrong with it, and what the common physical therapy exercises do to it.
 
 Code: `model.js` the bones, pose, gap and muscles; `view.js` the WebGL2 drawing (a cut plane with its faces
 filled in using the stencil buffer); `facts.js` every statement and its source; `main.js` the camera,
-labels, panel and controls; `geom.js`, `solid.js`, `gl.js` helpers. `css/shoulder.css` is the stylesheet.
+labels, panel and controls; `geom.js` and `solid.js` helpers. WebGL helpers come from the shared `js/gl/gl.js`. `css/shoulder.css` is the stylesheet.
 `tests/shoulder/`: `build-data.mjs` and `build-pose.mjs` make the data; `review.mjs` checks the muscles
 against the scans; `model.mjs` checks the model at hundreds of random arm positions (bones apart, no new
 points inside bone, no folds, and which muscles lengthen and shorten as the textbooks say); `page.mjs`
 presses every control and sweeps every slider looking for jumps. After changing any file under
-`js/shoulder/`, `css/shoulder.css` or `shoulder/data/`, run `node tests/shoulder/stamp.mjs`.
+`js/shoulder/`, `css/shoulder.css` or `shoulder/data/`, run `node tests/stamp.mjs shoulder`.
 
 ## Overshoot saccades
 
@@ -1018,7 +1018,7 @@ this in "What the clinic's note may mean". It opens on poor pursuit with oversho
   kind of saccade happens with each setting, the definitions, a jump to a still target, each muscle's pull and length
   change, Listing's law, Hering's law and the nerve burst and pause. `node tests/saccade/page.mjs`
   (`--quick` for the desktop only) presses every control at a desktop and a phone size. After changing
-  any file under `js/saccade/` or `css/saccade.css`, run `node tests/saccade/stamp.mjs`.
+  any file under `js/saccade/` or `css/saccade.css`, run `node tests/stamp.mjs saccade`.
   `node tests/saccade/shots.mjs <dir>` writes screenshots for a reviewer.
 
 ## Gear fidget
@@ -1066,7 +1066,7 @@ the rest turn with it. A Take apart slider spreads the parts out along each gear
   another, checks that a gear held still lets its neighbor turn no more than the backlash, and checks the core and
   the gears that do not mesh. `node tests/gears/page.mjs` (`--quick` for the desktop only) presses every control at
   a desktop and a phone size, drags a gear, and sweeps Spin and Take apart. After changing any file under
-  `js/gears/` or `css/gears.css`, run `node tests/gears/stamp.mjs`.
+  `js/gears/` or `css/gears.css`, run `node tests/stamp.mjs gears`.
 - **Making it** (`gears/make.html`, linked from the gears page as "How to make the parts"): for each toy and each
   part, a dimensioned drawing and the part being machined from brass, step by step.
   - Sizes (`js/gears/spec.js`, from `MM` and `blank()` in model.js): the gears are module 1 (cube, 14 teeth, Ø15.42

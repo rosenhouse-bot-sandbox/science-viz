@@ -1,16 +1,16 @@
 // Shoulder: the controller. The state is the zoom (0 Shoulder, 1 Joint, 2 Tendon), a condition or an exercise,
 // and the arm's lift and turn. Everything drawn and every number shown comes from model.js.
-import { unpack, makeModel, MUSCLES, clamp, smooth, apply, turn as turnDir } from './model.js?v=37e89f4d';
-import { V } from './geom.js?v=37e89f4d';
-import { makeView, COL } from './view.js?v=37e89f4d';
-import { SRC, DOES, CONDITIONS, EXERCISES, MODEL_NOTE, MODEL_SRC } from './facts.js?v=37e89f4d';
-import { EX_POSE, EX_STILL, EX_SECONDS } from './exercises.js?v=37e89f4d';
-import { gamepad } from '../gamepad/gamepad.js';
-import { touchSliders } from '../touch/slider.js';
+import { unpack, makeModel, MUSCLES, clamp, smooth, apply, turn as turnDir } from './model.js?v=a7948fcd';
+import { V } from './geom.js?v=a7948fcd';
+import { makeView, COL } from './view.js?v=a7948fcd';
+import { SRC, DOES, CONDITIONS, EXERCISES, MODEL_NOTE, MODEL_SRC } from './facts.js?v=a7948fcd';
+import { EX_POSE, EX_STILL, EX_SECONDS } from './exercises.js?v=a7948fcd';
+import { gamepad } from '../gamepad/gamepad.js?v=a7948fcd';
+import { touchSliders } from '../touch/slider.js?v=a7948fcd';
 
 const PINCH = 0.9;   // scales of zoom for each e-fold of finger spread: one full spread is about one scale, as on Maple and Engine
 
-const STAMP = '37e89f4d';                                        // written by tests/shoulder/stamp.mjs: the data files' version
+const STAMP = 'a7948fcd';                                        // written by tests/stamp.mjs: the data files' version
 const $ = (id) => document.getElementById(id);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const cv = $('view'), gl = cv.getContext('webgl2', { antialias: true, alpha: false, stencil: true, powerPreference: 'high-performance' });

@@ -1,8 +1,8 @@
 // Gears on a cube and an octahedron: the workshop's drawings. One sheet per part, drawn the way a machinist
 // expects: third-angle views, sections hatched, every size the part needs and no more, a title block. All numbers
 // come from spec.js. The sheet is built as SVG from numbers only.
-import { gearSpec, spacerSpec, screwSpec, coreSpec, bearingSpec, MATERIAL } from './spec.js?v=286eb78e';
-import { dot, cross, norm } from './model.js?v=286eb78e';
+import { gearSpec, spacerSpec, screwSpec, coreSpec, bearingSpec, MATERIAL } from './spec.js?v=6ca5dca9';
+import { dot, cross, norm } from './model.js?v=6ca5dca9';
 
 const NS = 'http://www.w3.org/2000/svg';
 const D = Math.PI / 180;

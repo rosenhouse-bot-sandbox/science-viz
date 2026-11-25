@@ -10,26 +10,12 @@
 //   - B goes back, Menu returns to where a visit that came from the Deck began, and there are no errors.
 //
 //   node tests/gamepad/run.mjs [page ...]     # needs Node 22 and Playwright, installed outside the repository
-import { createRequire } from 'node:module';
-import http from 'node:http';
-import fs from 'node:fs';
-import path from 'node:path';
+import { findChromium, serve, SOFT_GL } from '../lib/serve.mjs';
+import { covers } from '../lib/pages.mjs';
 
-const root = path.resolve(import.meta.dirname, '../..');
-let chromium;
-for (const from of [import.meta.url, '/opt/node-tools/', process.execPath]) { try { chromium = createRequire(from)('playwright').chromium; break; } catch { /* try the next place */ } }
-if (!chromium) { console.error('Playwright is not installed. Install it outside the repository: npm install -g playwright && npx playwright install chromium'); process.exit(2); }
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' };
-const server = http.createServer((req, res) => {
-  let p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
-  if (p === '/the-deck') { res.writeHead(200, { 'content-type': 'text/html' }); res.end('<!doctype html><title>Deck</title><a id="go" href="/?from=deck">Science</a>'); return; }
-  if (p.endsWith('/')) p += 'index.html';
-  const file = path.join(root, p);
-  if (!file.startsWith(root) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); res.end(); return; }
-  res.writeHead(200, { 'content-type': TYPES[path.extname(file)] || 'application/octet-stream' }); res.end(fs.readFileSync(file));
-});
-await new Promise((r) => server.listen(0, r));
-const base = `http://localhost:${server.address().port}/`;
+// /the-deck stands in for the Deck's own page, which opens the site with ?from=deck
+const deckPage = (p, req, res) => { if (p !== '/the-deck') return false; res.writeHead(200, { 'content-type': 'text/html' }); res.end('<!doctype html><title>Deck</title><a id="go" href="/?from=deck">Science</a>'); return true; };
+const { server, base } = await serve({ handle: deckPage });
 
 // What each page maps, and how to see from outside that it worked.
 const ALL = ['move', 'a', 'b', 'view', 'rs', 'lt', 'rt', 'lb', 'rb'];
@@ -84,10 +70,11 @@ const PAGES = {
     stage: () => window.__make.st.part,
   },
 };
+covers(PAGES, 'tests/gamepad/run.mjs');
 
 let fails = 0;
 const fail = (what) => { fails++; console.log('FAIL ' + what); };
-const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const browser = await findChromium().launch({ args: SOFT_GL });
 const BTN = { a: 0, b: 1, lb: 4, rb: 5, lt: 6, rt: 7, view: 8, menu: 9, up: 12, down: 13, left: 14, right: 15 };
 
 // `blind` leaves out the 3D drawing itself. Vesicle fusion's hundred thousand lipids take seconds a

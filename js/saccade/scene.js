@@ -1,8 +1,8 @@
 // Overshoot saccades: the 3D picture. Two eyes with their six muscles and optic nerves, and the screen they
 // watch, all at true size in mm. The screen's picture (grid, target, where the eyes land) is drawn on a 2D canvas
 // and shown on the screen as a texture. Nothing here decides anything: it draws what model.js computes.
-import { program, meshBuffers, normals, perspective, lookAt, mul4 } from './gl.js?v=5527e4ae';
-import { EYE_R, MUSCLES, OPTIC, SCREEN, musclePath, eyeCenter, rot, onScreen } from './model.js?v=5527e4ae';
+import { program, meshBuffers, normals, perspective, lookAt, mul4 } from '../gl/gl.js?v=7ec01cf7';
+import { EYE_R, MUSCLES, OPTIC, SCREEN, musclePath, eyeCenter, rot, onScreen } from './model.js?v=7ec01cf7';
 
 const VS = `#version 300 es
 layout(location=0) in vec3 aPos; layout(location=1) in vec3 aNor; layout(location=2) in vec3 aT;

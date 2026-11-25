@@ -3,25 +3,14 @@
 // a phone at twice the sharpness.
 //
 //   node tests/saccade/shots.mjs <out dir>
-import { createRequire } from 'node:module';
-import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import { findChromium, serve, SOFT_GL } from '../lib/serve.mjs';
 
-const root = path.resolve(import.meta.dirname, '../..'), out = path.resolve(process.argv[2] || path.join(import.meta.dirname, 'out'));
+const out = path.resolve(process.argv[2] || path.join(import.meta.dirname, 'out'));
 fs.mkdirSync(out, { recursive: true });
-let chromium;
-for (const from of [import.meta.url, '/opt/node-tools/', process.execPath, '/']) { try { chromium = createRequire(from)('playwright').chromium; break; } catch { /* next */ } }
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' };
-const server = http.createServer((req, res) => {
-  let p = decodeURIComponent(new URL(req.url, 'http://x').pathname); if (p.endsWith('/')) p += 'index.html';
-  const file = path.join(root, p);
-  if (!file.startsWith(root) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); res.end(); return; }
-  res.writeHead(200, { 'content-type': TYPES[path.extname(file)] || 'application/octet-stream' }); res.end(fs.readFileSync(file));
-});
-await new Promise((r) => server.listen(0, r));
-const base = `http://localhost:${server.address().port}/saccade/`;
-const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const { server, base } = await serve({ at: 'saccade/' });
+const browser = await findChromium().launch({ args: SOFT_GL });
 for (const [tag, w, h, dsf] of [['desktop', 1280, 800, 1], ['phone', 390, 844, 2]]) {
   const page = await browser.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: dsf, hasTouch: w < 600 });
   const errs = []; page.on('console', (m) => { if (m.type() === 'error') errs.push(m.text()); }); page.on('pageerror', (e) => errs.push(e.message));

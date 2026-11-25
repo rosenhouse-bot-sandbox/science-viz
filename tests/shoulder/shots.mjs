@@ -3,29 +3,16 @@
 // can be shown again with the same seed.
 //
 //   node tests/shoulder/shots.mjs [count] [seed]     # writes tests/shoulder/out/review/NN.png and states.json
-import { createRequire } from 'node:module';
-import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import { findChromium, serve, SOFT_GL } from '../lib/serve.mjs';
 
-const root = path.resolve(import.meta.dirname, '../..');
-let chromium;
-for (const from of [import.meta.url, '/opt/node-tools/', process.execPath, '/']) { try { chromium = createRequire(from)('playwright').chromium; break; } catch { /* try the next place */ } }
-if (!chromium) { console.error('Playwright is not installed.'); process.exit(2); }
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' };
-const server = http.createServer((req, res) => {
-  let p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
-  if (p.endsWith('/')) p += 'index.html';
-  const file = path.join(root, p);
-  if (!file.startsWith(root) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); res.end(); return; }
-  res.writeHead(200, { 'content-type': TYPES[path.extname(file)] || 'application/octet-stream' }); res.end(fs.readFileSync(file));
-});
-await new Promise((r) => server.listen(0, r));
+const { server } = await serve();
 const N = +(process.argv[2] || 30), SEED = +(process.argv[3] || 1);
 let seed = SEED; const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296), pick = (a) => a[Math.floor(rnd() * a.length)];
 const out = path.join(import.meta.dirname, 'out/review'); fs.mkdirSync(out, { recursive: true });
 const CONDS = ['healthy', 'tendinopathy', 'partial', 'full', 'bursitis', 'impingement'], EXS = ['pendulum', 'sleeper', 'external', 'internal', 'external90', 'wiper', 'pnf', 'bentRaise', 'extension', 'highRow', 'prone', 'thoracic', 'plank', 'sidePlank'];
-const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const browser = await findChromium().launch({ args: SOFT_GL });
 const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
 page.on('pageerror', (e) => console.log('page error: ' + e.message));
 await page.goto(`http://localhost:${server.address().port}/shoulder/`);

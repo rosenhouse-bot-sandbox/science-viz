@@ -1,12 +1,12 @@
 // Gears on a cube and an octahedron: the controller. The state is which solid, how far the gears have turned, and
 // the camera. Dragging a gear turns it about its own axis, and every gear it meshes with follows.
-import { SHAPES, angles, dot, cross, norm, R_IN, R_OUT, MM, unitMM } from './model.js?v=286eb78e';
-import { makeScene } from './scene.js?v=286eb78e';
-import { makeLook } from './look.js?v=286eb78e';
-import { KEY } from './facts.js?v=286eb78e';
-import { perspective, lookAt, mul4 } from './gl.js?v=286eb78e';
-import { gamepad } from '../gamepad/gamepad.js';
-import { touchSliders } from '../touch/slider.js';
+import { SHAPES, angles, dot, cross, norm, R_IN, R_OUT, MM, unitMM } from './model.js?v=6ca5dca9';
+import { makeScene } from './scene.js?v=6ca5dca9';
+import { makeLook } from './look.js?v=6ca5dca9';
+import { KEY } from './facts.js?v=6ca5dca9';
+import { perspective, lookAt, mul4 } from '../gl/gl.js?v=6ca5dca9';
+import { gamepad } from '../gamepad/gamepad.js?v=6ca5dca9';
+import { touchSliders } from '../touch/slider.js?v=6ca5dca9';
 
 const $ = (id) => document.getElementById(id);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -121,8 +121,8 @@ function writeHash() {
   clearTimeout(hashTimer);
   hashTimer = setTimeout(() => history.replaceState(null, '', '#' + new URLSearchParams({ s: st.shape, c: st.color ? 1 : 0 })), 400);
 }
-function readHash() {
-  const q = new URLSearchParams(location.hash.slice(1));
+function readHash(hash = location.hash) {
+  const q = new URLSearchParams(hash.slice(1));
   if (SHOWN.some((x) => x.id === q.get('s'))) st.shape = q.get('s');
   if (q.has('c')) st.color = q.get('c') !== '0';
 }
@@ -195,7 +195,8 @@ function controls() {
   });
   $('reload').addEventListener('click', () => location.reload());
   addEventListener('resize', measure);
-  addEventListener('hashchange', () => { readHash(); touch(); });
+  // read the address the event names: a slow frame can let writeHash's timer replace it before this runs
+  addEventListener('hashchange', (e) => { clearTimeout(hashTimer); readHash(new URL(e.newURL).hash); touch(); });
   document.addEventListener('visibilitychange', () => { last = 0; });
   const step = (k) => { const i = SHOWN.findIndex((s) => s.id === st.shape); choose(SHOWN[(i + k + SHOWN.length) % SHOWN.length].id); };
   // Sliders a finger can work (see js/touch/slider.js).
