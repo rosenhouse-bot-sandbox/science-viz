@@ -2,10 +2,10 @@
 // carriage, cross slide, compound, tool post, tailstock) and a knee mill (table, vise, spin indexer, tilting dividing
 // head, a head that tilts), drawn round the part being made. All sizes in millimeters; the machines are a typical
 // bench lathe's and a small knee mill's. The part's shape comes from cut.js; nothing here decides it.
-import { program } from './gl.js?v=e184e11b';
-import { grow, lathe, box, poly, sphere, gearMesh } from './mesh.js?v=e184e11b';
-import { bodyFaces, dot, cross, norm } from './model.js?v=e184e11b';
-import { outline } from './cut.js?v=e184e11b';
+import { program } from './gl.js?v=e35e505e';
+import { grow, lathe, box, poly, sphere, gearMesh } from './mesh.js?v=e35e505e';
+import { bodyFaces, dot, cross, norm } from './model.js?v=e35e505e';
+import { outline } from './cut.js?v=e35e505e';
 
 const VS = `#version 300 es
 layout(location=0) in vec3 aPos; layout(location=1) in vec3 aNor; layout(location=2) in vec3 aT;
@@ -51,6 +51,7 @@ void main(){
   else if (kind == 11) { base = vec3(0.05, 0.05, 0.055); rough = 0.6; }                                         // black
   else if (kind == 12) { base = uPaint * 0.35; rough = 0.8; }                                                    // a T-slot's shadow
   else if (kind == 13) { base = vec3(0.42, 0.44, 0.47); rough = 0.45; }                                       // chuck jaws, hardened and ground
+  else if (kind == 14) { base = uTint * vec3(0.7, 0.62, 0.52) * (0.94 + 0.06 * hash(floor(vL * 2.5))); rough = 0.75; }  // brass bar as it came: dull, sawn
   else { base = vec3(0.6, 0.62, 0.66); rough = 0.4; }                                                            // tool holders, plain steel
   vec3 nv = uV * n, vv = uV * v, r = normalize(mix(reflect(-vv, nv), nv, rough));
   float fr = 0.65 + 0.35 * pow(1. - max(dot(nv, vv), 0.), 5.);
@@ -307,23 +308,24 @@ export function turnedMesh(S, kind = 0) {
   const g = grow();
   for (const L of outline(S)) {
     const outer = L.outer, inner = L.inner.slice().reverse();
-    // the outside, split where the thread runs
-    const th = S.thread;
-    if (th) {
-      const parts = [[], [], []];
-      for (const p of outer) parts[p[1] < th[0] ? 0 : p[1] <= th[1] ? 1 : 2].push(p);
-      for (let k = 0; k < 3; k++) { const seg = parts[k]; if (k > 0 && parts[k - 1].length && seg.length) seg.unshift(parts[k - 1][parts[k - 1].length - 1]); if (seg.length > 1) lathe(g, seg, k === 1 ? 5 : kind, 64); }
-    } else lathe(g, outer, kind, 72);
+    // the outside, band by band: the thread, the bar as it came (not yet cut), and turned metal
+    const th = S.thread, raw = (r) => S.stockR && Math.abs(r - S.stockR) < 1e-4;
+    for (let k = 0; k + 1 < outer.length; k++) {
+      const a = outer[k], b = outer[k + 1], zm = (a[1] + b[1]) / 2;
+      lathe(g, [a, b], th && zm >= th[0] && zm <= th[1] ? 5 : raw(a[0]) && raw(b[0]) ? 14 : kind, 72);
+    }
     // the end faces and the inside
-    lathe(g, [outer[outer.length - 1], [inner[0][0], outer[outer.length - 1][1]]], kind, 72);
+    // an end still as it was sawn off the bar is rough
+    const sawn = (z) => S.sawn !== undefined && Math.abs(z - S.sawn) < 0.02 ? 14 : kind;
+    lathe(g, [outer[outer.length - 1], [inner[0][0], outer[outer.length - 1][1]]], sawn(L.z1), 72);
     if (inner.some((p) => p[0] > 1e-4)) lathe(g, inner, kind, 72);
-    lathe(g, [[inner[inner.length - 1][0], L.z0], outer[0]], kind, 72);
+    lathe(g, [[inner[inner.length - 1][0], L.z0], outer[0]], sawn(L.z0), 72);
   }
   return g;
 }
 // a convex milled part from its planes; with a plane part-way cut, two pieces: the part cut so far and the rest
 export function milledMesh(M) {
-  const g = grow(), add = (planes, skip) => { for (const f of bodyFaces(planes)) { if (f.kind === skip) continue; poly(g, f.poly, f.n, K(0, 0)); } };
+  const g = grow(), add = (planes, skip) => { for (const f of bodyFaces(planes)) { if (f.kind === skip) continue; poly(g, f.poly, f.n, K(f.kind === 'stock' ? 14 : 0, 0)); } };
   if (!M.cut) add(M.planes);
   else {
     const c = M.cut;
