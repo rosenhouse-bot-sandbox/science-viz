@@ -1049,6 +1049,14 @@ the rest turn with it. A Take apart slider spreads the parts out along each gear
   bevel gears so that they also mesh at 70.5°. The bearings' balls go round at 0.62 of the gear's speed, as balls
   do with the outer ring turning and the inner ring held. Taking the parts apart is a slider the visitor moves; it
   never plays by itself, and the gears cannot be turned while the parts are apart.
+- **How it looks** (`js/gears/look.js`, shared with the workshop page): the metal reflects a lit room (pale walls
+  with shelves, tube lights overhead, a window), and each part carries the marks of how it is made: fine turning
+  grooves round a gear's axis, fly cutter arcs on the core. The tube lights cast a soft shadow from a shadow map,
+  and gaps that little light reaches are darkened from the depth picture. The set sits on a walnut desk; taken
+  apart, it is held up so that its lowest part just touches the desk, and from below the desk is not drawn. The
+  room, the desk and the marks are the page's own choice, not measured. A browser that cannot draw into a
+  floating-point picture gets the plain lighting the page had before. In the workshop, steel is a satin mid gray,
+  black oxide a dark gray and the machines' cast iron lumpy under its paint, as in photos of real shops.
 - **Controls**: the shape, Play (off with reduced motion), a Spin slider, Take apart, and a tick box that colors
   the gears by the way they spin (gold and blue). Dragging off the gears, or the arrow keys on the picture, turns
   the view; a double click puts it back. A controller's right stick turns the view, the triggers turn the gears,

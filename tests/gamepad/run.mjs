@@ -74,12 +74,12 @@ const PAGES = {
     stage: () => (window.__saccade.busy ? null : Math.round(window.__saccade.st.z * 1000) / 1000),
   },
   gears: {
-    path: 'gears/?res=0.4#s=cube4', keys: ALL, ready: () => !!(window.__gears && window.__gears.drawn.shape), before: () => window.__gears.settle(),
+    path: 'gears/?res=0.4&look=0#s=cube4', keys: ALL, ready: () => !!(window.__gears && window.__gears.drawn.shape), before: () => window.__gears.settle(),
     look: () => window.__gears.st.yaw, zoom: () => window.__gears.st.t, settle: () => window.__gears.settle(), idle: () => !window.__gears.busy,
     stage: () => window.__gears.st.shape,
   },
   gearsmake: {
-    path: 'gears/make.html?res=0.4#s=cube4&p=core&v=make', back: 'gears/', keys: ALL, ready: () => !!(window.__make && window.__make.cur), before: () => { window.__make.settle(); window.__make.at(60); },
+    path: 'gears/make.html?res=0.4&look=0#s=cube4&p=core&v=make', back: 'gears/', keys: ALL, ready: () => !!(window.__make && window.__make.cur), before: () => { window.__make.settle(); window.__make.at(60); },
     look: () => window.__make.st.yaw, zoom: () => window.__make.st.t, settle: () => window.__make.settle(), idle: () => !window.__make.st.play,
     stage: () => window.__make.st.part,
   },

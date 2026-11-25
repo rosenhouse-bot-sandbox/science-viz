@@ -57,7 +57,7 @@ const SIZES = [['desktop', 1280, 800, 'no-preference'], ['phone, reduced motion'
 {
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
   page.on('pageerror', (e) => fail(`gears page: ${e.message}`));
-  await page.goto(base + '?res=0.5#s=octa');
+  await page.goto(base + '?res=0.5&look=0#s=octa');
   await page.waitForFunction(() => window.__gears?.drawn.shape, null, { timeout: 120000 });
   await page.evaluate(() => new Promise((r) => setTimeout(r, 500)));
   await page.click('#more');
@@ -71,7 +71,7 @@ for (const [name, width, height, motion] of quick ? SIZES.slice(0, 1) : SIZES) {
   const page = await browser.newPage({ viewport: { width, height }, reducedMotion: motion, hasTouch: width < 600 });
   page.on('console', (m) => { if (m.type() === 'error') fail(`${name}: console: ${m.text()}`); });
   page.on('pageerror', (e) => fail(`${name}: ${e.message}`));
-  await page.goto(base + 'make.html?res=0.5');
+  await page.goto(base + 'make.html?res=0.5&look=0');
   await page.waitForFunction(() => window.__make?.cur && document.querySelector('#parts button'), null, { timeout: 120000 });
   const frame = () => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
   const fits = async (when) => { const w = await page.evaluate(() => [document.documentElement.scrollWidth, document.getElementById('panel').scrollWidth, document.getElementById('panel').clientWidth]); if (w[0] > width || w[1] > w[2]) fail(`${name}: something is wider than the screen ${when} (${w.join(', ')})`); };
@@ -120,6 +120,22 @@ for (const [name, width, height, motion] of quick ? SIZES.slice(0, 1) : SIZES) {
     if (Math.abs(t[0] - t[1]) > 1e-6) fail(`${what}: the slider's end is not the end of the work (${t[0].toFixed(1)} of ${t[1].toFixed(1)} s)`);
     await fits(`while machining the ${part}`);
   }
+  await page.close();
+}
+// The lit look (js/gears/look.js), which draws slowly without a graphics card: it starts without an error and
+// draws the lathe and the mill.
+{
+  const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: 'reduce' });
+  page.on('console', (m) => { if (m.type() === 'error') fail(`lit: console: ${m.text()}`); });
+  page.on('pageerror', (e) => fail(`lit: ${e.message}`));
+  await page.goto(base + 'make.html?res=0.4#s=octa&p=gear&v=make');
+  await page.waitForFunction(() => window.__make?.cur, null, { timeout: 180000 });
+  if (!(await page.evaluate(() => window.__make.lit))) fail('lit: the page fell back to the plain lighting');
+  for (const [where, f] of [['the lathe', 0.02], ['the mill', 0.6]]) {
+    await page.evaluate((f) => window.__make.at(f * window.__make.cur.tl.T), f);
+    if (spread(await page.evaluate(SNAP)) < 60) fail(`lit: the picture at ${where} is blank`);
+  }
+  console.log('lit: done');
   await page.close();
 }
 await browser.close(); server.close();

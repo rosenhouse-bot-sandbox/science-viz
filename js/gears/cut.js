@@ -4,8 +4,8 @@
 // A lathe part is kept as two radii along its axis, sampled every 0.01 mm: the outside (ro) and the inside (ri).
 // Where ro <= ri there is no metal. A mill part is a list of planes (it stays convex), with holes, gear gaps and a
 // slot on top.
-import { dot, cross, norm } from './model.js?v=e35e505e';
-import { bodyFaces } from './model.js?v=e35e505e';
+import { dot, cross, norm } from './model.js?v=286eb78e';
+import { bodyFaces } from './model.js?v=286eb78e';
 
 export const DZ = 0.01;
 const RAPID = 0.8, CHANGE = 2.5;        // seconds to bring a tool in between passes, and to change tools between steps

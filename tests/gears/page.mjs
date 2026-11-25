@@ -50,7 +50,7 @@ for (const [name, width, height, motion] of quick ? SIZES.slice(0, 1) : SIZES) {
   const page = await browser.newPage({ viewport: { width, height }, reducedMotion: motion, hasTouch: width < 600 });
   page.on('console', (m) => { if (m.type() === 'error') fail(`${name}: console: ${m.text()}`); });
   page.on('pageerror', (e) => fail(`${name}: ${e.message}`));
-  await page.goto(base + '?res=0.5');
+  await page.goto(base + '?res=0.5&look=0');   // the plain lighting: the lit one is checked on its own below
   await page.waitForFunction(() => window.__gears?.drawn.shape && document.querySelector('#shapes button'), null, { timeout: 120000 });
   if (!(await page.$eval('#oops', (e) => e.hidden))) { fail(`${name}: the picture could not start`); await page.close(); continue; }
   const frame = () => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
@@ -135,6 +135,26 @@ for (const [name, width, height, motion] of quick ? SIZES.slice(0, 1) : SIZES) {
     const b = await boxes(); if (b !== bA) fail(`${name}: a control moved while playing or coloring: ${moved(bA, b)}`); }
   await fits('at the end');
   console.log(`${name}: done`);
+  await page.close();
+}
+// The lit look (js/gears/look.js), which draws slowly without a graphics card: it starts without an error, draws
+// both shapes, and taking the set apart (which also lowers the desk under it) does not jump.
+{
+  const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: 'reduce' });
+  page.on('console', (m) => { if (m.type() === 'error') fail(`lit: console: ${m.text()}`); });
+  page.on('pageerror', (e) => fail(`lit: ${e.message}`));
+  await page.goto(base + '?res=0.4#s=cube4');
+  await page.waitForFunction(() => window.__gears?.drawn.shape, null, { timeout: 180000 });
+  if (!(await page.evaluate(() => window.__gears.lit))) fail('lit: the page fell back to the plain lighting');
+  for (const id of ['cube4', 'octa']) {
+    await page.evaluate((id) => { location.hash = 's=' + id; }, id); await page.waitForFunction((id) => window.__gears.drawn.shape === id, id, { timeout: 120000 });
+    if (spread(await page.evaluate(SNAP)) < 60) fail(`lit: the picture of ${id} is blank`);
+  }
+  const shots = [];
+  for (let k = 0; k <= 10; k++) { await page.$eval('#apart', (el, v) => { el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); }, (k / 10).toFixed(2)); shots.push(await page.evaluate(SNAP)); }
+  const d = shots.slice(1).map((s, i) => diff(shots[i], s)), med = d.slice().sort((a, b) => a - b)[d.length >> 1];
+  d.forEach((x, i) => { if (x > 3 * med + 4) fail(`lit: the picture jumped taking apart from ${i / 10} to ${(i + 1) / 10} (${x.toFixed(1)} against ${med.toFixed(1)})`); });
+  console.log(`lit: done (taking apart, steps ${d.map((x) => x.toFixed(1)).join(' ')})`);
   await page.close();
 }
 await browser.close(); server.close();

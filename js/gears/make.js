@@ -1,16 +1,17 @@
 // Gears on a cube and an octahedron, the workshop: for each part, its dimensioned drawing, and how it is made on a
 // lathe and a mill, step by step. The state is which toy, which part, which view, the machine time, and the camera.
-import { MM, parts, unitMM } from './model.js?v=e35e505e';
-import { planOf, startOf, MANDREL, PARTS, NAMES, by, SHOWN } from './plan.js?v=e35e505e';
-import { stockOf, gearSpec, screwSpec } from './spec.js?v=e35e505e';
-import { timeline, makeReplay, DZ } from './cut.js?v=e35e505e';
-import { makeShop, M4, turnedMesh, milledMesh, holeMesh, slotMesh } from './shop.js?v=e35e505e';
-import { grow, lathe, box, gearMesh, smallParts, sphere } from './mesh.js?v=e35e505e';
-import { collisions, turnedEnvelope } from './collide.js?v=e35e505e';
-import { cutting, chipMesh, rnd } from './chips.js?v=e35e505e';
-import { drawing } from './drawing.js?v=e35e505e';
-import { perspective, lookAt, mul4 } from './gl.js?v=e35e505e';
-import { dot, cross, norm, bodyFaces } from './model.js?v=e35e505e';
+import { MM, parts, unitMM } from './model.js?v=286eb78e';
+import { planOf, startOf, MANDREL, PARTS, NAMES, by, SHOWN } from './plan.js?v=286eb78e';
+import { stockOf, gearSpec, screwSpec } from './spec.js?v=286eb78e';
+import { timeline, makeReplay, DZ } from './cut.js?v=286eb78e';
+import { makeLook } from './look.js?v=286eb78e';
+import { makeShop, M4, turnedMesh, milledMesh, holeMesh, slotMesh } from './shop.js?v=286eb78e';
+import { grow, lathe, box, gearMesh, smallParts, sphere } from './mesh.js?v=286eb78e';
+import { collisions, turnedEnvelope } from './collide.js?v=286eb78e';
+import { cutting, chipMesh, rnd } from './chips.js?v=286eb78e';
+import { drawing } from './drawing.js?v=286eb78e';
+import { perspective, lookAt, mul4 } from './gl.js?v=286eb78e';
+import { dot, cross, norm, bodyFaces } from './model.js?v=286eb78e';
 import { gamepad } from '../gamepad/gamepad.js';
 import { touchSliders } from '../touch/slider.js';
 
@@ -353,10 +354,14 @@ function bench(items) {
   return { items, cutting: false };
 }
 
+let look = null;
 function draw() {
   cam = camera();
   const f = frameOf();
-  shop.draw({ items: f.items, spin }, cam, { x: 0, y: 0, w: cv.width, h: cv.height });
+  if (!look) { shop.draw({ items: f.items, spin }, cam, { x: 0, y: 0, w: cv.width, h: cv.height }); return f; }
+  const R = frameDist * st.zoom, zUp = upAxis[2] === 1;
+  look.frame((c, vpx, hook) => shop.draw({ items: f.items, spin }, c, vpx, hook), cam, cv.width, cv.height,
+    { up: upAxis, lDir: zUp ? [0.3, -0.45, 1] : [0.3, 1, 0.45], unit: 1, center: target, size: 170, near: R * 0.05, far: R * 30, aoR: 5 });
   return f;
 }
 
@@ -546,9 +551,9 @@ function controls() {
 // ---- start ----
 function start() {
   if (!gl) throw new Error('This browser does not offer WebGL 2.');
-  shop = makeShop(gl);
+  look = makeLook(gl); shop = makeShop(gl, !!look);
   cv.addEventListener('webglcontextlost', (e) => { e.preventDefault(); shop = null; });
-  cv.addEventListener('webglcontextrestored', () => { shop = makeShop(gl); meshCache.clear(); partKey = holeKey = slotKey = chipKey = ''; touch(); });
+  cv.addEventListener('webglcontextrestored', () => { look = makeLook(gl); shop = makeShop(gl, !!look); meshCache.clear(); partKey = holeKey = slotKey = chipKey = ''; touch(); });
   $('loading').hidden = true;
   touch();
 }
@@ -564,5 +569,5 @@ function collide(t) {
   return collisions(f.items, f.axis, f.tip, lathe ? { turning: ['hold', 'part'], still: ['move', 'cut'], cutPart: ['cut', 'part'] }
     : { turning: ['cut', 'spin'], still: ['static', 'part'], skip: [['part', 'cut']] });
 }
-window.__make = { collide, frame(t) { const was = [st.t, spin]; st.t = t; spin = 0; const f = frameOf(); [st.t, spin] = was; return f; }, st, drawn, get cur() { return cur; }, settle() { st.play = false; touch(); }, res(k) { res = k; measure(); },
+window.__make = { get lit() { return !!look; }, collide, frame(t) { const was = [st.t, spin]; st.t = t; spin = 0; const f = frameOf(); [st.t, spin] = was; return f; }, st, drawn, get cur() { return cur; }, settle() { st.play = false; touch(); }, res(k) { res = k; measure(); },
   redraw() { if (st.view === 'make') draw(); else sheet(); sync(); gl.finish(); }, at(t) { st.play = false; const was = cur.steps[stepAt(st.t)].op; st.t = t; if (cur.steps[stepAt(t)].op !== was) resetView(); touch(); } };

@@ -2,10 +2,11 @@
 // carriage, cross slide, compound, tool post, tailstock) and a knee mill (table, vise, spin indexer, tilting dividing
 // head, a head that tilts), drawn round the part being made. All sizes in millimeters; the machines are a typical
 // bench lathe's and a small knee mill's. The part's shape comes from cut.js; nothing here decides it.
-import { program } from './gl.js?v=e35e505e';
-import { grow, lathe, box, poly, sphere, gearMesh } from './mesh.js?v=e35e505e';
-import { bodyFaces, dot, cross, norm } from './model.js?v=e35e505e';
-import { outline } from './cut.js?v=e35e505e';
+import { program } from './gl.js?v=286eb78e';
+import { GLSL, withLit } from './look.js?v=286eb78e';
+import { grow, lathe, box, poly, sphere, gearMesh } from './mesh.js?v=286eb78e';
+import { bodyFaces, dot, cross, norm } from './model.js?v=286eb78e';
+import { outline } from './cut.js?v=286eb78e';
 
 const VS = `#version 300 es
 layout(location=0) in vec3 aPos; layout(location=1) in vec3 aNor; layout(location=2) in vec3 aT;
@@ -16,6 +17,7 @@ precision highp float;
 in vec3 vW, vN, vT, vL; out vec4 o;
 uniform vec3 uCam, uTint, uPaint; uniform mat3 uV; uniform float uSpin, uHi;
 uniform int uCut; uniform vec4 uHoleC[8], uHoleN[8]; uniform int uHoles; uniform vec4 uSlot;
+${GLSL}
 vec3 env(vec3 r){
   vec3 c = mix(vec3(0.2, 0.19, 0.18), vec3(0.5, 0.51, 0.53), smoothstep(-0.5, 0.9, r.y));
   c += vec3(2.6, 2.5, 2.3) * smoothstep(0.72, 0.95, dot(r, normalize(vec3(0.3, 0.9, 0.35))));
@@ -26,6 +28,9 @@ vec3 env(vec3 r){
 float hash(vec3 p){ return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
 void main(){
   int kind = int(vT.x + 0.5);
+#ifdef LIT
+  if (kind == 7) { o = vec4(backdrop(vT.yz, uCam), 1.); return; }
+#endif
   if (kind == 7) { float r = length(vT.xy * vec2(1.0, 0.8) - vec2(0., 0.25));
     o = vec4(mix(vec3(0.085, 0.09, 0.1), vec3(0.018, 0.02, 0.026), smoothstep(0.0, 1.4, r)), 1.); return; }
   if (uCut == 1) {
@@ -35,6 +40,9 @@ void main(){
       if (a > -0.02 && a < uHoleN[i].w && dot(q, q) < uHoleC[i].w * uHoleC[i].w) discard; }
     if (uSlot.x > 0. && abs(vL.x) < uSlot.x && vL.z > uSlot.y - 0.001 && vL.y > min(uSlot.z, uSlot.w) && vL.y < max(uSlot.z, uSlot.w)) discard;
   }
+#ifdef LIT
+  if (uDepthOnly == 1) { o = vec4(0.); return; }
+#endif
   vec3 n = normalize(vN), v = normalize(uCam - vW);
   if (dot(n, v) < 0.) n = -n;
   vec3 base; float rough = 0.3;
@@ -53,6 +61,21 @@ void main(){
   else if (kind == 13) { base = vec3(0.42, 0.44, 0.47); rough = 0.45; }                                       // chuck jaws, hardened and ground
   else if (kind == 14) { base = uTint * vec3(0.7, 0.62, 0.52) * (0.94 + 0.06 * hash(floor(vL * 2.5))); rough = 0.75; }  // brass bar as it came: dull, sawn
   else { base = vec3(0.6, 0.62, 0.66); rough = 0.4; }                                                            // tool holders, plain steel
+#ifdef LIT
+  {
+    // as in photos of real shops: brass bright, steel a satin mid gray, black oxide a dark gray, cast iron lumpy under its paint
+    bool brass = kind == 0 || kind == 5 || kind == 6 || kind == 8 || kind == 9 || kind == 14, mtl = kind != 2 && kind != 11 && kind != 12;
+    if (brass) base = clamp(base / uTint, 0., 1.2) * vec3(0.98, 0.80, 0.52);
+    if (kind == 14) base = vec3(0.86, 0.76, 0.55) * (0.94 + 0.06 * hash(floor(vL * 2.5)));
+    int fin = (kind == 0 || kind == 5) ? 1 : (kind == 1 ? 4 : (mtl ? 0 : 3));
+    float rr = mtl ? (brass && kind != 14 ? rough * 0.5 : max(rough, 0.42)) : 0.55;
+    if (!brass && mtl && kind != 4 && kind != 10) base = vec3(0.80, 0.80, 0.79);
+    if (kind == 4) { base = vec3(0.50, 0.50, 0.51); rr = 0.45; }
+    if (kind == 13) base = vec3(0.72, 0.72, 0.71);
+    if (kind == 2) base = uPaint;                                 // (its texture comes from shade)
+    o = vec4(shade(base, rr, mtl, fin, n, v, vW, vL), 1.); return;
+  }
+#endif
   vec3 nv = uV * n, vv = uV * v, r = normalize(mix(reflect(-vv, nv), nv, rough));
   float fr = 0.65 + 0.35 * pow(1. - max(dot(nv, vv), 0.), 5.);
   float dif = max(dot(n, normalize(vec3(0.25, 0.9, 0.35))), 0.);
@@ -364,8 +387,8 @@ export function slotMesh(top, R, w, depth, from, to) {
   return g;
 }
 
-export function makeShop(gl) {
-  const prog = program(gl, VS, FS), u = prog.u;
+export function makeShop(gl, lit) {
+  const prog = program(gl, VS, lit ? withLit(FS) : FS), u = prog.u;
   const L = latheParts(), MP = millParts(), up = (g) => mesh(gl, g);
   const lathe3 = { base: up(L.base), chuck: up(L.chuck), collet: up(L.collet), carriage: up(L.carriage), cross: up(L.cross), compound: up(L.compound), post: up(L.post), holder: up(L.holder), tail: up(L.tail), quill: up(L.quill), jacobs: up(L.jacobs), die: up(L.die) };
   const mill = { table: up(MP.table), indexer: up(indexerParts()), jacobs: up(MP.jacobs), nut: up(MP.nut) }; const dv = dividingParts(); mill.dbase = up(dv.base); mill.dhead = up(dv.head);
@@ -381,10 +404,10 @@ export function makeShop(gl) {
   return {
     gl, M4, memo, latheTool, rotaryTool, millTool, gearCutter, sawCutter, mesh: (g) => mesh(gl, g, true),
     // f: what to draw (see make.js), cam: { vp, pos, rot }
-    draw(f, cam, vpx) {
+    draw(f, cam, vpx, hook) {
       gl.viewport(vpx.x, vpx.y, vpx.w, vpx.h);
       gl.clearColor(0.02, 0.025, 0.035, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-      gl.useProgram(prog.p);
+      gl.useProgram(prog.p); hook?.(gl, prog.p);
       gl.disable(gl.DEPTH_TEST); gl.uniformMatrix4fv(u.uVP, false, I); gl.uniformMatrix4fv(u.uM, false, I); gl.uniform1i(u.uCut, 0); back.draw();
       gl.enable(gl.DEPTH_TEST);
       gl.uniformMatrix4fv(u.uVP, false, cam.vp); gl.uniform3fv(u.uCam, cam.pos); gl.uniformMatrix3fv(u.uV, false, cam.rot);
