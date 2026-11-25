@@ -1,9 +1,9 @@
 // Gears on a cube and an octahedron: the 3D picture. The parts are the ones the brass toy is made of: a core block,
 // and on each face a washer, a toothed gear with a ball bearing pressed into it, and a flanged screw. Sizes come
 // from model.js; nothing here decides how the gears move.
-import { program, meshBuffers } from '../gl/gl.js?v=8406f29f';
-import { bodyPlanes, bodyFaces, parts } from './model.js?v=8406f29f';
-import { grow, gearMesh, smallParts } from './mesh.js?v=8406f29f';
+import { program, meshBuffers } from '../gl/gl.js?v=e925ca2c';
+import { bodyPlanes, bodyFaces, parts, MM } from './model.js?v=e925ca2c';
+import { grow, gearMesh, smallParts, faceWithHole, holeWalls } from './mesh.js?v=e925ca2c';
 
 const VS = `#version 300 es
 layout(location=0) in vec3 aPos; layout(location=1) in vec3 aNor; layout(location=2) in vec3 aT;
@@ -39,6 +39,8 @@ void main(){
     base *= 0.92 + 0.08 * hash(floor(vL * vec3(400., 6., 400.))); }
   else if (kind == 3) { base = vec3(0.8, 0.82, 0.85); rough = 0.1; }            // the bearing: polished steel
   else if (kind == 4) { base = vec3(0.9, 0.72, 0.44); rough = 0.3; }            // a washer
+  else if (kind == 6) { base = vec3(0.86, 0.67, 0.39) * (0.3 + 0.25 * smoothstep(-0.6, 0.6, sin(vT.y * 20.944))); rough = 0.5; }  // a tapped hole: 0.3 mm pitch
+  else if (kind == 8) { base = vec3(0.86, 0.67, 0.39) * 0.3; rough = 0.6; }      // inside a drilled hole
   else { base = vec3(0.9, 0.74, 0.48) * (0.75 + 0.25 * sin(vT.y * 260.)); rough = 0.4; }   // the screw's thread
   vec3 nv = uV * n, vv = uV * v, r = normalize(mix(reflect(-vv, nv), nv, rough));
   float fr = 0.7 + 0.3 * pow(1. - max(dot(nv, vv), 0.), 5.);
@@ -55,9 +57,19 @@ function upload(gl, g) {
   m.setPos(new Float32Array(g.P)); m.setNor(new Float32Array(g.N)); m.setTT(new Float32Array(g.T));
   return m;
 }
+// the core, with a tapped hole in the middle of every gear's face: spotted, drilled Ø1.1 with the drill's point at
+// the bottom, tapped M1.4 (sizes from MM)
 function bodyGeometry(sh) {
-  const g = grow();
+  const g = grow(), u = parts(sh).u, T = MM.tap, r = MM.screw.thread / 2, rd = T.drill / 2, spot = 0.75;
+  const holed = (n) => sh.normals.some((m) => m[0] * n[0] + m[1] * n[1] + m[2] * n[2] > 0.999);
   for (const f of bodyFaces(bodyPlanes(sh))) {
+    if (f.kind === 'face' && holed(f.n)) {
+      const c = f.n.map((x) => x * MM.core[sh.solid] / u);
+      faceWithHole(g, f.poly, f.n, c, spot / u, [2, 0, 0]);
+      const pts = [[spot, 0], [r, spot - r], [r, T.depth], [rd, T.depth + (r - rd)], [rd, T.drillDepth], [0, T.drillDepth + rd / Math.tan(59 * Math.PI / 180)]];
+      holeWalls(g, f.n, c, pts.map(([a, b]) => [a / u, b / u]), [8, 6, 8, 8, 8], u);
+      continue;
+    }
     const ids = f.poly.map((p) => g.v(p, f.n, [2, 0, 0]));
     for (let k = 1; k + 1 < ids.length; k++) g.I.push(ids[0], ids[k], ids[k + 1]);
   }

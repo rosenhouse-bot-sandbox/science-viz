@@ -4,8 +4,8 @@
 // A lathe part is kept as two radii along its axis, sampled every 0.01 mm: the outside (ro) and the inside (ri).
 // Where ro <= ri there is no metal. A mill part is a list of planes (it stays convex), with holes, gear gaps and a
 // slot on top.
-import { dot, cross, norm } from './model.js?v=8406f29f';
-import { bodyFaces } from './model.js?v=8406f29f';
+import { dot, cross, norm } from './model.js?v=e925ca2c';
+import { bodyFaces } from './model.js?v=e925ca2c';
 
 export const DZ = 0.01;
 const RAPID = 0.8, CHANGE = 2.5;        // seconds to bring a tool in between passes, and to change tools between steps
@@ -49,7 +49,7 @@ export function latheStart(op, prev) {
   const a = op.zJaw - op.dir * 12, b = op.stock.free;
   const z0 = Math.min(a, b), n = Math.round(Math.abs(b - a) / DZ) + 1;
   const ro = new Float32Array(n).fill(op.stock.r), ri = new Float32Array(n);
-  return { z0, n, ro, ri, thread: null };
+  return { z0, n, ro, ri, thread: null, stockR: op.stock.r, sawn: op.stock.free };
 }
 const idx = (S, z) => (z - S.z0) / DZ;
 // the radius of a path at z, over the part of it covered so far (progress f along its length), or null
@@ -129,7 +129,7 @@ export function keepFree(S, op) {
   for (const i of order) { if (S.ro[i] > S.ri[i] + 1e-6) met = true; else if (met) { cut = i; break; } }
   if (cut < 0) return S;
   const a = op.dir > 0 ? cut : 0, b = op.dir > 0 ? S.n - 1 : cut;
-  return { z0: S.z0 + a * DZ, n: b - a + 1, ro: S.ro.slice(a, b + 1), ri: S.ri.slice(a, b + 1), thread: S.thread };
+  return { ...S, z0: S.z0 + a * DZ, n: b - a + 1, ro: S.ro.slice(a, b + 1), ri: S.ri.slice(a, b + 1), ring: null };
 }
 // the outline as closed loops of [r, z], one per separate piece, simplified, for turning into a mesh
 export function outline(S) {
@@ -245,7 +245,7 @@ const clone = (M) => ({ ...M, planes: M.planes.slice(), holes: M.holes.map((h) =
 // a plane cut replaces any shallower cut with the same normal
 function addPlane(planes, n, d) {
   const i = planes.findIndex((q) => dot(q.n, n) > 1 - 1e-9);
-  if (i >= 0) { if (d < planes[i].d) planes[i] = { ...planes[i], d }; } else planes.push({ n, d, kind: 'cut' });
+  if (i >= 0) { if (d < planes[i].d) planes[i] = { ...planes[i], d, kind: 'cut' }; } else planes.push({ n, d, kind: 'cut' });
 }
 // apply mill pass p as far as f; returns the tool's position: { at: point in part frame, axis, ... }
 export function millPass(M, op, p, f, start) {
