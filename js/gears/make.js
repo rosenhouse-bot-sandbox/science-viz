@@ -1,18 +1,18 @@
 // Gears on a cube and an octahedron, the workshop: for each part, its dimensioned drawing, and how it is made on a
 // lathe and a mill, step by step. The state is which toy, which part, which view, the machine time, and the camera.
-import { MM, parts, unitMM } from './model.js?v=e35e505e';
-import { planOf, startOf, MANDREL, PARTS, NAMES, by, SHOWN } from './plan.js?v=e35e505e';
-import { stockOf, gearSpec, screwSpec } from './spec.js?v=e35e505e';
-import { timeline, makeReplay, DZ } from './cut.js?v=e35e505e';
-import { makeShop, M4, turnedMesh, milledMesh, holeMesh, slotMesh } from './shop.js?v=e35e505e';
-import { grow, lathe, box, gearMesh, smallParts, sphere } from './mesh.js?v=e35e505e';
-import { collisions, turnedEnvelope } from './collide.js?v=e35e505e';
-import { cutting, chipMesh, rnd } from './chips.js?v=e35e505e';
-import { drawing } from './drawing.js?v=e35e505e';
-import { perspective, lookAt, mul4 } from './gl.js?v=e35e505e';
-import { dot, cross, norm, bodyFaces } from './model.js?v=e35e505e';
-import { gamepad } from '../gamepad/gamepad.js';
-import { touchSliders } from '../touch/slider.js';
+import { MM, parts, unitMM } from './model.js?v=e925ca2c';
+import { planOf, startOf, MANDREL, PARTS, NAMES, by, SHOWN } from './plan.js?v=e925ca2c';
+import { stockOf, gearSpec, screwSpec } from './spec.js?v=e925ca2c';
+import { timeline, makeReplay, DZ } from './cut.js?v=e925ca2c';
+import { makeShop, M4, turnedMesh, milledMesh, holeMesh, slotMesh } from './shop.js?v=e925ca2c';
+import { grow, lathe, box, gearMesh, smallParts, sphere } from './mesh.js?v=e925ca2c';
+import { collisions, turnedEnvelope } from './collide.js?v=e925ca2c';
+import { cutting, chipMesh, rnd } from './chips.js?v=e925ca2c';
+import { drawing } from './drawing.js?v=e925ca2c';
+import { perspective, lookAt, mul4 } from '../gl/gl.js?v=e925ca2c';
+import { dot, cross, norm, bodyFaces } from './model.js?v=e925ca2c';
+import { gamepad } from '../gamepad/gamepad.js?v=e925ca2c';
+import { touchSliders } from '../touch/slider.js?v=e925ca2c';
 
 const $ = (id) => document.getElementById(id);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;

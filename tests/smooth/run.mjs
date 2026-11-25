@@ -14,32 +14,22 @@
 // software renderer is. Every frame is sampled: the picture, what was sent to WebGL, the layout of
 // the panel, the labels, the page's state. analyze.mjs then looks for anything that did not change
 // smoothly. See README.md here for what it can and cannot catch.
-import { createRequire } from 'node:module';
-import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { scenarios } from './scenarios.mjs';
 import { analyze, writeReport } from './analyze.mjs';
+import { findChromium, serve, SOFT_GL } from '../lib/serve.mjs';
 
-const here = import.meta.dirname, root = path.resolve(here, '../..'), out = path.join(here, 'out');
+const here = import.meta.dirname, out = path.join(here, 'out');
 const args = process.argv.slice(2), flag = n => args.includes('--' + n), opt = (n, d) => { const i = args.indexOf('--' + n); return i >= 0 ? args[i + 1] : d; };
 const JOBS = +opt('jobs', 3), DPR = +opt('dpr', 0.5), only = opt('only', null) && new RegExp(opt('only'), 'i');
 
 if (!flag('analyze')) {
-  let chromium;
-  try { chromium = createRequire(import.meta.url)('playwright').chromium; }
-  catch { try { chromium = createRequire('/opt/node-tools/')('playwright').chromium; } catch { console.error('Playwright is not installed. Install it outside the repository: npm install -g playwright && npx playwright install chromium'); process.exit(2); } }
+  const chromium = findChromium();
 
   if (!flag('keep') && !flag('list')) fs.rmSync(out, { recursive: true, force: true });      // --keep: rerun some scenarios and report on them with the rest of the last run
   fs.mkdirSync(path.join(out, 'traces'), { recursive: true });
-  const types = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml', '.json': 'application/json' };
-  const srv = http.createServer((q, s) => {
-    let p = decodeURIComponent(new URL(q.url, 'http://x').pathname); if (p.endsWith('/')) p += 'index.html';
-    const f = path.join(root, p); if (!f.startsWith(root)) { s.writeHead(403); return s.end(); }
-    fs.readFile(f, (e, d) => { if (e) { s.writeHead(404); s.end(); } else { s.writeHead(200, { 'content-type': types[path.extname(f)] || 'application/octet-stream', 'cache-control': 'no-store' }); s.end(d); } });
-  }).listen(0, '127.0.0.1');
-  await new Promise(r => srv.once('listening', r));
-  const base = `http://127.0.0.1:${srv.address().port}`;
+  const { server: srv, origin: base } = await serve({ host: '127.0.0.1', headers: { 'cache-control': 'no-store' } });
   const VIEW = { desk: { width: 960, height: 600 }, phone: { width: 390, height: 844 } };
 
   // ---------- what a scenario can do ----------
@@ -141,7 +131,7 @@ if (!flag('analyze')) {
   }
 
   // ---------- ask the page what it has ----------
-  const launch = () => chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+  const launch = () => chromium.launch({ args: SOFT_GL });
   async function discover() {
     const browser = await launch(), ctx = await browser.newContext({ viewport: VIEW.desk, deviceScaleFactor: DPR });
     await ctx.route(/fonts\.(googleapis|gstatic)\.com/, r => r.abort());

@@ -1,10 +1,10 @@
 // Overshoot saccades: the controller. The state is the zoom (0 Screen, 1 Eyes, 2 Muscles), healthy or poor pursuit,
 // how fast time runs, and the target. The simulation in model.js moves the eyes; scene.js draws them.
-import { makeSim, STEP, INSET_DEG, CATCHUP, SCREEN, MUSCLES, PURSUIT, onScreen, gazeOf, eyeGaze, listing, turnOf, rate, musclePath, rot } from './model.js?v=5527e4ae';
-import { makeScene, camera } from './scene.js?v=5527e4ae';
-import { SRC, CONDITIONS, SACCADES, CAPTIONS, NOTE, NOTE_SRC, MODEL, MODEL_SRC, INSET } from './facts.js?v=5527e4ae';
-import { gamepad } from '../gamepad/gamepad.js';
-import { touchSliders } from '../touch/slider.js';
+import { makeSim, STEP, INSET_DEG, CATCHUP, SCREEN, MUSCLES, PURSUIT, onScreen, gazeOf, eyeGaze, listing, turnOf, rate, musclePath, rot } from './model.js?v=7ec01cf7';
+import { makeScene, camera } from './scene.js?v=7ec01cf7';
+import { SRC, CONDITIONS, SACCADES, CAPTIONS, NOTE, NOTE_SRC, MODEL, MODEL_SRC, INSET } from './facts.js?v=7ec01cf7';
+import { gamepad } from '../gamepad/gamepad.js?v=7ec01cf7';
+import { touchSliders } from '../touch/slider.js?v=7ec01cf7';
 
 const PINCH = 0.9;   // scales of zoom for each e-fold of finger spread: one full spread is about one scale, as on Maple and Engine
 

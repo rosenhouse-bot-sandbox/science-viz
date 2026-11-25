@@ -6,10 +6,10 @@
 //   node tests/home/thumbs.mjs [page ...]
 //
 // Pages draw WebGL in software here, so each one is given time to settle before the shot.
-import { createRequire } from 'node:module';
+import { findChromium } from '../lib/serve.mjs';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-let chromium; for (const from of [import.meta.url, '/opt/node-tools/']) { try { chromium = createRequire(from)('playwright').chromium; break; } catch { /* try the next place */ } }
+const chromium = findChromium();
 
 const BASE = process.env.BASE || 'http://localhost:8000/';
 const OUT = fileURLToPath(new URL('../../img/thumbs/', import.meta.url));

@@ -1,10 +1,13 @@
-// Small WebGL2 helpers and 4 × 4 matrices (column-major, as WebGL takes them) for the gears page.
+// Small WebGL2 helpers and 4 × 4 matrices (column-major, as WebGL takes them), shared by the 3D pages.
+// A page imports what it needs from here; anything only one page uses stays in that page's own folder.
 
+// Compiles and links a vertex and a fragment shader. Returns the program and the location of each uniform by name
+// (an array by its name without [0]).
 export function program(gl, vs, fs) {
   const mk = (type, src) => {
     const s = gl.createShader(type);
     gl.shaderSource(s, src); gl.compileShader(s);
-    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error('Shader did not compile: ' + gl.getShaderInfoLog(s));
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error('Shader did not compile: ' + gl.getShaderInfoLog(s) + '\n' + src.split('\n').map((l, i) => `${i + 1}: ${l}`).join('\n'));
     return s;
   };
   const p = gl.createProgram();
@@ -57,6 +60,11 @@ export function mul4(a, b) {
   const o = new Float32Array(16);
   for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) { let s = 0; for (let k = 0; k < 4; k++) s += a[k * 4 + r] * b[c * 4 + k]; o[c * 4 + r] = s; }
   return o;
+}
+// a rigid transform from the model ({ R rows, t }) as a matrix
+export function rigid(T) {
+  const R = T.R, t = T.t;
+  return new Float32Array([R[0][0], R[1][0], R[2][0], 0, R[0][1], R[1][1], R[2][1], 0, R[0][2], R[1][2], R[2][2], 0, t[0], t[1], t[2], 1]);
 }
 // where a point lands on the screen, in CSS pixels, or null behind the eye
 export function project(m, p, W, H) {

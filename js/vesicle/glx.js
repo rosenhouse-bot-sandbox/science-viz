@@ -1,28 +1,5 @@
 // Small WebGL2 helpers and the handful of matrix routines the scene needs.
-export function program(gl, vs, fs) {
-  const mk = (type, src) => {
-    const s = gl.createShader(type);
-    gl.shaderSource(s, src); gl.compileShader(s);
-    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
-      const log = gl.getShaderInfoLog(s);
-      const lines = src.split('\n').map((l, i) => `${i + 1}: ${l}`).join('\n');
-      throw new Error(`Shader compile failed:\n${log}\n${lines}`);
-    }
-    return s;
-  };
-  const p = gl.createProgram();
-  gl.attachShader(p, mk(gl.VERTEX_SHADER, vs));
-  gl.attachShader(p, mk(gl.FRAGMENT_SHADER, fs));
-  gl.linkProgram(p);
-  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error('Link failed: ' + gl.getProgramInfoLog(p));
-  const u = {};
-  const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
-  for (let i = 0; i < n; i++) {
-    const name = gl.getActiveUniform(p, i).name.replace(/\[0\]$/, '');
-    u[name] = gl.getUniformLocation(p, name);
-  }
-  return { p, u };
-}
+export { program } from '../gl/gl.js';   // shared with the other 3D pages
 
 // A VAO for instanced quads: location 0 is the shared corner buffer, the rest are per instance.
 export function instancedVAO(gl, corners, buf, layout, stride) {

@@ -6,32 +6,16 @@
 //
 //   node tests/gears/collide.mjs              # needs Node 22 and Playwright, installed outside the repository
 //   node tests/gears/collide.mjs octa screw   # only these shapes and parts (about a minute a part)
-import { createRequire } from 'node:module';
-import http from 'node:http';
-import fs from 'node:fs';
-import path from 'node:path';
-import { stamp } from './stamp.mjs';
+import { staleStamp } from '../stamp.mjs';
+import { findChromium, serve, SOFT_GL } from '../lib/serve.mjs';
 
-{ const r = stamp(true); if (r.stale.length) { console.error(`The version stamp is out of date in: ${r.stale.join(', ')}. Run: node tests/gears/stamp.mjs`); process.exit(1); } }
+{ const e = staleStamp('gears'); if (e) { console.error(e); process.exit(1); } }
 
-const root = path.resolve(import.meta.dirname, '../..');
-let chromium;
-for (const from of [import.meta.url, '/opt/node-tools/', process.execPath, '/']) { try { chromium = createRequire(from)('playwright').chromium; break; } catch { /* try the next place */ } }
-if (!chromium) { console.error('Playwright is not installed. Install it outside the repository: npm install -g playwright && npx playwright install chromium'); process.exit(2); }
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' };
-const server = http.createServer((req, res) => {
-  let p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
-  if (p.endsWith('/')) p += 'index.html';
-  const file = path.join(root, p);
-  if (!file.startsWith(root) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); res.end(); return; }
-  res.writeHead(200, { 'content-type': TYPES[path.extname(file)] || 'application/octet-stream' }); res.end(fs.readFileSync(file));
-});
-await new Promise((r) => server.listen(0, r));
-const base = `http://localhost:${server.address().port}/gears/`;
+const { server, base } = await serve({ at: 'gears/' });
 
 let fails = 0;
 const fail = (what) => { fails++; console.log('FAIL ' + what); };
-const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const browser = await findChromium().launch({ args: SOFT_GL });
 const SHAPES = ['cube4', 'octa'], PARTS = ['gear', 'core', 'spacer', 'screw'], args = process.argv.slice(2);
 const pick = (all) => (all.some((x) => args.includes(x)) ? all.filter((x) => args.includes(x)) : all);
 const page = await browser.newPage({ viewport: { width: 800, height: 600 } });

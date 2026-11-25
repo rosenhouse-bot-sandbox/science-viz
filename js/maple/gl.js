@@ -2,21 +2,7 @@
 // Positions and rotations are worked out in JavaScript numbers (64-bit) and only handed to the
 // graphics card at the end, because the page spans from metres down to a tenth of a nanometre.
 
-export function program(gl, vs, fs) {
-  const mk = (type, src) => {
-    const s = gl.createShader(type);
-    gl.shaderSource(s, src); gl.compileShader(s);
-    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error('Shader did not compile: ' + gl.getShaderInfoLog(s) + '\n' + src.split('\n').map((l, i) => `${i + 1}: ${l}`).join('\n'));
-    return s;
-  };
-  const p = gl.createProgram();
-  gl.attachShader(p, mk(gl.VERTEX_SHADER, vs)); gl.attachShader(p, mk(gl.FRAGMENT_SHADER, fs));
-  gl.linkProgram(p);
-  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error('Shaders did not link: ' + gl.getProgramInfoLog(p));
-  const u = {};
-  for (let i = 0, n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS); i < n; i++) { const name = gl.getActiveUniform(p, i).name.replace(/\[0\]$/, ''); u[name] = gl.getUniformLocation(p, name); }
-  return { p, u };
-}
+export { program } from '../gl/gl.js?v=5ce163c7';   // shared with the other 3D pages
 
 // A shape drawn many times. mesh: { pos: Float32Array (xyz), nor: Float32Array, idx: Uint16Array }.
 // layout: sizes of the per-copy numbers, which go to attribute locations 2, 3, ...

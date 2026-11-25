@@ -12,13 +12,13 @@
 //
 //   node tests/saccade/model.mjs
 import { makeSim, duration, peakSpeed, PULL, MUSCLES, musclePath, listing, eyeGaze, onScreen, turnOf, rate, EYE_R, CATCHUP, PURSUIT, NEURON, STEP } from '../../js/saccade/model.js';
-import { stamp } from './stamp.mjs';
+import { staleStamp } from '../stamp.mjs';
 
 let fails = 0;
 const fail = (what) => { fails++; console.log('FAIL ' + what); };
 const near = (a, b, tol) => Math.abs(a - b) <= tol;
 
-{ const r = stamp(true); if (r.stale.length) fail(`the version stamp is out of date in ${r.stale.join(', ')}: run node tests/saccade/stamp.mjs`); }
+{ const e = staleStamp('saccade'); if (e) fail(e); }
 
 // ---- the main sequence: measured humans make a 10° saccade in about 40 to 60 ms at 300 to 500°/s [collewijn, bahill]
 for (const [a, d0, d1, v0, v1] of [[1, 20, 35, 50, 120], [5, 30, 45, 200, 350], [10, 40, 60, 300, 500], [20, 60, 90, 400, 650]]) {

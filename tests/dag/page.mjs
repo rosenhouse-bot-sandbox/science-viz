@@ -5,29 +5,13 @@
 // the real TALA from their CDN and lays out one small graph with each.
 //
 //   node tests/dag/page.mjs         # needs Node 22 and Playwright, installed outside the repository
-import { createRequire } from 'node:module';
-import http from 'node:http';
-import fs from 'node:fs';
-import path from 'node:path';
+import { findChromium, serve } from '../lib/serve.mjs';
 
-const root = path.resolve(import.meta.dirname, '../..');
-let chromium;
-for (const from of [import.meta.url, '/opt/node-tools/', process.execPath]) { try { chromium = createRequire(from)('playwright').chromium; break; } catch { /* try the next place */ } }
-if (!chromium) { console.error('Playwright is not installed. Install it outside the repository: npm install -g playwright && npx playwright install chromium'); process.exit(2); }
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.yaml': 'text/yaml' };
-const server = http.createServer((req, res) => {
-  let p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
-  if (p.endsWith('/')) p += 'index.html';
-  const file = path.join(root, p);
-  if (!file.startsWith(root) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); res.end(); return; }
-  res.writeHead(200, { 'content-type': TYPES[path.extname(file)] || 'application/octet-stream' }); res.end(fs.readFileSync(file));
-});
-await new Promise((r) => server.listen(0, r));
-const base = `http://localhost:${server.address().port}/dag/`;
+const { server, base } = await serve({ at: 'dag/' });
 
 let fails = 0;
 const fail = (what) => { fails++; console.log('FAIL ' + what); };
-const browser = await chromium.launch();
+const browser = await findChromium().launch();
 for (const [name, width, height, motion] of [['desktop', 1280, 800, 'no-preference'], ['phone', 390, 844, 'no-preference'], ['phone, reduced motion', 390, 844, 'reduce']]) {
   const page = await browser.newPage({ viewport: { width, height }, reducedMotion: motion, hasTouch: width < 600 });
   page.on('console', (m) => { if (m.type() === 'error') fail(`${name}: console: ${m.text()}`); });

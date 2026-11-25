@@ -10,37 +10,21 @@
 //
 //   node tests/ipad/run.mjs                  # every page at every size (about 25 minutes without a graphics card)
 //   node tests/ipad/run.mjs --quick          # iPad Air upright and sideways only
-//   node tests/ipad/run.mjs maple engine     # some pages only (names as in PAGES below)
+//   node tests/ipad/run.mjs maple engine     # some pages only (names as in tests/lib/pages.mjs)
 //   node tests/ipad/run.mjs --shots          # also writes a picture of each page and size to tests/ipad/out/
 //
 // Needs Node 22 and Playwright, installed outside the repository. Chromium stands in for Safari: it has the
 // iPad's sizes and a touch screen (pointer: coarse, hover: none), but not Safari's toolbars, the Home Screen's
 // status bar (safe-area insets) or how Safari draws. Look at a real iPad as well.
-import { createRequire } from 'node:module';
-import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import { findChromium, serve } from '../lib/serve.mjs';
+import { PAGES, chosen, covers } from '../lib/pages.mjs';
 
-const root = path.resolve(import.meta.dirname, '../..');
-let chromium;
-for (const from of [import.meta.url, '/opt/node-tools/', process.execPath, '/']) { try { chromium = createRequire(from)('playwright').chromium; break; } catch { /* try the next place */ } }
-if (!chromium) { console.error('Playwright is not installed. Install it outside the repository: npm install -g playwright && npx playwright install chromium'); process.exit(2); }
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.bin': 'application/octet-stream' };
-const server = http.createServer((req, res) => {
-  let p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
-  if (p.endsWith('/')) p += 'index.html';
-  const file = path.join(root, p);
-  if (!file.startsWith(root) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); res.end(); return; }
-  res.writeHead(200, { 'content-type': TYPES[path.extname(file)] || 'application/octet-stream' }); res.end(fs.readFileSync(file));
-});
-await new Promise((r) => server.listen(0, r));
-const base = `http://localhost:${server.address().port}/`;
+const { server, base } = await serve();
 
-// Every page of the site. A new page goes here.
-const PAGES = {
-  home: '', rainbows: 'v2/', vesicle: 'vesicle/', optics: 'optics/', graph: 'dag/', maple: 'maple/',
-  engine: 'engine/', shoulder: 'shoulder/', saccade: 'saccade/', gears: 'gears/', gearsmake: 'gears/make.html',
-};
+// Every page of the site (tests/lib/pages.mjs).
+covers(PAGES, 'tests/ipad/run.mjs');
 // CSS pixels of the screen (a Home Screen app fills it). The split views are the iPad Air's, sideways.
 const SIZES = [
   ['iPad Air, upright', 820, 1180], ['iPad Air, sideways', 1180, 820],
@@ -49,9 +33,7 @@ const SIZES = [
   ['split view, half', 590, 820], ['split view, a third', 375, 820],
 ];
 const args = process.argv.slice(2), quick = args.includes('--quick'), shots = args.includes('--shots');
-const only = args.filter((a) => !a.startsWith('--'));
-for (const n of only) if (!(n in PAGES)) { console.error(`No page called ${n}. Pages: ${Object.keys(PAGES).join(', ')}`); process.exit(2); }
-const pages = only.length ? only : Object.keys(PAGES), sizes = quick ? SIZES.slice(0, 2) : SIZES;
+const pages = chosen(PAGES, args), sizes = quick ? SIZES.slice(0, 2) : SIZES;
 const out = path.join(import.meta.dirname, 'out');
 if (shots) fs.mkdirSync(out, { recursive: true });
 
@@ -97,7 +79,7 @@ function look(minTarget) {
   return bad;
 }
 
-const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const browser = await findChromium().launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 for (const pg of pages) {
   for (const [size, width, height] of sizes) {
     const where = `${pg}, ${size} (${width} × ${height})`, t0 = Date.now();
