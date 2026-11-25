@@ -6,8 +6,8 @@
 // faces (dir +1: its +z end toward the tailstock) and where the chuck's jaws end (zJaw). Mill passes are in the
 // part's frame too; a setup says how the part sits on the machine (rot: part to machine) and how far the head
 // is tilted. Speeds are real; feeds are real, in mm a second.
-import { by, SHOWN, gearSpec, spacerSpec, screwSpec, coreSpec, stockOf } from './spec.js?v=e925ca2c';
-import { norm, cross, dot } from './model.js?v=e925ca2c';
+import { by, SHOWN, gearSpec, spacerSpec, screwSpec, coreSpec, stockOf } from './spec.js?v=6ca5dca9';
+import { norm, cross, dot } from './model.js?v=6ca5dca9';
 
 const D = Math.PI / 180;
 // spindle speed for a cut at surface speed v (m/min) on diameter d (mm), within what the machine can do

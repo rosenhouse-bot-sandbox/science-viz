@@ -1,11 +1,12 @@
 // Gears on a cube and an octahedron: the controller. The state is which solid, how far the gears have turned, and
 // the camera. Dragging a gear turns it about its own axis, and every gear it meshes with follows.
-import { SHAPES, angles, dot, cross, norm, R_IN, R_OUT, MM } from './model.js?v=e925ca2c';
-import { makeScene } from './scene.js?v=e925ca2c';
-import { KEY } from './facts.js?v=e925ca2c';
-import { perspective, lookAt, mul4 } from '../gl/gl.js?v=e925ca2c';
-import { gamepad } from '../gamepad/gamepad.js?v=e925ca2c';
-import { touchSliders } from '../touch/slider.js?v=e925ca2c';
+import { SHAPES, angles, dot, cross, norm, R_IN, R_OUT, MM, unitMM } from './model.js?v=6ca5dca9';
+import { makeScene } from './scene.js?v=6ca5dca9';
+import { makeLook } from './look.js?v=6ca5dca9';
+import { KEY } from './facts.js?v=6ca5dca9';
+import { perspective, lookAt, mul4 } from '../gl/gl.js?v=6ca5dca9';
+import { gamepad } from '../gamepad/gamepad.js?v=6ca5dca9';
+import { touchSliders } from '../touch/slider.js?v=6ca5dca9';
 
 const $ = (id) => document.getElementById(id);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -80,9 +81,16 @@ function frameOf() {
   const cage = ang.map((a, i) => (a - sh.phase[i]) * CAGE);
   return { sh, ang, tint, cage, e: st.e, hi: st.held >= 0 ? st.held : st.hi };
 }
+let look = null, deskKey = '', deskY = 0;
 function draw() {
   cam = camera();
-  scene.draw(frameOf(), cam, { x: 0, y: 0, w: cv.width, h: cv.height });
+  const f = frameOf();
+  if (!look) { scene.draw(f, cam, { x: 0, y: 0, w: cv.width, h: cv.height }); return; }
+  // the set sits on a desk; taken apart, it is held up so that its lowest part just touches it
+  const k = f.sh.id + f.e; if (k !== deskKey) { deskKey = k; deskY = scene.lowest(f.sh, f.e) - 0.004; }
+  f.desk = deskY;
+  look.frame((c, vpx, hook) => scene.draw(f, c, vpx, hook), cam, cv.width, cv.height,
+    { up: [0, 1, 0], lDir: [0.45, 1, 0.6], unit: 1 / unitMM(f.sh), exposure: 0.62, center: [0, deskY / 2, 0], size: 2.4 + 1.8 * f.e, near: 0.5, far: 40, aoR: 0.12 });
 }
 
 // ---- the panel ----
@@ -113,8 +121,8 @@ function writeHash() {
   clearTimeout(hashTimer);
   hashTimer = setTimeout(() => history.replaceState(null, '', '#' + new URLSearchParams({ s: st.shape, c: st.color ? 1 : 0 })), 400);
 }
-function readHash() {
-  const q = new URLSearchParams(location.hash.slice(1));
+function readHash(hash = location.hash) {
+  const q = new URLSearchParams(hash.slice(1));
   if (SHOWN.some((x) => x.id === q.get('s'))) st.shape = q.get('s');
   if (q.has('c')) st.color = q.get('c') !== '0';
 }
@@ -187,7 +195,8 @@ function controls() {
   });
   $('reload').addEventListener('click', () => location.reload());
   addEventListener('resize', measure);
-  addEventListener('hashchange', () => { readHash(); touch(); });
+  // read the address the event names: a slow frame can let writeHash's timer replace it before this runs
+  addEventListener('hashchange', (e) => { clearTimeout(hashTimer); readHash(new URL(e.newURL).hash); touch(); });
   document.addEventListener('visibilitychange', () => { last = 0; });
   const step = (k) => { const i = SHOWN.findIndex((s) => s.id === st.shape); choose(SHOWN[(i + k + SHOWN.length) % SHOWN.length].id); };
   // Sliders a finger can work (see js/touch/slider.js).
@@ -203,15 +212,15 @@ function controls() {
 // ---- start ----
 function start() {
   if (!gl) throw new Error('This browser does not offer WebGL 2.');
-  scene = makeScene(gl, SHAPES);
+  look = makeLook(gl); scene = makeScene(gl, SHAPES, !!look);
   cv.addEventListener('webglcontextlost', (e) => { e.preventDefault(); scene = null; });
-  cv.addEventListener('webglcontextrestored', () => { scene = makeScene(gl, SHAPES); touch(); });
+  cv.addEventListener('webglcontextrestored', () => { look = makeLook(gl); scene = makeScene(gl, SHAPES, !!look); deskKey = ''; touch(); });
   $('loading').hidden = true;
   touch();
 }
 readHash(); controls(); measure();
 try { start(); } catch (e) { oops(e); }
-window.__gears = { st, drawn, SHAPES, get busy() { return st.play && st.e === 0; }, pick: (x, y) => pick(x, y),
+window.__gears = { st, drawn, SHAPES, get lit() { return !!look; }, get busy() { return st.play && st.e === 0; }, pick: (x, y) => pick(x, y),
   settle() { st.play = false; touch(); }, res(k) { res = k; measure(); }, redraw() { draw(); sync(); gl.finish(); },
   // where gear i's cap is on the screen, in CSS pixels, for the tests
   capAt(i) { const n = shape().normals[i], p = [n[0] * (R_OUT + 0.04), n[1] * (R_OUT + 0.04), n[2] * (R_OUT + 0.04), 1], m = cam.vp;

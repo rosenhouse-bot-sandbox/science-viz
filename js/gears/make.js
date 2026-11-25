@@ -1,18 +1,19 @@
 // Gears on a cube and an octahedron, the workshop: for each part, its dimensioned drawing, and how it is made on a
 // lathe and a mill, step by step. The state is which toy, which part, which view, the machine time, and the camera.
-import { MM, parts, unitMM } from './model.js?v=e925ca2c';
-import { planOf, startOf, MANDREL, PARTS, NAMES, by, SHOWN } from './plan.js?v=e925ca2c';
-import { stockOf, gearSpec, screwSpec } from './spec.js?v=e925ca2c';
-import { timeline, makeReplay, DZ } from './cut.js?v=e925ca2c';
-import { makeShop, M4, turnedMesh, milledMesh, holeMesh, slotMesh } from './shop.js?v=e925ca2c';
-import { grow, lathe, box, gearMesh, smallParts, sphere } from './mesh.js?v=e925ca2c';
-import { collisions, turnedEnvelope } from './collide.js?v=e925ca2c';
-import { cutting, chipMesh, rnd } from './chips.js?v=e925ca2c';
-import { drawing } from './drawing.js?v=e925ca2c';
-import { perspective, lookAt, mul4 } from '../gl/gl.js?v=e925ca2c';
-import { dot, cross, norm, bodyFaces } from './model.js?v=e925ca2c';
-import { gamepad } from '../gamepad/gamepad.js?v=e925ca2c';
-import { touchSliders } from '../touch/slider.js?v=e925ca2c';
+import { MM, parts, unitMM } from './model.js?v=6ca5dca9';
+import { planOf, startOf, MANDREL, PARTS, NAMES, by, SHOWN } from './plan.js?v=6ca5dca9';
+import { stockOf, gearSpec, screwSpec } from './spec.js?v=6ca5dca9';
+import { timeline, makeReplay, DZ } from './cut.js?v=6ca5dca9';
+import { makeLook } from './look.js?v=6ca5dca9';
+import { makeShop, M4, turnedMesh, milledMesh, holeMesh, slotMesh } from './shop.js?v=6ca5dca9';
+import { grow, lathe, box, gearMesh, smallParts, sphere } from './mesh.js?v=6ca5dca9';
+import { collisions, turnedEnvelope } from './collide.js?v=6ca5dca9';
+import { cutting, chipMesh, rnd } from './chips.js?v=6ca5dca9';
+import { drawing } from './drawing.js?v=6ca5dca9';
+import { perspective, lookAt, mul4 } from '../gl/gl.js?v=6ca5dca9';
+import { dot, cross, norm, bodyFaces } from './model.js?v=6ca5dca9';
+import { gamepad } from '../gamepad/gamepad.js?v=6ca5dca9';
+import { touchSliders } from '../touch/slider.js?v=6ca5dca9';
 
 const $ = (id) => document.getElementById(id);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -353,10 +354,14 @@ function bench(items) {
   return { items, cutting: false };
 }
 
+let look = null;
 function draw() {
   cam = camera();
   const f = frameOf();
-  shop.draw({ items: f.items, spin }, cam, { x: 0, y: 0, w: cv.width, h: cv.height });
+  if (!look) { shop.draw({ items: f.items, spin }, cam, { x: 0, y: 0, w: cv.width, h: cv.height }); return f; }
+  const R = frameDist * st.zoom, zUp = upAxis[2] === 1;
+  look.frame((c, vpx, hook) => shop.draw({ items: f.items, spin }, c, vpx, hook), cam, cv.width, cv.height,
+    { up: upAxis, lDir: zUp ? [0.3, -0.45, 1] : [0.3, 1, 0.45], unit: 1, center: target, size: 170, near: R * 0.05, far: R * 30, aoR: 5 });
   return f;
 }
 
@@ -398,8 +403,8 @@ function toolText(s) {
 }
 let hashTimer = 0;
 function writeHash() { clearTimeout(hashTimer); hashTimer = setTimeout(() => history.replaceState(null, '', '#' + new URLSearchParams({ s: st.shape, p: st.part, v: st.view })), 400); }
-function readHash() {
-  const q = new URLSearchParams(location.hash.slice(1));
+function readHash(hash = location.hash) {
+  const q = new URLSearchParams(hash.slice(1));
   if (SHOWN.includes(q.get('s'))) st.shape = q.get('s');
   if (PARTS.includes(q.get('p'))) st.part = q.get('p');
   if (q.get('v') === 'draw' || q.get('v') === 'make') st.view = q.get('v');
@@ -530,7 +535,8 @@ function controls() {
   });
   $('reload').addEventListener('click', () => location.reload());
   addEventListener('resize', measure);
-  addEventListener('hashchange', () => { readHash(); load(); touch(); });
+  // read the address the event names: a slow frame can let writeHash's timer replace it before this runs
+  addEventListener('hashchange', (e) => { clearTimeout(hashTimer); readHash(new URL(e.newURL).hash); load(); touch(); });
   document.addEventListener('visibilitychange', () => { last = 0; });
   const cycle = (k) => { const i = PARTS.indexOf(st.part); choose('part', PARTS[(i + k + PARTS.length) % PARTS.length]); };
   // Sliders a finger can work (see js/touch/slider.js).
@@ -546,9 +552,9 @@ function controls() {
 // ---- start ----
 function start() {
   if (!gl) throw new Error('This browser does not offer WebGL 2.');
-  shop = makeShop(gl);
+  look = makeLook(gl); shop = makeShop(gl, !!look);
   cv.addEventListener('webglcontextlost', (e) => { e.preventDefault(); shop = null; });
-  cv.addEventListener('webglcontextrestored', () => { shop = makeShop(gl); meshCache.clear(); partKey = holeKey = slotKey = chipKey = ''; touch(); });
+  cv.addEventListener('webglcontextrestored', () => { look = makeLook(gl); shop = makeShop(gl, !!look); meshCache.clear(); partKey = holeKey = slotKey = chipKey = ''; touch(); });
   $('loading').hidden = true;
   touch();
 }
@@ -564,5 +570,5 @@ function collide(t) {
   return collisions(f.items, f.axis, f.tip, lathe ? { turning: ['hold', 'part'], still: ['move', 'cut'], cutPart: ['cut', 'part'] }
     : { turning: ['cut', 'spin'], still: ['static', 'part'], skip: [['part', 'cut']] });
 }
-window.__make = { collide, frame(t) { const was = [st.t, spin]; st.t = t; spin = 0; const f = frameOf(); [st.t, spin] = was; return f; }, st, drawn, get cur() { return cur; }, settle() { st.play = false; touch(); }, res(k) { res = k; measure(); },
+window.__make = { get lit() { return !!look; }, collide, frame(t) { const was = [st.t, spin]; st.t = t; spin = 0; const f = frameOf(); [st.t, spin] = was; return f; }, st, drawn, get cur() { return cur; }, settle() { st.play = false; touch(); }, res(k) { res = k; measure(); },
   redraw() { if (st.view === 'make') draw(); else sheet(); sync(); gl.finish(); }, at(t) { st.play = false; const was = cur.steps[stepAt(st.t)].op; st.t = t; if (cur.steps[stepAt(t)].op !== was) resetView(); touch(); } };

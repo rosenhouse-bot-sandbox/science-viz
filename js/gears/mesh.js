@@ -1,7 +1,7 @@
 // Gears on a cube and an octahedron: building the parts as triangle meshes, for the assembled toy (scene.js) and
 // for the workshop (shop.js). Every size comes from model.js. A mesh is plain arrays: positions, normals, and three
 // numbers per corner for the shader (the first says which material).
-import { R_IN, R_OUT, endAt } from './model.js?v=e925ca2c';
+import { R_IN, R_OUT, endAt } from './model.js?v=6ca5dca9';
 
 export function grow() {
   const P = [], N = [], T = [], I = [];
