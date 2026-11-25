@@ -8,26 +8,10 @@
 // What is allowed to change: the text of a number, the fill of a bar, the marker on a scale, and
 // the Submit button coming and going (it is fixed to the screen and pushes nothing).
 
-import { createRequire } from 'node:module';
-import http from 'node:http';
-import fs from 'node:fs';
-import path from 'node:path';
+import { findChromium, serve } from '../lib/serve.mjs';
 
-const here = import.meta.dirname, root = path.resolve(here, '../..');
-let chromium;
-for (const from of [import.meta.url, '/opt/node-tools/', process.execPath]) { try { chromium = createRequire(from)('playwright').chromium; break; } catch { /* try the next place */ } }
-if (!chromium) { console.error('Playwright is not installed. Install it outside the repository: npm install -g playwright && npx playwright install chromium'); process.exit(2); }
 
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' };
-const server = http.createServer((req, res) => {
-  let p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
-  if (p.endsWith('/')) p += 'index.html';
-  const file = path.join(root, p);
-  if (!file.startsWith(root) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); res.end(); return; }
-  res.writeHead(200, { 'content-type': TYPES[path.extname(file)] || 'application/octet-stream' }); res.end(fs.readFileSync(file));
-});
-await new Promise((r) => server.listen(0, r));
-const base = `http://localhost:${server.address().port}`;
+const { server, origin: base } = await serve();
 
 // Runs in the page: sweep one slider and report the first place each thing moved.
 function sweep(sliderId) {
@@ -67,7 +51,7 @@ function sweep(sliderId) {
 
 const fails = [];
 let steps = 0;
-const browser = await chromium.launch();
+const browser = await findChromium().launch();
 for (const [name, viewport, touch] of [['desktop', { width: 1280, height: 800 }, false], ['phone', { width: 390, height: 844 }, true], ['short phone', { width: 390, height: 700 }, true]]) {
   const ctx = await browser.newContext({ viewport, hasTouch: touch, isMobile: touch, deviceScaleFactor: 1 });
   const page = await ctx.newPage();

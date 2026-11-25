@@ -1,17 +1,17 @@
 // Gears on a cube and an octahedron, the workshop: for each part, its dimensioned drawing, and how it is made on a
 // lathe and a mill, step by step. The state is which toy, which part, which view, the machine time, and the camera.
-import { MM, parts, unitMM } from './model.js?v=e184e11b';
-import { planOf, startOf, MANDREL, PARTS, NAMES, by, SHOWN } from './plan.js?v=e184e11b';
-import { stockOf, gearSpec, screwSpec } from './spec.js?v=e184e11b';
-import { timeline, makeReplay, DZ } from './cut.js?v=e184e11b';
-import { makeShop, M4, turnedMesh, milledMesh, holeMesh, slotMesh } from './shop.js?v=e184e11b';
-import { grow, lathe, box, gearMesh, smallParts, sphere } from './mesh.js?v=e184e11b';
-import { collisions, turnedEnvelope } from './collide.js?v=e184e11b';
-import { drawing } from './drawing.js?v=e184e11b';
-import { perspective, lookAt, mul4 } from './gl.js?v=e184e11b';
-import { dot, cross, norm, bodyFaces } from './model.js?v=e184e11b';
-import { gamepad } from '../gamepad/gamepad.js';
-import { touchSliders } from '../touch/slider.js';
+import { MM, parts, unitMM } from './model.js?v=8406f29f';
+import { planOf, startOf, MANDREL, PARTS, NAMES, by, SHOWN } from './plan.js?v=8406f29f';
+import { stockOf, gearSpec, screwSpec } from './spec.js?v=8406f29f';
+import { timeline, makeReplay, DZ } from './cut.js?v=8406f29f';
+import { makeShop, M4, turnedMesh, milledMesh, holeMesh, slotMesh } from './shop.js?v=8406f29f';
+import { grow, lathe, box, gearMesh, smallParts, sphere } from './mesh.js?v=8406f29f';
+import { collisions, turnedEnvelope } from './collide.js?v=8406f29f';
+import { drawing } from './drawing.js?v=8406f29f';
+import { perspective, lookAt, mul4 } from '../gl/gl.js?v=8406f29f';
+import { dot, cross, norm, bodyFaces } from './model.js?v=8406f29f';
+import { gamepad } from '../gamepad/gamepad.js?v=8406f29f';
+import { touchSliders } from '../touch/slider.js?v=8406f29f';
 
 const $ = (id) => document.getElementById(id);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;

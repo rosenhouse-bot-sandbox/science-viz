@@ -4,12 +4,12 @@
 //
 //   node tests/maple/model.mjs
 import * as M from '../../js/maple/model.js';
-import { stamp } from './stamp.mjs';
+import { staleStamp } from '../stamp.mjs';
 import { buildTree, place, leafShape, SPOT, DROOP, LOBES, bladeAt, foldOf, onBlade } from '../../js/maple/tree.js';
 import { qrot } from '../../js/maple/gl.js';
 
 let fails = 0;
-{ const r = stamp(true); if (r.stale.length) { fails++; console.log(`FAIL the version stamp is out of date in: ${r.stale.join(', ')}. Run: node tests/maple/stamp.mjs`); } }
+{ const e = staleStamp('maple'); if (e) { fails++; console.log('FAIL ' + e); } }
 const ok = (cond, what) => { if (!cond) { fails++; console.log('FAIL ' + what); } };
 
 // the calendar

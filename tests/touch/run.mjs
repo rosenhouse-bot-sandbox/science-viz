@@ -17,25 +17,10 @@
 //
 // What it cannot see: these are Chromium's touches, not iPad Safari's. Safari's own slider grabs only on the knob and
 // Chromium's does not, so a pass here says that our handling works, not that Safari leaves it alone. Try a real iPad.
-import { createRequire } from 'node:module';
-import http from 'node:http';
-import fs from 'node:fs';
-import path from 'node:path';
+import { findChromium, serve, SOFT_GL } from '../lib/serve.mjs';
+import { covers, chosen } from '../lib/pages.mjs';
 
-const root = path.resolve(import.meta.dirname, '../..');
-let chromium;
-for (const from of [import.meta.url, '/opt/node-tools/', process.execPath, '/']) { try { chromium = createRequire(from)('playwright').chromium; break; } catch { /* try the next place */ } }
-if (!chromium) { console.error('Playwright is not installed. Install it outside the repository: npm install -g playwright && npx playwright install chromium'); process.exit(2); }
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.webmanifest': 'application/manifest+json' };
-const server = http.createServer((req, res) => {
-  let p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
-  if (p.endsWith('/')) p += 'index.html';
-  const file = path.join(root, p);
-  if (!file.startsWith(root) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); res.end(); return; }
-  res.writeHead(200, { 'content-type': TYPES[path.extname(file)] || 'application/octet-stream' }); res.end(fs.readFileSync(file));
-});
-await new Promise((r) => server.listen(0, '127.0.0.1', r));
-const base = `http://127.0.0.1:${server.address().port}/`;   // 127.0.0.1, not localhost: js/pwa.js skips the service worker on localhost only, and the worker is not wanted here either way
+const { server, base } = await serve({ host: '127.0.0.1' });   // 127.0.0.1, not localhost: js/pwa.js skips the service worker on localhost only, and the worker is not wanted here either way
 
 const PAGES = {
   home: { url: '', ready: () => !!document.querySelector('nav a'), noSliders: true },
@@ -51,13 +36,12 @@ const PAGES = {
   gearsmake: { url: 'gears/make.html', ready: () => !!document.getElementById('timeV')?.textContent },
 };
 const args = process.argv.slice(2), quick = args.includes('--quick');
-const only = args.filter((a) => !a.startsWith('--'));
-for (const n of only) if (!(n in PAGES)) { console.error(`No page called ${n}. Pages: ${Object.keys(PAGES).join(', ')}`); process.exit(2); }
-const names = only.length ? only : Object.keys(PAGES);
+covers(PAGES, 'tests/touch/run.mjs');
+const names = chosen(PAGES, args);
 
 let fails = 0, checked = 0;
 const fail = (what) => { fails++; console.log('FAIL ' + what); };
-const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+const browser = await findChromium().launch({ args: SOFT_GL });
 const W = 820, H = 1180;   // iPad Air, upright
 
 // In the page: every slider a person can reach now (shown, enabled, not hidden under another control), brought into

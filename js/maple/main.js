@@ -1,11 +1,11 @@
 // Japanese maple: the controller. Two numbers drive the page: the zoom (0 = tree ... 4 = molecules)
 // and the season (0 = late March ... 1 = late December). The picture is redrawn only when one changes.
-import { dayOf, dateOf, dayLength, sunAt, takenIn, PHASES, phaseAt, LAT, clamp, smooth, mix, css, leafRGB } from './model.js?v=12fecabb';
-import { makeWorld, TARGETS, CUT as LEAF_CUT } from './world.js?v=12fecabb';
-import { quatOf, qmul, qrot, slerp, add, mul, unit, cross, lerp3 } from './gl.js?v=12fecabb';
-import { drawSpectrum, drawStalk, drawChain } from './figs.js?v=12fecabb';
-import { gamepad } from '../gamepad/gamepad.js';
-import { touchSliders } from '../touch/slider.js';
+import { dayOf, dateOf, dayLength, sunAt, takenIn, PHASES, phaseAt, LAT, clamp, smooth, mix, css, leafRGB } from './model.js?v=5ce163c7';
+import { makeWorld, TARGETS, CUT as LEAF_CUT } from './world.js?v=5ce163c7';
+import { quatOf, qmul, qrot, slerp, add, mul, unit, cross, lerp3 } from './gl.js?v=5ce163c7';
+import { drawSpectrum, drawStalk, drawChain } from './figs.js?v=5ce163c7';
+import { gamepad } from '../gamepad/gamepad.js?v=5ce163c7';
+import { touchSliders } from '../touch/slider.js?v=5ce163c7';
 
 const $ = (id) => document.getElementById(id);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;

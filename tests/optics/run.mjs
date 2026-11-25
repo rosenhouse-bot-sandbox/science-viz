@@ -8,26 +8,13 @@
 //
 // Screenshots of each challenge, before and after, go to tests/optics/out/ (not committed).
 
-import { createRequire } from 'node:module';
-import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import { findChromium, serve } from '../lib/serve.mjs';
 
-const here = import.meta.dirname, root = path.resolve(here, '../..'), out = path.join(here, 'out');
-let chromium;
-try { chromium = createRequire(import.meta.url)('playwright').chromium; }
-catch { try { chromium = createRequire('/opt/node-tools/')('playwright').chromium; } catch { try { chromium = createRequire(process.execPath)('playwright').chromium; } catch { console.error('Playwright is not installed. Install it outside the repository: npm install -g playwright && npx playwright install chromium'); process.exit(2); } } }
+const here = import.meta.dirname, out = path.join(here, 'out');
 
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png' };
-const server = http.createServer((req, res) => {
-  let p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
-  if (p.endsWith('/')) p += 'index.html';
-  const file = path.join(root, p);
-  if (!file.startsWith(root) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); res.end(); return; }
-  res.writeHead(200, { 'content-type': TYPES[path.extname(file)] || 'application/octet-stream' }); res.end(fs.readFileSync(file));
-});
-await new Promise((r) => server.listen(0, r));
-const base = `http://localhost:${server.address().port}`;
+const { server, origin: base } = await serve();
 fs.mkdirSync(out, { recursive: true });
 
 // What to do in each challenge: choices to click, sliders to set by keyboard, then knobs to drag
@@ -53,7 +40,7 @@ const landing = (page) => page.evaluate(() => {
 const fails = [];
 const check = (ok, msg) => { if (!ok) { fails.push(msg); console.log('  FAIL ' + msg); } };
 
-const browser = await chromium.launch();
+const browser = await findChromium().launch();
 for (const [name, viewport, touch] of [['desktop', { width: 1280, height: 800 }, false], ['phone', { width: 390, height: 844 }, true]]) {
   const ctx = await browser.newContext({ viewport, hasTouch: touch, isMobile: touch, deviceScaleFactor: 1 });
   const page = await ctx.newPage();

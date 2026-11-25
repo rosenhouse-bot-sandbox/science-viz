@@ -1,5 +1,5 @@
 // Overshoot saccades: every sentence on the page, with its sources. Numbers are put in from model.js.
-import { PURSUIT, CATCHUP, MAIN_SEQ, NEURON, INSET_DEG } from './model.js?v=5527e4ae';
+import { PURSUIT, CATCHUP, MAIN_SEQ, NEURON, INSET_DEG } from './model.js?v=7ec01cf7';
 
 export const SRC = {
   sanz: { name: 'Sanz, Aivar and Tejedor (2026). Differences in smooth pursuit and associated saccades in children with two common types of strabismus. Investigative Ophthalmology & Visual Science 67(2):28. Defines catch-up, overshoot, anticipatory and back-up saccades during pursuit.', url: 'https://doi.org/10.1167/iovs.67.2.28' },

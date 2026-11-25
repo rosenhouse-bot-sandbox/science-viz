@@ -9,10 +9,10 @@ import { ATOM, SHAPES, count, makeGroup, place, MAX_ATOMS } from '../../js/engin
 import { WORLD_FS } from '../../js/engine/shaders.js';
 import { readFileSync } from 'node:fs';
 const MAIN_JS = readFileSync(new URL('../../js/engine/main.js', import.meta.url), 'utf8');
-import { stamp } from './stamp.mjs';
+import { staleStamp } from '../stamp.mjs';
 
 let fails = 0;
-{ const r = stamp(true); if (r.stale.length) { fails++; console.log(`FAIL the version stamp is out of date in: ${r.stale.join(', ')}. Run: node tests/engine/stamp.mjs`); } }
+{ const e = staleStamp('engine'); if (e) { fails++; console.log('FAIL ' + e); } }
 const ok = (cond, what) => { if (!cond) { fails++; console.log('FAIL ' + what); } };
 const near = (a, b, tol) => Math.abs(a - b) <= tol;
 
