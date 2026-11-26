@@ -93,7 +93,19 @@ for (const [name, width, height, motion] of quick ? SIZES.slice(0, 1) : SIZES) {
     if (st.flex?.id !== id || st.flex.c !== 1) fail(`${name}: tapping ${id} did not pull it all the way (${JSON.stringify(st.flex)})`);
     if (!st.shown || st.inLi !== id) fail(`${name}: the Contract slider is not under ${id}`);
     for (const z of quick ? [0] : [0, 1]) { await put('zoom', z); await sweep('flex', 0, 100, n, `(${id}, zoom ${z})`); await labels(`(${id} pulling, zoom ${z})`); }
+    // the muscle that pulls is in the picture at the Joint stop too (the parts of the deltoid once faded away there,
+    // and the arm moved with nothing to be seen pulling it)
+    await put('zoom', 1); await settle();
+    const seen = await page.evaluate((id) => window.__shoulder.frame.soft.find((s) => s.key === id)?.alpha ?? 0, id);
+    if (seen < 0.9) fail(`${name}: ${id} pulls but is not drawn at the Joint stop (alpha ${seen})`);
     await put('zoom', 0);
+    // the front and the middle of the deltoid alone also pull the ball up: the gap narrows along the pull, and no other muscle's does
+    // (with the hole of a full tear the ball is up already, so this is looked at in the healthy shoulder)
+    { await page.click('#conds button[data-id="healthy"]'); await put('flex', 0); await settle(); const g0 = await page.evaluate(() => window.__shoulder.frame.gap); await put('flex', 100); await settle(); const g1 = await page.evaluate(() => window.__shoulder.frame.gap);
+      const rides = id === 'deltA' || id === 'deltM', note = await page.$eval('#flexNote', (e) => e.textContent);
+      if (rides ? g1 > g0 - 1 : g1 < g0 - 1) fail(`${name}: with ${id} pulling the gap goes from ${g0.toFixed(1)} to ${g1.toFixed(1)} mm`);
+      if (rides !== !!note) fail(`${name}: the note under the Contract slider is ${note ? 'shown' : 'missing'} for ${id}`);
+      await page.click('#conds button[data-id="full"]'); await settle(); }
     if (id === 'deltM' || id === 'infra') { await sweep('lift', 0, 150, n, `with ${id} pulling`); await sweep('turn', -60, 60, n, `with ${id} pulling`); await put('lift', 0); await put('turn', 0); }
     await page.click(`#muscleList li[data-id="${id}"] button`); await settle();
     if (await page.evaluate(() => window.__shoulder.st.flex)) fail(`${name}: a second tap on ${id} did not let go`);
