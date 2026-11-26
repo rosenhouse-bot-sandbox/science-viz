@@ -10,7 +10,7 @@
 //   picture darkens corners and gaps that little light reaches.
 // A browser without floating-point pictures (EXT_color_buffer_float) gets null from makeLook, and the pages draw the
 // way they did before.
-import { program } from '../gl/gl.js?v=e30be9be';
+import { program } from '../gl/gl.js?v=57c9eaea';
 
 // GLSL pasted into both pages' fragment shaders. It and the pages' lit branches are compiled only with LIT
 // defined (withLit), so that the plain lighting pays nothing for them.

@@ -2,13 +2,17 @@
 //  - the finished part has the drawing's sizes: diameters, lengths, faces, holes, every tooth gap, the slot;
 //  - no cutting tool comes within 0.4 mm of the chuck or collet that holds the part;
 //  - spindle speeds stay within what the machines do, and surface speeds within what suits brass and the tool;
-//  - every step says what it does and with which tool, and the steps follow each other in time.
+//  - every step says what it does and with which tool, and the steps follow each other in time;
+//  - a facing cutter cuts at the radius it is drawn with, and spends most of each pass in the metal.
 //
 //   node tests/gears/make.mjs
 import { planOf, startOf, PARTS, by, SHOWN, LATHE_MAX, MILL_MAX } from '../../js/gears/plan.js';
 import { timeline, makeReplay, outline } from '../../js/gears/cut.js';
 import { gearSpec, spacerSpec, screwSpec, coreSpec } from '../../js/gears/spec.js';
-import { dot } from '../../js/gears/model.js';
+import { dot, cross } from '../../js/gears/model.js';
+import { millTool } from '../../js/gears/shop.js';
+// how far out a mill tool's bottom reaches, as drawn
+const drawnR = (t) => { const g = millTool(t); let r = 0; for (let i = 0; i < g.P.length; i += 3) if (g.P[i + 2] < 0.01) r = Math.max(r, Math.hypot(g.P[i], g.P[i + 1])); return r; };
 
 let fails = 0;
 const fail = (what) => { fails++; console.log('FAIL ' + what); };
@@ -93,6 +97,26 @@ for (const id of SHOWN) for (const part of PARTS) {
       near(got.depth, c.tap.drillDepth, 0.01, `${name}: drill depth`); near(got.tap, c.tap.depth, 0.01, `${name}: thread depth`); near(got.d, c.tap.drill, 1e-6, `${name}: drill size`);
     }
     if (M.holes.length !== c.holes.length) fail(`${name}: ${M.holes.length} holes, the drawing has ${c.holes.length}`);
+  }
+  // facing passes: the cutting circle is the drawn tool's, and its front arc is in the metal for most of the pass
+  for (const s of tl.segs) {
+    const p = s.p; if (p.k !== 'plane' || p.tool === 'chamfer') continue;
+    const tool = plan[s.op].steps[s.step].tool, what = `${name}: step "${plan[s.op].steps[s.step].title}"`;
+    if (!p.r) { fail(`${what}: a facing pass without its tool's radius`); continue; }
+    near(p.r, tool.d / 2, 1e-9, `${what}: cutting radius against the tool's size`);
+    near(drawnR(tool), p.r, 0.2, `${what}: cutting radius against the drawn ${tool.type} cutter`);
+    let inMetal = 0, n = 0;
+    for (let k = 1; k < 40; k++) {
+      const r = R.at(s.t0 + (s.t1 - s.t0) * k / 40); if (!r.tip || !p.geo) continue; n++;
+      // the face being cut, and where the circle's front is on it, line by line across the feed
+      const v = cross(p.n, p.u), ax = dot(r.tip.at, p.u), vc = dot(r.tip.at, v);
+      const hit = p.geo.poly.some((q, i) => { const q2 = p.geo.poly[(i + 1) % p.geo.poly.length];
+        for (let j = 0; j <= 8; j++) { const pt = q.map((x, m) => x + (q2[m] - x) * j / 8), y = dot(pt, v) - vc;
+          if (Math.abs(y) < p.r && Math.abs(dot(pt, p.u) - ax) < p.r && Math.hypot(dot(pt, p.u) - ax, y) <= p.r + 0.05) return true; } return false; })
+        || (() => { const f = ax + p.r; const us = p.geo.poly.map((q) => dot(q, p.u)); return f >= Math.min(...us) && f <= Math.max(...us); })();
+      if (hit) inMetal++;
+    }
+    if (n && inMetal / n < 0.7) fail(`${what}: the cutter is in the metal for only ${Math.round(100 * inMetal / n)}% of a pass`);
   }
   console.log(`${name}: ${plan.length} setups, ${plan.reduce((a, op) => a + op.steps.length, 0)} steps, ${(tl.T / 60).toFixed(1)} min`);
 }
