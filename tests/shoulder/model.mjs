@@ -10,12 +10,19 @@
 //    lifting the arm out to the side shortens supraspinatus and the middle deltoid; taking it back shortens the back of
 //    the deltoid; turning it out with the arm forward shortens infraspinatus);
 //  - any of these fails at a pose that an exercise passes through, or where one muscle pulling alone takes the arm;
-//  - one muscle pulling alone moves the arm another way than the sources say it does, or lengthens along its pull.
+//  - one muscle pulling alone moves the arm another way than the sources say it does, or lengthens along its pull;
+//  - one muscle pulling alone on a lifted arm drops it further than its measured leverage allows;
+//  - a muscle's leverage points more than 20° away from the measured leverage, on average over the measured poses, or
+//    is under 0.8 or over 1.35 times its size (Axford 2024, tests/shoulder/axford.mjs);
+//  - a muscle's length changes by more than 1.5 mm for one degree of the arm (no real muscle has that much leverage);
+//  - the subscapularis's middle line passes more than 3 mm inside the shoulder blade.
 import { model, bones } from './load.mjs';
 import { solid } from '../../js/shoulder/solid.js';
 import { CLEAR, ROTS, closest } from '../../js/shoulder/model.js';
 import { V } from '../../js/shoulder/geom.js';
 import { EX_POSE } from '../../js/shoulder/exercises.js';
+import { measured, inRange, DIAM } from './axford.mjs';
+import { leverage, asVector } from './isb.mjs';
 
 const N = +(process.argv[2] || 120), SEED = +(process.env.SEED || 7);
 let seed = SEED; const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
@@ -44,7 +51,7 @@ for (let n = 0; n < N; n++) {
 // and every exercise through its round, which reaches planes the random ones do not (back, and across the body)
 for (const [ex, f] of Object.entries(EX_POSE)) for (let k = 0; k < 24; k++) poses.push({ ex, ...f(k / 24) });
 // and where one muscle pulling alone takes the arm (model.contract), from a spread of starting poses
-const STARTS = [{ elev: 0, plane: 30, rot: 0 }, { elev: 0, plane: 30, rot: -60 }, { elev: 0, plane: 30, rot: 60 }, { elev: 90, plane: 30, rot: 0 }, { elev: 150, plane: 30, rot: 0 },
+const STARTS = [{ elev: 0, plane: 30, rot: 0 }, { elev: 0, plane: 30, rot: -60 }, { elev: 0, plane: 30, rot: 60 }, { elev: 90, plane: 30, rot: 0 }, { elev: 150, plane: 30, rot: 0 }, { elev: 120, plane: 30, rot: 0 },
   ...Object.entries(EX_POSE).map(([ex, f]) => ({ ex, ...f(0.5) }))];
 const pulls = [];
 for (const S of STARTS) for (const b of model.built) {
@@ -142,10 +149,61 @@ for (const { b, S, path } of pulls) {
   if (path.some((q, i) => i && q.len > path[i - 1].len + 1e-6)) fail(`${b.id} lengthens somewhere along its own pull`, S);
   if (S === STARTS[0] && path.length < 30) fail(`${b.id} pulls the arm only ${path.length - 1}° from hanging`, S);
 }
+// With the arm lifted, the infraspinatus, the teres minor and the back of the deltoid have little leverage for lowering
+// it (Ackland 2008, Axford 2024): pulling alone, each mostly turns the arm or takes it back. They once dropped it
+// 10° to 25°, because a muscle's bend followed the bone's turn and not a taut line.
+for (const [S, least] of [[STARTS[3], { infra: 88, tminor: 80, deltP: 78 }], [STARTS[5], { infra: 115, tminor: 105, deltP: 103 }]]) for (const [id, lo] of Object.entries(least)) {
+  const e = pulls.find((p) => p.S === S && p.b.id === id).path.at(-1); want.push([`${id} pulling alone from a lift of ${S.elev}° leaves the arm above ${lo}° (it ends at ${e.elev.toFixed(0)}°)`, e.elev >= lo]);
+}
 for (const [what, ok] of want) if (!ok) fail(what + ' (it does not)', {});
+
+// 6. each muscle's leverage against the measured leverage (Axford 2024), over the poses that were measured: the same
+// joint angles, the shoulder blade still, the measured figures scaled to this ball. Leverage has a direction (the axis
+// the muscle turns the arm about) and a size; the direction is compared from 20° of elevation up, because below that
+// the plane and the turn are nearly one angle.
+const AXFORD = { supra: ['Supra'], infra: ['Infra'], tminor: ['TMinor'], subscap: ['SubSup', 'SubInf'], deltA: ['AntDelt'], deltM: ['LatDelt'], deltP: ['PostDelt'] };
+const against = {};
+for (const b of model.built) {
+  const names = AXFORD[b.id]; if (!names) continue;
+  let ang = 0, size = 0, n = 0;
+  for (const E of [20, 30, 40, 50, 60]) for (const P of [-20, 0, 20, 40, 60]) for (const f of [0.15, 0.5, 0.85]) {
+    const R = -0.5 * P - 50 + 60 * f; if (!inRange(E, P, R)) throw new Error('a pose outside the measured range');
+    const m = measured(E, P, R), their = {}; for (const k of ['elev', 'plane', 'rot']) their[k] = (2 * model.headR / DIAM) * names.reduce((s, x) => s + m[k][x], 0) / names.length;
+    const a = asVector(leverage(b, E, P, R), E, P), t = asVector(their, E, P);
+    ang += Math.acos(Math.max(-1, Math.min(1, V.dot(a, t) / (V.len(a) * V.len(t))))) * 180 / Math.PI; size += V.len(a) / V.len(t); n++;
+  }
+  against[b.id] = { ang: ang / n, size: size / n };
+  if (ang / n > 20) fail(`${b.id}: its leverage points ${(ang / n).toFixed(0)}° away from the measured leverage, on average`, {});
+  if (size / n < 0.8 || size / n > 1.35) fail(`${b.id}: its leverage is ${(size / n).toFixed(2)} times the measured leverage, on average`, {});
+}
+
+// 7. no jumps: one degree of the arm never changes a muscle's length by more than 1.5 mm (that would be 86 mm of
+// leverage, twice the ball's width). A taut line over a ball can flip to the ball's other side; this catches it.
+const jump = {};
+{
+  const mmOf = (b, P) => model.lineMm(b, model.pose({ ...P, elbow: 90, quick: true }));
+  for (let elev = 0; elev <= 149; elev += 10) for (let plane = -30; plane <= 100; plane += 10) for (let rot = -60; rot <= 89; rot += 10) for (const b of model.built) {
+    if (b.id === 'bursa') continue;
+    const P = { elev, plane, rot }, l0 = mmOf(b, P);
+    for (const k of ['elev', 'plane', 'rot']) { const d = Math.abs(mmOf(b, { ...P, [k]: P[k] + 1 }) - l0); jump[b.id] = Math.max(jump[b.id] || 0, d); if (!(d <= 1.5)) fail(`${b.id} changes length by ${d.toFixed(1)} mm for one degree of ${k}`, P); }
+  }
+}
+
+// 8. the subscapularis lies on the front of the shoulder blade, so its middle line must not pass through the blade
+{
+  const b = model.built.find((x) => x.id === 'subscap'), sol = model.SOL.scapula; let worst = 0;
+  for (const elev of [0, 30, 60, 90, 120, 150]) for (const plane of [-30, 0, 30, 60, 90]) for (const rot of [-60, -30, 0, 30, 60, 90]) {
+    const P = { elev, plane, rot, elbow: 90 }, T = model.pose({ ...P, quick: true }), inv = model.invT(T.scapula);
+    const d = Math.max(...model.lineOf(b, T).map((p) => sol.depth(applyT(inv, p)))); worst = Math.max(worst, d);
+    if (d > 3) fail(`the subscapularis's middle line is ${d.toFixed(1)} mm inside the shoulder blade`, P);
+  }
+  jump.subscapInBlade = worst;
+}
 
 console.log(`${N} random arm positions, seed ${SEED}, and ${poses.length - N} from the exercises`);
 for (const b of model.built) { const l = lens[b.id]; console.log(`  ${b.id.padEnd(8)} length ${Math.min(...l).toFixed(2)} to ${Math.max(...l).toFixed(2)} of rest; worst new points in bone ${(100 * worstNew[b.id]).toFixed(1)}%`); }
+console.log('  leverage against measured (Axford 2024): ' + Object.entries(against).map(([id, a]) => `${id} ${a.ang.toFixed(0)}° off, ${a.size.toFixed(2)} times`).join('; '));
+console.log('  largest change of length for one degree: ' + model.built.filter((b) => b.id !== 'bursa').map((b) => `${b.id} ${jump[b.id].toFixed(2)} mm`).join(', ') + `; the subscapularis's line at most ${jump.subscapInBlade.toFixed(1)} mm inside the blade`);
 console.log(`  at rest, out 60°, in 60°, out to the side 90°: ` + ['infra', 'tminor', 'subscap', 'supra', 'deltM'].map((k) => `${k} ${rest[k].toFixed(2)}/${out[k].toFixed(2)}/${inn[k].toFixed(2)}/${abd[k].toFixed(2)}`).join(', '));
 if (fails.length) { console.log(`\n${fails.length} failed:`); for (const f of fails.slice(0, 40)) console.log('  ' + f); process.exit(1); }
 console.log('all passed');
