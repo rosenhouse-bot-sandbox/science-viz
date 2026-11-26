@@ -181,8 +181,9 @@ Before pushing:
   graphics card look at the page itself as well, and on a phone.
 - For Shoulder, run `node tests/shoulder/model.mjs` (no browser needed) after changing the pose, the muscles
   or how they bend: it samples hundreds of arm positions and fails if a bone enters another, a muscle point is
-  pushed into a bone, a muscle folds, the bursa leaves the tendon's outer side, or a muscle lengthens or
-  shortens against the textbook direction. After changing the muscle data, run `node tests/shoulder/review.mjs`
+  pushed into a bone, a muscle folds, the bursa leaves the tendon's outer side, a muscle lengthens or
+  shortens against the textbook direction, or a muscle's leverage is far from the leverage measured in cadaver
+  shoulders (`tests/shoulder/axford.mjs`, about a minute). After changing the muscle data, run `node tests/shoulder/review.mjs`
   (about 2 minutes): it compares every built muscle with its scan. Then `node tests/shoulder/page.mjs`
   (`--quick` for the desktop only). Gabe's rule for this page: wrong information is far worse than missing
   information. Every sentence on screen is in `js/shoulder/facts.js` with its source; numbers come from the

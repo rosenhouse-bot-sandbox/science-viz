@@ -8,8 +8,8 @@
 //   rot    turning the arm about its own length: + turns out (the forearm swings out), - turns in
 //   elbow  elbow bend, in degrees (0 straight, 90 the forearm level)
 //   up     how far the ball of the arm bone has moved up toward the acromion, in mm (a large cuff tear)
-import { V, K, bandMesh, binU } from './geom.js?v=a4800837';
-import { solid } from './solid.js?v=a4800837';
+import { V, K, bandMesh, binU } from './geom.js?v=c69aaabe';
+import { solid } from './solid.js?v=c69aaabe';
 
 // ---- reading the packed meshes -------------------------------------------------------------------
 export function unpack(json, buf) {
@@ -289,7 +289,7 @@ export function makeModel(bones, musclesJson, table = null) {
     if (!bursaFor.has(key)) {
       const sl = bursaSlices(thick), S = supra.S, i0 = Math.floor(BURSA.from * (S - 1)), b = makeBuilt({ id: 'bursa', name: 'Subacromial bursa', from: 'scapula' }, sl);
       // it moves as the tendon under it does: its t runs over the same part of the tendon
-      b.t = b.t.map((t) => (i0 + t * (S - 1 - i0)) / (S - 1)); b.tOf = (i) => (i0 + i) / (S - 1);
+      b.t = b.t.map((t) => (i0 + t * (S - 1 - i0)) / (S - 1));
       bursaFor.set(key, b);
     }
     return bursaFor.get(key);
@@ -318,55 +318,193 @@ export function makeModel(bones, musclesJson, table = null) {
     return { pos: out };
   }
 
-  // how much of the arm bone's turn a slice at t (0 origin, 1 insertion) takes: a cuff muscle crosses the joint
-  // near its end, the deltoid just below where it starts (the acromion and collarbone sit right over the joint)
-  // The subscapularis starts later: it lies on the front of the shoulder blade for three quarters of its length (at
-  // 0.75 it comes within two radii of the ball's middle). With the share the others have, the part of it still on the
-  // shoulder blade swung round with the arm when the arm turned in, into the edge of the socket, and its tendon was
-  // drawn in tatters.
-  const FOLLOW = { cuff: [0.55, 0.97], deltoid: [0.04, 0.6], subscap: [0.75, 0.97] };
-  // and how much of the arm bone's turn about its own length. A cuff tendon lies on the ball and turns with it. The
-  // deltoid does not: it is fixed to the arm bone only at its narrow end, a little way out from the bone's middle
-  // line, and the bone turns under the rest of it. So only its last part (the tendon) turns with the bone; the rest
-  // is carried sideways by its end, each slice a share (SHEAR) of the way the end has moved. (Turning every slice
-  // about the bone, as before, swung the whole muscle round the arm, twisted it into a ribbon when the arm was
-  // lifted and turned out, and made the back of the deltoid seem a stronger turner of the arm than it is.)
-  const TWIST = { cuff: FOLLOW.cuff, subscap: FOLLOW.subscap, deltoid: [0.78, 1] }, SHEAR = [0.08, 0.82];
+  // ---- how a muscle bends: its middle line is pulled taut over the ball ----
+  // A muscle's middle line runs on its own bone as far as the place it leaves that bone, and on the arm bone from the
+  // place it joins it. Between the two it is the shortest line that stays outside a ball about the joint's middle:
+  // straight where it can be, and round the ball where the ball is in the way (the method of Garner and Pandy 2000).
+  // The muscle's length is the length of that line, and its leverage is how fast that length changes as the arm turns,
+  // which is how leverage is measured on a shoulder (An 1984). The slices of the mesh are carried by the line.
+  //
+  // LINE, for each muscle: a and b, where the line leaves its bone and joins the arm bone, as shares of the muscle's
+  // length; r, the ball's radius in mm (never more than the scan leaves room for). They were chosen so that the leverage
+  // for lifting, swinging and turning the arm comes closest to Axford's measurements on eight shoulders (2024, tables
+  // G-1 to G-3: 10 to 60° of lift at the joint, across planes and turns), then checked against Ackland 2008 up to
+  // 120° of lift. README, Shoulder, says how close that is.
+  //   cap: a tendon that the arm's turn winds round the ball is wound on like a rope past this angle (see lineAt).
+  //   peel, pw: the supraspinatus tendon peels off the ball near the socket (see lineAt).
+  //   on, hand: the front deltoid starts on the collarbone, but its line starts on the front of the shoulder, which
+  //   goes with the shoulder blade. Its first slices are handed from the one bone to the other over the shares `hand`.
+  // The deltoid leaves its bone well along its length: the front, side and back of the shoulder hold it, and with an
+  // earlier place its three parts lose their leverage at the side and gain too much with the arm lifted.
+  // The subscapularis leaves late, at the neck of the socket: it lies on the front of the shoulder blade until there,
+  // and a line from further back runs through the socket.
+  const LINE = {
+    supra: { a: 0.43, b: 0.84, r: 23, peel: 0.91, pw: [20, 70] }, infra: { a: 0.5, b: 0.93, r: 23, cap: 140 }, tminor: { a: 0.55, b: 0.92, r: 23, cap: 130 }, subscap: { a: 0.8, b: 0.96, r: 23, cap: 120 },
+    deltA: { a: 0.286, b: 1, r: 26, on: 'scapula', hand: [0.1, 0.24] }, deltM: { a: 0.163, b: 1, r: 26 }, deltP: { a: 0.238, b: 1, r: 26 },
+  };
+  // the shortest way from A to B that stays outside the ball (middle C, radius rho): straight, or straight to the
+  // ball, round it, and straight on. Returns its length and at(u): the point a share u of the way along, with the
+  // direction of travel there and the direction away from the ball's middle (square to it). u1 is where it meets the ball.
+  function wrapPath(A, B, C, rho, hint) {
+    let a = V.sub(A, C), b = V.sub(B, C), la = V.len(a), lb = V.len(b);
+    if (la < rho * 1.0005) { a = V.mul(a, rho * 1.0005 / la); la = rho * 1.0005; }
+    if (lb < rho * 1.0005) { b = V.mul(b, rho * 1.0005 / lb); lb = rho * 1.0005; }
+    const e1 = V.mul(a, 1 / la); let p = V.sub(b, V.mul(e1, V.dot(b, e1)));
+    if (V.len(p) < 1e-4 * lb) p = V.sub(hint, V.mul(e1, V.dot(hint, e1)));          // the ends in line with the ball's middle: go round by the side the muscle is on
+    const e2 = V.norm(p), th = Math.atan2(V.dot(b, e2), V.dot(b, e1));
+    const al = Math.acos(rho / la), be = Math.acos(rho / lb), phi = th - al - be;
+    const frame = (q, t) => { const n = V.sub(q, V.mul(t, V.dot(q, t))); return { p: V.add(C, q), t, n: V.norm(n) }; };
+    if (phi <= 1e-6) {
+      const d = V.sub(b, a), L = V.len(d), t = V.mul(d, 1 / L);
+      return { len: L, u1: 0.7, at: (u) => frame(V.add(a, V.mul(d, u)), t) };
+    }
+    const dir = (x) => V.add(V.mul(e1, Math.cos(x)), V.mul(e2, Math.sin(x))), tan = (x) => V.add(V.mul(e1, -Math.sin(x)), V.mul(e2, Math.cos(x)));
+    const T1 = V.mul(dir(al), rho), T2 = V.mul(dir(th - be), rho), l1 = Math.sqrt(la * la - rho * rho), l2 = rho * phi, l3 = Math.sqrt(lb * lb - rho * rho), L = l1 + l2 + l3;
+    return { len: L, u1: Math.min(0.7, l1 / L), at(u) {
+      const x = u * L;
+      if (x <= l1) return frame(V.add(a, V.mul(V.sub(T1, a), l1 > 1e-9 ? x / l1 : 0)), tan(al));
+      if (x <= l1 + l2) { const g = al + (x - l1) / rho; return { p: V.add(C, V.mul(dir(g), rho)), t: tan(g), n: dir(g) }; }
+      return frame(V.add(T2, V.mul(V.sub(b, T2), l3 > 1e-9 ? (x - l1 - l2) / l3 : 1)), tan(th - be));
+    } };
+  }
+  const colsOf = (f) => tr([f.t, f.n, V.cross(f.t, f.n)]);            // a frame as a rotation: its columns are t, n, t × n
+  // part way from one rotation to another
+  function rotMix(R0, R1, w) {
+    if (w <= 0) return R0; if (w >= 1) return R1;
+    const D = mm(tr(R0), R1), c = clamp((D[0][0] + D[1][1] + D[2][2] - 1) / 2, -1, 1), a = Math.acos(c);
+    if (a < 1e-7) return R0;
+    const k = [D[2][1] - D[1][2], D[0][2] - D[2][0], D[1][0] - D[0][1]], l = V.len(k);
+    if (l < 1e-9) return w < 0.5 ? R0 : R1;
+    return mm(R0, axisR(V.mul(k, 1 / l), a * w));
+  }
+  const I3R = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+  // how far round the axis k the point b is from the point a
+  const azim = (k, a, b) => { const ap = V.sub(a, V.mul(k, V.dot(a, k))), bp = V.sub(b, V.mul(k, V.dot(b, k))); return Math.atan2(V.dot(k, V.cross(ap, bp)), V.dot(ap, bp)); };
+  // the way from the ball's middle to the middle of the socket: toward the part of the shoulder blade nearest the ball
+  const SOCKET = (() => { const p = bones.scapula.pos, near = []; for (let i = 0; i < p.length; i += 3) { const q = [p[i], p[i + 1], p[i + 2]]; if (V.len(V.sub(q, HC)) < headR + 5) near.push(q); } return V.norm(V.sub(V.mean(near), HC)); })();
+  // What a muscle's line needs that does not change with the pose: the slices' middles (cs) and the length along them
+  // (s), the slices where the line leaves its bone (ia) and joins the arm bone (ib), the taut line at rest (W0), and
+  // for each slice between them its share of the way along (u), the line's frame there (F0) and how far the slice's
+  // middle is from the line (D). At rest the slices are where the scan has them.
+  function pathOf(b) {
+    const S = b.S, cs = b.sl.map((q) => q.c), s = [0]; for (let i = 1; i < S; i++) s.push(s[i - 1] + V.len(V.sub(cs[i], cs[i - 1])));
+    const ln = LINE[b.id], ia = Math.round(ln.a * (S - 1)), ib = Math.round(ln.b * (S - 1));
+    // the ball the line is drawn over: no bigger than the scan leaves room for
+    let hint = [0, 0, 0], rho = ln.r; for (let i = ia; i <= ib; i++) { hint = V.add(hint, V.sub(cs[i], HC)); rho = Math.min(rho, V.len(V.sub(cs[i], HC)) - 0.05); }
+    const W0 = wrapPath(cs[ia], cs[ib], HC, rho, hint), u = cs.map((_, i) => clamp((s[i] - s[ia]) / (s[ib] - s[ia])));
+    const F0 = [], D = []; for (let i = ia + 1; i < ib; i++) { const f = W0.at(u[i]); F0[i] = [f.t, f.n, V.cross(f.t, f.n)]; D[i] = V.sub(cs[i], f.p); }
+    const E = b.sl.map((q) => { const U = V.norm(q.U), W = V.norm(V.sub(q.W, V.mul(U, V.dot(q.W, U)))); return tr([U, W, V.cross(U, W)]); });   // each slice's own turn
+    // how the change of length is shared out along the muscle: a cuff muscle's belly takes it, its tendon keeps its
+    // length; the deltoid shares it evenly between its ends
+    const wOf = (t) => (b.cuff === false ? 0.05 + 0.95 * sstep(0.02, 0.1, t) * (1 - sstep(0.85, 0.95, t)) : 0.03 + 0.97 * sstep(0.02, 0.12, t) * (1 - sstep(0.7, 0.86, t)));
+    const om = []; for (let i = 0; i + 1 < S; i++) om.push(wOf((i + 0.5) / (S - 1)));
+    // how far round the arm bone's long axis the line's end is from its start, at rest, and which way round
+    const phi0 = azim(DOWN, V.sub(cs[ia], HC), V.sub(cs[ib], HC)), cap = ln.cap ? rad(ln.cap) : 0;
+    return { S, cs, s, ia, ib, rho, hint, u, F0, D, E, om, W0, fixed: s[ia] + s[S - 1] - s[ib], on: ln.on || b.from, hand: ln.hand,
+      cap, sense: Math.sign(phi0), gate: cap - Math.abs(phi0), ie: ln.peel ? Math.round(ln.peel * (S - 1)) : ib, pw: ln.pw };
+  }
+  // The taut line at a pose, in the terms of the bone its first end rides on (O). Two things are added to the plain
+  // taut line, each for a place where a line over a ball goes wrong and a tendon does not.
+  function lineAt(b, T) {
+    const P = (b.path ||= pathOf(b)), O = T[P.on], rel = compose(invT(O), T.humerus), C = apply(rel, HC);
+    const hint = V.add(P.hint, mv(rel.R, P.hint)), A = P.cs[P.ia];
+    // Peeling (supraspinatus). Its tendon lies on top of the ball before it reaches its footprint, and the line joins
+    // the arm bone there. With the arm lifted high that place comes round to the socket, where a tendon cannot follow.
+    // As it nears the socket (from pw[1] to pw[0] degrees from the socket's middle, seen from the ball's middle) the
+    // tendon peels off the ball, and the line joins the arm bone further along, up to the footprint itself (slice ie).
+    let sq = P.s[P.ib], Bl = P.cs[P.ib];
+    if (P.ie > P.ib) {
+      const gam = Math.acos(clamp(V.dot(V.norm(mv(rel.R, V.sub(Bl, HC))), SOCKET), -1, 1)), peel = 1 - sstep(rad(P.pw[0]), rad(P.pw[1]), gam);
+      if (peel > 0) { sq += peel * (P.s[P.ie] - sq); let j = P.ib; while (j < P.ie - 1 && P.s[j + 1] < sq) j++; Bl = V.add(P.cs[j], V.mul(V.sub(P.cs[j + 1], P.cs[j]), (sq - P.s[j]) / (P.s[j + 1] - P.s[j]))); }
+    }
+    const B = apply(rel, Bl), base = { P, O, rel, relc: rel, C, sq, fixed: P.s[P.ia] + P.s[P.S - 1] - sq, turn: 0, extra: 0 };
+    if (!P.cap) return { ...base, W: wrapPath(A, B, C, P.rho, hint) };
+    // Winding (infraspinatus, teres minor, subscapularis). A line drawn taut over a ball slides sideways off it once it
+    // is wound far round: the shortest way then goes over the top of the ball or under it, the line loses its leverage
+    // for turning the arm, and at half way round it jumps to the other side. A tendon cannot slide like that: it is
+    // broad, and it is joined to the capsule under it. So the line is drawn taut only up to a turn of the arm bone about
+    // its own length, P.gate (the turn that brings the hanging arm's tendon P.cap round the bone's long axis from where
+    // the line starts). The rest of the turn, `over`, winds the tendon on as a rope is wound on a drum: the ball carries
+    // the tendon's end round, and the length taken up is the angle times the end's distance from the long axis.
+    // The arm bone's turn, as seen from the muscle's bone, is a swing of its long axis and then a turn about that axis;
+    // `turned` is the second, counted the way that winds this tendon. The winding comes on over up to 30°, so that the
+    // leverage has no step, and never with the arm at rest.
+    const k = mv(rel.R, DOWN), bb = V.sub(B, C);
+    const sax = V.len(V.cross(DOWN, k)) > 1e-9 ? V.norm(V.cross(DOWN, k)) : [1, 0, 0], Tw = mm(tr(axisR(sax, Math.acos(clamp(V.dot(DOWN, k), -1, 1)))), rel.R);
+    const turned = P.sense * Math.atan2(V.dot(DOWN, [Tw[2][1] - Tw[1][2], Tw[0][2] - Tw[2][0], Tw[1][0] - Tw[0][1]]), Tw[0][0] + Tw[1][1] + Tw[2][2] - 1);
+    const D = Math.min(rad(15), P.gate), x = turned - P.gate, over = x <= -D ? 0 : x >= D ? x : (x + D) * (x + D) / (4 * D);
+    if (over <= 0) return { ...base, W: wrapPath(A, B, C, P.rho, hint) };
+    // taut as far as the place the tendon's end would be without `over`, then round the ball with the end
+    const Rc = mm(axisR(k, -P.sense * over), rel.R), relc = { R: Rc, t: V.sub(C, mv(Rc, HC)) };
+    return { ...base, relc, k, turn: P.sense * over, extra: V.len(V.cross(k, bb)) * over, W: wrapPath(A, V.add(C, mv(axisR(k, -P.sense * over), bb)), C, P.rho, hint) };
+  }
+  // where the tendon is wound on, a point a share u of the way along the line is carried round with the ball: not at all
+  // where the line meets the ball, and all the way at the tendon's end
+  const spinAt = (ln, u) => (ln.turn ? axisR(ln.k, ln.turn * sstep(ln.W.u1, 1, u)) : null);
+  // the line between the two bones as points in the world (for checks)
+  function lineOf(b, T, n = 40) { const ln = lineAt(b, T), out = []; for (let i = 0; i <= n; i++) { const u = i / n, S = spinAt(ln, u); let p = ln.W.at(u).p; if (S) p = V.add(ln.C, mv(S, V.sub(p, ln.C))); out.push(apply(ln.O, p)); } return out; }
+  // where each slice's middle and frame go at a pose (muscle() places the outline round them), and how much its
+  // outline grows or shrinks (k)
+  function frames(b, T) {
+    if (b.id === 'bursa') {                                              // the bursa goes with the supraspinatus under it
+      const S = supra.S, i0 = Math.floor(BURSA.from * (S - 1)), fs = frames(supra, T);
+      return b.sl.map((q, i) => { const f = fs[i0 + i]; return { c: V.add(f.c, mv(f.R, V.sub(q.c, supra.sl[i0 + i].c))), R: f.R, k: f.k }; });
+    }
+    const ln = lineAt(b, T), { P, O, rel, relc, W: Wp } = ln, S = b.S, { cs, s, ia, ib } = P, Z = 0.3;
+    // Each slice before it slides, in the terms of the bone the line's first end rides on: on that bone, on the taut
+    // line, or on the arm bone. A slice on the line keeps how far it was from the line at rest (D), turned as the line
+    // has turned there, and near the line's ends as the bone at that end has turned.
+    const g = [], Rg = [], uB = 1 - (ln.sq - s[ib]) / Wp.len;       // where slice ib is on the line (short of its end if the tendon has peeled)
+    for (let i = 0; i < S; i++) {
+      if (i <= ia) { g.push(cs[i]); Rg.push(I3R); continue; }
+      if (i >= ib) { g.push(s[i] < ln.sq ? Wp.at(1 - (ln.sq - s[i]) / Wp.len).p : apply(rel, cs[i])); Rg.push(rel.R); continue; }   // peeled off, or on the arm bone
+      const u = P.u[i] * uB, f = Wp.at(u), Q = mm(colsOf(f), P.F0[i]);
+      const Qe = rotMix(rotMix(I3R, Q, sstep(0, Z, P.u[i])), relc.R, sstep(1 - Z, 1, P.u[i])), Sp = spinAt(ln, u);
+      const p = V.add(f.p, mv(Qe, P.D[i]));
+      if (Sp) { g.push(V.add(ln.C, mv(Sp, V.sub(p, ln.C)))); Rg.push(mm(Sp, Qe)); } else { g.push(p); Rg.push(Qe); }
+    }
+    // Where the taut line meets a part that is fixed to a bone it can turn sharply (the footprint of a tendon, with the
+    // arm lifted and turned out as far as it goes, points back along the tendon). A tendon has thickness and cannot
+    // turn on a point: a turn sharper than about 70° is rounded off over the slices to each side of it.
+    let jq = ib; while (jq < S - 1 && s[jq + 1] <= ln.sq) jq++;       // the slice where the line joins the arm bone (further along if the tendon has peeled)
+    for (const j of [ia, jq]) {
+      if (j < 1 || j > S - 2) continue;
+      const turn = V.dot(V.norm(V.sub(g[j], g[j - 1])), V.norm(V.sub(g[j + 1], g[j])));
+      // (the sharper the turn, the more slices share it: two to each side, and four where it turns right back)
+      for (const [span, w] of [[2, 1 - sstep(-0.1, 0.35, turn)], [4, 1 - sstep(-0.7, -0.2, turn)]]) {
+        for (let pass = 0; w > 0 && pass < span + 1; pass++) { const h = g.slice(); for (let i = Math.max(1, j - span); i <= Math.min(S - 2, j + span); i++) g[i] = V.add(h[i], V.mul(V.sub(V.mul(V.add(h[i - 1], h[i + 1]), 0.5), h[i]), 0.5 * w)); }
+      }
+    }
+    // then the slices slide along that line, so that the change of length is shared out (om)
+    const sg = [0]; for (let i = 1; i < S; i++) sg.push(sg[i - 1] + V.len(V.sub(g[i], g[i - 1])));
+    const L0 = s[S - 1], L1 = sg[S - 1]; let sum = 0; for (let i = 0; i + 1 < S; i++) sum += (s[i + 1] - s[i]) * P.om[i];
+    const eps = (L1 - L0) / sum, fac = P.om.map((w) => Math.max(0.3, 1 + eps * w)); let tot = 0; for (let i = 0; i + 1 < S; i++) tot += (s[i + 1] - s[i]) * fac[i];
+    const rel0 = P.hand ? compose(invT(O), T[b.from]) : null;       // the front deltoid's own bone, seen from the bone its line rides on
+    const out = []; let st = 0, j = 0;
+    for (let i = 0; i < S; i++) {
+      if (i > 0) st += (s[i] - s[i - 1]) * fac[i - 1] * L1 / tot;
+      while (j < S - 2 && sg[j + 1] < st) j++;
+      const f = clamp(sg[j + 1] > sg[j] ? (st - sg[j]) / (sg[j + 1] - sg[j]) : 0);
+      let c = V.add(g[j], V.mul(V.sub(g[j + 1], g[j]), f));
+      let R = mm(mm(rotMix(Rg[j], Rg[j + 1], f), rotMix(P.E[j], P.E[j + 1], f)), tr(P.E[i]));
+      if (rel0) { const w = 1 - sstep(...P.hand, i / (S - 1)); if (w > 0) { c = V.add(c, V.mul(V.sub(apply(rel0, c), c), w)); R = mm(rotMix(I3R, rel0.R, w), R); } }
+      // a muscle keeps its volume: where it shortens, its cross-section grows
+      const stretch = ((fac[Math.max(0, i - 1)] + fac[Math.min(S - 2, i)]) / 2) * L1 / tot;
+      out.push({ c: apply(O, c), R: mm(O.R, R), k: 1 / Math.sqrt(stretch) });
+    }
+    return out;
+  }
+  // A muscle's length at a pose, as a share of its length at rest: the parts of its line that lie on a bone, the taut
+  // line between them, and what is wound on. (The mesh's own middle line is a little longer: it keeps the scan's bends.)
+  const length = (b, T) => { const { P, W, extra, fixed } = lineAt(b, T); return (fixed + W.len + extra) / (P.fixed + P.W0.len); };
+  // the same in mm of the line (for checking leverage against measurements)
+  const lineMm = (b, T) => { const { W, extra, fixed } = lineAt(b, T); return fixed + W.len + extra; };
   // A built mesh at a pose. opts.shape(t, s, top) may return { thick, lift }: the outline's half thickness is
   // multiplied by thick, and lift (a share of the full thickness) raises the bottom face (a tear from below).
-  // where each slice's middle and frame go at a pose (muscle() places the outline round them)
-  function frames(b, T) {
-    const O = T[b.from], H = T.humerus;
-    const tOf = b.tOf || ((i) => i / (b.S - 1)), kind = b.cuff === false ? 'deltoid' : 'cuff';
-    const follow = (t) => sstep(...(FOLLOW[b.id] || FOLLOW[kind]), t), twistOf = (t) => sstep(...(TWIST[b.id] || TWIST[kind]), t);
-    // The arm bone's turn as seen from the muscle's origin bone. Each slice of the muscle keeps its own shape and
-    // takes the share follow(t) of that turn, about the ball's middle, keeping its own shape (so that a muscle twists
-    // along its length rather than being crushed, and passes over the ball rather than through it).
-    // The turn is split into a swing of the arm bone's long axis and a twist about it, each shared out by w.
-    const rel = compose(invT(O), H), Rr = rel.R, a0 = DOWN, a1 = mv(Rr, a0);
-    const sw = Math.acos(clamp(V.dot(a0, a1), -1, 1)), sax = V.len(V.cross(a0, a1)) > 1e-9 ? V.norm(V.cross(a0, a1)) : [1, 0, 0];
-    const Tw = mm(tr(axisR(sax, sw)), Rr), tw = Math.atan2(V.dot(a0, [Tw[2][1] - Tw[1][2], Tw[0][2] - Tw[2][0], Tw[1][0] - Tw[0][1]]), Tw[0][0] + Tw[1][1] + Tw[2][2] - 1);
-    const turnAt = (w, wt) => mm(axisR(sax, sw * w), axisR(a0, tw * wt));
-    const slideRel = V.sub(apply(rel, HC), HC);
-    // the deltoid's end, and how far the bone's turn about its length has carried it
-    const rI = kind === 'deltoid' ? V.sub(b.sl[b.S - 1].c, HC) : null, endAt = rI && mv(axisR(a0, tw), rI);
-    return b.sl.map((s, i) => {
-      const t = tOf(i), w = follow(t), wt = twistOf(t), sh = rI ? sstep(...SHEAR, t) : 0;
-      if (w <= 0 && wt <= 0 && sh <= 0) return { c: apply(O, s.c), R: O.R };
-      if (w >= 1 && wt >= 1) return { c: apply(H, s.c), R: H.R };
-      const Rw = turnAt(w, wt);                                    // turned about the ball's middle: it keeps its distance
-      let q = mv(Rw, V.sub(s.c, HC));
-      if (rI) q = V.add(q, mv(axisR(sax, sw * w), V.mul(V.sub(endAt, mv(axisR(a0, tw * wt), rI)), sh)));   // carried by its end
-      return { c: apply(O, V.add(V.add(HC, q), V.mul(slideRel, w))), R: mm(O.R, Rw) };
-    });
-  }
-  // a muscle's length at a pose, along the middles of its slices, as a share of its length at rest
-  const length = (b, T) => arc(frames(b, T).map((f) => f.c)) / b.L0;
   function muscle(b, T, opts = {}) {
     const H = T.humerus, ball = apply(H, HC), into = Object.keys(SOL).map((k) => [k, SOL[k], T[k], invT(T[k])]);
     const fr = frames(b, T);
-    // a muscle keeps its volume: its cross-section grows as it shortens
-    const L = arc(fr.map((f) => f.c)), k = Math.sqrt(b.L0 / L);
+    const L = (b.id === 'bursa' ? 1 : length(b, T)) * b.L0;
     const out = new Float32Array(b.rest.length * 3), pressed = new Float32Array(b.rest.length);
     b.rest.forEach((p0, i) => {
       const c = b.at[i], t = b.t[i];
@@ -378,7 +516,7 @@ export function makeModel(bones, musclesJson, table = null) {
         p = V.add(s.c, V.add(V.mul(s.U, c.u), V.mul(s.W, v)));
       }
       const si = c.cap !== undefined ? c.cap : c.i, s = b.sl[si], f = fr[si];
-      let q = V.add(f.c, mv(f.R, V.mul(V.sub(p, s.c), k)));
+      let q = V.add(f.c, mv(f.R, V.mul(V.sub(p, s.c), f.k)));
       // wrapped over the ball: never closer to its middle than at rest
       const d = V.sub(q, ball), l = V.len(d); if (l < b.wrap) q = V.add(ball, V.mul(d, b.wrap / l));
       for (let pass = 0; pass < 2; pass++) for (const [kk, f, Tk, Ik] of into) {     // twice: one push can lead into another bone
@@ -438,12 +576,17 @@ export function makeModel(bones, musclesJson, table = null) {
       let w = V.mul(g, -1 / n), Q = poseOf(mm(axisR(w, rad(1)), R), P);
       const e = elbowOf(Q);
       if (intoBody(e)) {
-        // slide along the side of the body: take away the part of the turn that moves the elbow in
-        const r = V.sub(elbowOf(P), apply(quick(P).humerus, HC)), nc = V.cross(r, [1, 0, 0]), into = V.dot(w, nc);
-        if (into > 0) w = V.sub(w, V.mul(nc, into / V.dot(nc, nc)));
-        const wl = V.len(w); if (wl < 1e-6 || -V.dot(w, g) / (wl * n) < 0.2) break;   // barely shortens that way: it stops
-        w = V.mul(w, 1 / wl); Q = poseOf(mm(axisR(w, rad(1)), R), P);
-        if (intoBody(elbowOf(Q))) break;
+        // slide along the side of the body: turn the arm out from the side by as much as the step would take the elbow
+        // in (and 0.1 mm more). The elbow's way is found by trying the step, because the shoulder blade and collarbone
+        // carry the whole arm with them as it lifts.
+        const r = V.sub(elbowOf(P), apply(quick(P).humerus, HC)), nc = V.cross(r, [1, 0, 0]);
+        let ok = false, wl = 1;
+        for (let it = 0; it < 4 && !ok; it++) {
+          w = V.sub(w, V.mul(nc, (elbowOf(Q)[0] - xMax + 0.1) / rad(1) / V.dot(nc, nc)));
+          wl = V.len(w); if (wl < 1e-6) break;
+          w = V.mul(w, 1 / wl); Q = poseOf(mm(axisR(w, rad(1)), R), P); ok = !intoBody(elbowOf(Q));
+        }
+        if (!ok || -V.dot(w, g) / n < 0.2) break;                 // no way along the side, or it barely shortens that way: it stops
       }
       let slow = 0;
       if (Q.elev > lim.elev || Q.rot < lim.lo || Q.rot > lim.hi) {
@@ -460,7 +603,7 @@ export function makeModel(bones, musclesJson, table = null) {
     return out;
   }
 
-  return { marks: mk, headR, NS, DOWN, pose, length, contract, orient, poseOf, LIMIT, bodyOf, gap, bodyOf, gap, stored, glideAt, makeTable, PLANES, built, muscle, bursa, bursaOn, bones, SOL, invT, ribPen };
+  return { marks: mk, headR, NS, DOWN, pose, length, contract, orient, poseOf, LIMIT, bodyOf, gap, bodyOf, gap, stored, glideAt, makeTable, PLANES, built, muscle, bursa, bursaOn, bones, SOL, invT, ribPen, lineOf, lineMm };
 }
 
 export function arc(cs) { let L = 0; for (let i = 1; i < cs.length; i++) L += V.len(V.sub(cs[i], cs[i - 1])); return L; }
