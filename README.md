@@ -955,16 +955,42 @@ wrong with it, and what the common physical therapy exercises do to it.
   the deltoid that pulls stays in the picture as far in as the Joint. When the front or the middle of the deltoid
   pulls alone, the ball rides up 3 mm where there is room. Cadaver shoulders lifted by the deltoid alone showed
   the ball moving up (Sharkey and Marder 1995); the size is the page's own, and the page says so. From the arm
-  hanging, each pull is what the sources say that muscle does. With the arm already lifted the pulls are less
-  sure: the model's back deltoid, teres minor and infraspinatus pull the arm down more than was measured
-  (Ackland 2008), and the page says so.
-- How a muscle bends is a rule, not a simulation: each slice keeps its shape and takes a share of the arm
-  bone's turn about the ball's middle (from none at the origin to all of it at the insertion), then is
-  pushed out of any bone it was not already in at rest. The subscapularis takes its share later along its
-  length than the other cuff muscles, because it lies on the shoulder blade for three quarters of it. The
-  deltoid is fixed to the arm bone only at its end, so when the bone turns about its length the deltoid is
-  carried sideways by its end and does not go round the arm. At the far ends of the turns (90° out with the
-  arm up) the deltoid bunches more untidily than a real one.
+  hanging, each pull is what the sources say that muscle does.
+- How a muscle bends is a rule, not a simulation. Each muscle's middle line is pulled tight from the place it
+  leaves its own bone, over a ball about the joint's middle, to the arm bone. This is the obstacle-set method of
+  Garner and Pandy (2000) with one ball. The muscle's slices keep the shape and the offset from that line
+  that they have at rest, and the belly takes up the change of length. A slice is then pushed out of any bone
+  it was not already in at rest.
+  - The infraspinatus, the teres minor and the subscapularis wind on to the ball when the arm bone turns about
+    its length further than the tendon can follow. The wound part goes round with the bone. Without this, a
+    tight line slides sideways off the ball there and the length jumps.
+  - The supraspinatus joins the arm bone further along its footprint as the footprint nears the socket, so that
+    its line does not pass through the socket with the arm high.
+  - A muscle's leverage is how much its line shortens for each degree the arm turns (tendon excursion, An and
+    others 1984). `model.contract` and the lengths in the panel use it.
+- The leverage is checked against measurements. Axford (2024) pulled each tendon with 20 N in eight cadaver
+  shoulders and gave the leverage about all three axes of the joint, for 10° to 60° of lift at the joint.
+  `tests/shoulder/axford.mjs` holds those tables, scaled to this ball. Over the measured poses, the axis each
+  muscle turns the arm about is 6° to 14° from the measured axis on average. The leverage is 0.98 to 1.10 times
+  the measured size for five muscles, 1.24 times for the teres minor and 1.26 times for the back of the deltoid.
+  The rule this one replaced (each slice took a share of the arm bone's turn) was 9° to 45° off, and up to 1.5
+  times the size. Known differences that remain, against Axford and against Ackland and others (2008), who
+  measured lift leverage up to 120° of lift:
+  - The supraspinatus lifts the arm out to the side less than measured once the arm is high (2 mm against 10 mm
+    at 90°).
+  - The infraspinatus's lift leverage in the plane of the shoulder blade rises with the lift; the measured one
+    falls.
+  - The teres minor pulls a low arm down more than Ackland measured (13 mm against 2 mm at 30° of lifting out
+    to the side). It is nearer Axford's figures.
+  - The front of the deltoid has 5 to 10 mm less leverage for lifting out to the side than Ackland measured, and
+    the middle of the deltoid 10 mm less at 120°.
+  - With the arm already lifted, the back of the deltoid, the teres minor and the infraspinatus no longer drop
+    it as the old rule did. From 90° in the plane of the shoulder blade, a 40° pull by the infraspinatus ends at
+    95° (it was 82°), by the teres minor at 84° (73°), and by the back of the deltoid at 80° (77°).
+  - At the far ends of the range (the arm high, behind the body and turned out) the supraspinatus's and the
+    infraspinatus's lines pass up to 9 mm inside the shoulder blade, and nothing was measured there.
+  The page says that the leverage is close to the measurements and not the same, and names the largest
+  differences.
 - Labels are DOM elements. Each is shown only where its part is really seen: the page draws a small
   picture of which part is at each pixel, and the label's dot goes to the nearest place its part shows.
 
@@ -973,8 +999,9 @@ filled in using the stencil buffer); `facts.js` every statement and its source; 
 labels, panel and controls; `geom.js` and `solid.js` helpers. WebGL helpers come from the shared `js/gl/gl.js`. `css/shoulder.css` is the stylesheet.
 `tests/shoulder/`: `build-data.mjs` and `build-pose.mjs` make the data; `review.mjs` checks the muscles
 against the scans; `model.mjs` checks the model at hundreds of random arm positions (bones apart, no new
-points inside bone, no folds, which muscles lengthen and shorten as the textbooks say, and where each muscle
-pulling alone takes the arm); `page.mjs`
+points inside bone, no folds, which muscles lengthen and shorten as the textbooks say, where each muscle
+pulling alone takes the arm, and each muscle's leverage against the measured leverage in `axford.mjs`, with the
+joint's angles worked out in `isb.mjs`); `page.mjs`
 presses every control and sweeps every slider looking for jumps. After changing any file under
 `js/shoulder/`, `css/shoulder.css` or `shoulder/data/`, run `node tests/stamp.mjs shoulder`.
 
