@@ -21,6 +21,8 @@ export const SRC = {
   plank: { name: 'Wikipedia, Plank (exercise): muscles worked', url: 'https://en.wikipedia.org/wiki/Plank_(exercise)' },
   gmed: { name: 'Wikipedia, Gluteus medius', url: 'https://en.wikipedia.org/wiki/Gluteus_medius' },
   thoracic: { name: 'Wikipedia, Thoracic vertebrae', url: 'https://en.wikipedia.org/wiki/Thoracic_vertebrae' },
+  sharkey: { name: 'Sharkey and Marder 1995, The rotator cuff opposes superior translation of the humeral head', url: 'https://doi.org/10.1177/036354659502300303' },
+  ackland: { name: 'Ackland et al. 2008, Moment arms of the muscles crossing the anatomical shoulder', url: 'https://pmc.ncbi.nlm.nih.gov/articles/PMC2644775' },
   bp3d: { name: 'BodyParts3D, © The Database Center for Life Science, CC BY 4.0', url: 'https://dbarchive.biosciencedbc.jp/en/bodyparts3d/' },
 };
 
@@ -37,6 +39,12 @@ export const DOES = {
 
 // The conditions. show: what the model does for it (model.js and main.js read these, and say on screen what
 // is drawn larger than life).
+// What else happens when a muscle pulls with no other muscle helping: shown under its Contract slider. How far the
+// ball moves is the page's own size (RIDE_UP in main.js), which the sentence says.
+export const ALONE = {
+  deltA: { text: 'Alone, it also pulls the ball up (drawn 3 mm). The cuff muscles stop this.', src: ['sharkey'] },
+  deltM: { text: 'Alone, it also pulls the ball up (drawn 3 mm). The cuff muscles stop this.', src: ['sharkey'] },
+};
 export const CONDITIONS = [
   { id: 'healthy', name: 'Healthy',
     title: 'Four muscles hold the ball in its socket',
@@ -126,5 +134,5 @@ export const EXERCISES = [
     src: ['plank', 'gmed'] },
 ];
 
-export const MODEL_NOTE = 'Bones are one person\'s scanned right shoulder; muscles are built to match the scans of the same body (checked against them: within 1 mm over 95% of each surface). The shoulder blade turns a third of the lift (the 2 to 1 rhythm, a simplification). In this scan the acromion sits low over the ball, so as the arm lifts the model lets the ball slide down in its socket enough to keep 2 mm between the bones. That is a correction for this scan, not a motion to learn from: in a real shoulder the ball stays close to the middle of its socket. The gap is the narrowest distance between the two bones in this model, not an X-ray measurement. How a muscle bends as the arm moves follows a simple rule (each slice of it takes a share of the arm bone\'s turn, more toward the arm), not a simulation of muscle. A muscle that pulls on its own turns the arm 40°, a degree at a time, the way that shortens it fastest in this model. The arm\'s weight and the muscles that would steady it are left out. The arm stops at 150° up, 60° in and 90° out, and the elbow does not go into the side of the body.';
-export const MODEL_SRC = ['bp3d', 'inman', 'ludewig'];
+export const MODEL_NOTE = 'Bones are one person\'s scanned right shoulder; muscles are built to match the scans of the same body (checked against them: within 1 mm over 95% of each surface). The shoulder blade turns a third of the lift (the 2 to 1 rhythm, a simplification). In this scan the acromion sits low over the ball, so as the arm lifts the model lets the ball slide down in its socket enough to keep 2 mm between the bones. That is a correction for this scan, not a motion to learn from: in a real shoulder the ball stays close to the middle of its socket. The gap is the narrowest distance between the two bones in this model, not an X-ray measurement. How a muscle bends as the arm moves follows a simple rule (each slice of it takes a share of the arm bone\'s turn, more toward the arm), not a simulation of muscle. A muscle that pulls on its own turns the arm up to 40°, a degree at a time, the way that shortens it fastest in this model. The arm\'s weight and the muscles that would steady it are left out. The shoulder blade still turns with the lift, though the muscles that turn it are not drawn. The arm goes no further than 150° up, 60° in and 90° out, and the elbow does not go into the side of the body. In shoulders from cadavers lifted by the deltoid alone, the ball moved up (Sharkey and Marder 1995). Here the front or the middle of the deltoid pulling alone moves it up 3 mm where there is room, which is a drawn size. With the arm already lifted the pulls are less sure: this model\'s back deltoid, teres minor and infraspinatus pull the arm down more than was measured (Ackland 2008).';
+export const MODEL_SRC = ['bp3d', 'inman', 'ludewig', 'sharkey', 'ackland'];

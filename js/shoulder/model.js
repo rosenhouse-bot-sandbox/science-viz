@@ -8,8 +8,8 @@
 //   rot    turning the arm about its own length: + turns out (the forearm swings out), - turns in
 //   elbow  elbow bend, in degrees (0 straight, 90 the forearm level)
 //   up     how far the ball of the arm bone has moved up toward the acromion, in mm (a large cuff tear)
-import { V, K, bandMesh, binU } from './geom.js?v=a7948fcd';
-import { solid } from './solid.js?v=a7948fcd';
+import { V, K, bandMesh, binU } from './geom.js?v=a4800837';
+import { solid } from './solid.js?v=a4800837';
 
 // ---- reading the packed meshes -------------------------------------------------------------------
 export function unpack(json, buf) {
@@ -320,17 +320,25 @@ export function makeModel(bones, musclesJson, table = null) {
 
   // how much of the arm bone's turn a slice at t (0 origin, 1 insertion) takes: a cuff muscle crosses the joint
   // near its end, the deltoid just below where it starts (the acromion and collarbone sit right over the joint)
-  const FOLLOW = { cuff: [0.55, 0.97], deltoid: [0.04, 0.6] };
-  // and how much of the arm bone's turn about its own length. The deltoid takes it evenly along its whole length: shared
-  // out over its first part only, as the swing is, it twisted so tightly there that it folded over itself when the
-  // arm was turned out with the elbow at shoulder height.
-  const TWIST = { cuff: FOLLOW.cuff, deltoid: [0, 1] };
+  // The subscapularis starts later: it lies on the front of the shoulder blade for three quarters of its length (at
+  // 0.75 it comes within two radii of the ball's middle). With the share the others have, the part of it still on the
+  // shoulder blade swung round with the arm when the arm turned in, into the edge of the socket, and its tendon was
+  // drawn in tatters.
+  const FOLLOW = { cuff: [0.55, 0.97], deltoid: [0.04, 0.6], subscap: [0.75, 0.97] };
+  // and how much of the arm bone's turn about its own length. A cuff tendon lies on the ball and turns with it. The
+  // deltoid does not: it is fixed to the arm bone only at its narrow end, a little way out from the bone's middle
+  // line, and the bone turns under the rest of it. So only its last part (the tendon) turns with the bone; the rest
+  // is carried sideways by its end, each slice a share (SHEAR) of the way the end has moved. (Turning every slice
+  // about the bone, as before, swung the whole muscle round the arm, twisted it into a ribbon when the arm was
+  // lifted and turned out, and made the back of the deltoid seem a stronger turner of the arm than it is.)
+  const TWIST = { cuff: FOLLOW.cuff, subscap: FOLLOW.subscap, deltoid: [0.78, 1] }, SHEAR = [0.08, 0.82];
   // A built mesh at a pose. opts.shape(t, s, top) may return { thick, lift }: the outline's half thickness is
   // multiplied by thick, and lift (a share of the full thickness) raises the bottom face (a tear from below).
   // where each slice's middle and frame go at a pose (muscle() places the outline round them)
   function frames(b, T) {
     const O = T[b.from], H = T.humerus;
-    const tOf = b.tOf || ((i) => i / (b.S - 1)), kind = b.cuff === false ? 'deltoid' : 'cuff', follow = (t) => sstep(...FOLLOW[kind], t), twistOf = (t) => sstep(...TWIST[kind], t);
+    const tOf = b.tOf || ((i) => i / (b.S - 1)), kind = b.cuff === false ? 'deltoid' : 'cuff';
+    const follow = (t) => sstep(...(FOLLOW[b.id] || FOLLOW[kind]), t), twistOf = (t) => sstep(...(TWIST[b.id] || TWIST[kind]), t);
     // The arm bone's turn as seen from the muscle's origin bone. Each slice of the muscle keeps its own shape and
     // takes the share follow(t) of that turn, about the ball's middle, keeping its own shape (so that a muscle twists
     // along its length rather than being crushed, and passes over the ball rather than through it).
@@ -340,12 +348,16 @@ export function makeModel(bones, musclesJson, table = null) {
     const Tw = mm(tr(axisR(sax, sw)), Rr), tw = Math.atan2(V.dot(a0, [Tw[2][1] - Tw[1][2], Tw[0][2] - Tw[2][0], Tw[1][0] - Tw[0][1]]), Tw[0][0] + Tw[1][1] + Tw[2][2] - 1);
     const turnAt = (w, wt) => mm(axisR(sax, sw * w), axisR(a0, tw * wt));
     const slideRel = V.sub(apply(rel, HC), HC);
+    // the deltoid's end, and how far the bone's turn about its length has carried it
+    const rI = kind === 'deltoid' ? V.sub(b.sl[b.S - 1].c, HC) : null, endAt = rI && mv(axisR(a0, tw), rI);
     return b.sl.map((s, i) => {
-      const w = follow(tOf(i)), wt = twistOf(tOf(i));
-      if (w <= 0 && wt <= 0) return { c: apply(O, s.c), R: O.R };
+      const t = tOf(i), w = follow(t), wt = twistOf(t), sh = rI ? sstep(...SHEAR, t) : 0;
+      if (w <= 0 && wt <= 0 && sh <= 0) return { c: apply(O, s.c), R: O.R };
       if (w >= 1 && wt >= 1) return { c: apply(H, s.c), R: H.R };
       const Rw = turnAt(w, wt);                                    // turned about the ball's middle: it keeps its distance
-      return { c: apply(O, V.add(V.add(HC, mv(Rw, V.sub(s.c, HC))), V.mul(slideRel, w))), R: mm(O.R, Rw) };
+      let q = mv(Rw, V.sub(s.c, HC));
+      if (rI) q = V.add(q, mv(axisR(sax, sw * w), V.mul(V.sub(endAt, mv(axisR(a0, tw * wt), rI)), sh)));   // carried by its end
+      return { c: apply(O, V.add(V.add(HC, q), V.mul(slideRel, w))), R: mm(O.R, Rw) };
     });
   }
   // a muscle's length at a pose, along the middles of its slices, as a share of its length at rest
@@ -387,7 +399,10 @@ export function makeModel(bones, musclesJson, table = null) {
   function poseOf(R, prev) {
     const a1 = mv(R, DOWN), c = clamp(V.dot(a1, DOWN), -1, 1), elev = Math.acos(c) / rad(1);
     let plane = prev.plane ?? 30;
-    if (elev > 0.5) {                                           // hanging straight down, the direction of the lift is kept
+    // hanging straight down there is no direction of lift, and the last one is kept. (Only straight down: this once
+    // began at half a degree, which is the size of the turns contract() tries, so that from the arm hanging a pull
+    // could not tell lifting forward from lifting back, and every muscle began by only turning the arm.)
+    if (elev > 1e-4) {
       const ap = V.norm(V.sub(a1, V.mul(DOWN, c))); plane = Math.atan2(ap[2], -ap[0]) / rad(1);
       for (let n = 0; n < 4; n++) { const pl = rad(plane), H = [-Math.cos(pl), 0, Math.sin(pl)], hp = V.norm(V.sub(H, V.mul(DOWN, V.dot(H, DOWN)))); plane -= Math.atan2(V.dot(DOWN, V.cross(hp, ap)), V.dot(hp, ap)) / rad(1); }
       while (plane - (prev.plane ?? 30) > 180) plane -= 360; while (plane - (prev.plane ?? 30) < -180) plane += 360;
@@ -408,8 +423,8 @@ export function makeModel(bones, musclesJson, table = null) {
   const LIMIT = { elev: 150, rotIn: -60, rotOut: 90 };
   // How the arm moves when one muscle pulls alone, from the pose P0: a degree at a time, the arm bone turns about
   // its ball the way that shortens the muscle fastest (the way the muscle's pull turns it), until it has turned deg
-  // degrees, or reaches a limit, or the muscle can shorten no further. The arm's weight and the other muscles that
-  // steady it are left out. Returns the poses a degree apart, each with the muscle's length (share of rest).
+  // degrees, or the muscle can shorten no further (or barely). At a limit of the joint it goes on along the limit. The arm's
+  // weight and the other muscles that steady it are left out. Returns the poses a degree apart, each with the muscle's length (share of rest).
   function contract(b, P0, deg = 40) {
     const quick = (P) => pose({ ...P, quick: true }), lenAt = (P) => length(b, quick(P)), d = rad(0.5), AX = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
     const lim = { elev: Math.max(LIMIT.elev, P0.elev ?? 0), lo: Math.min(LIMIT.rotIn, P0.rot ?? 0), hi: Math.max(LIMIT.rotOut, P0.rot ?? 0) };
@@ -430,8 +445,16 @@ export function makeModel(bones, musclesJson, table = null) {
         w = V.mul(w, 1 / wl); Q = poseOf(mm(axisR(w, rad(1)), R), P);
         if (intoBody(elbowOf(Q))) break;
       }
-      if (Q.elev > lim.elev || Q.rot < lim.lo || Q.rot > lim.hi) break;
-      const len = lenAt(Q); if (len >= out.at(-1).len) break;      // it can shorten no further
+      let slow = 0;
+      if (Q.elev > lim.elev || Q.rot < lim.lo || Q.rot > lim.hi) {
+        // at a limit of the joint the arm goes on the way that is left to it, along the limit (the front of the
+        // deltoid still lifts an arm that is turned in as far as it goes), unless that barely shortens the muscle
+        Q = { ...Q, elev: Math.min(Q.elev, lim.elev), rot: clamp(Q.rot, lim.lo, lim.hi) };
+        if (intoBody(elbowOf(Q))) break;
+        slow = 0.2 * n * rad(1);
+      }
+      // it can shorten no further, or so little for the turn (under 3 mm of leverage) that it would not move the arm
+      const len = lenAt(Q); if (len >= out.at(-1).len - Math.max(slow, 3 * rad(1) / b.L0)) break;
       P = Q; out.push({ ...P, len });
     }
     return out;

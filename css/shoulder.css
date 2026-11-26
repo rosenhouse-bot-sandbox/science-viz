@@ -110,6 +110,7 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family
 @media (hover:hover){.each li button:hover{background:rgba(255,215,115,.12);color:var(--ink)}}
 .each li b{font-family:var(--mono);font-weight:500;font-size:0.75rem;color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap}
 .each .flex{display:grid;padding:2px 8px 8px}
+.each .flex .fine{margin-top:4px}
 .each li small{grid-column:1/-1;color:var(--ink3);font-size:0.7188rem;line-height:1.3}
 .each li.works button{color:var(--ink)}
 .each li.works > button b::before{content:'working · ';color:var(--gold);font-family:var(--body)}

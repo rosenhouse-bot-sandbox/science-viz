@@ -947,9 +947,23 @@ wrong with it, and what the common physical therapy exercises do to it.
 - **Each muscle** (in the panel) gives each muscle's length against its length at rest, from the model.
   The numbers under the picture (the narrowest gap between arm bone and acromion, and the ball's slide)
   are from the model too. Every sentence on the page has a source, listed under it (`js/shoulder/facts.js`).
+- A tap on a muscle in that list makes it **pull alone**. The arm turns a degree at a time, the way that shortens
+  that muscle fastest in the model (`model.contract`), up to 40°. It goes no further than 150° up, 60° in and
+  90° out, and the elbow stays out of the body; at a limit the arm goes on along the limit. The arm's weight
+  and the other muscles are left out, and the shoulder blade still turns with the lift. The view goes round to
+  the front for the subscapularis and the front of the deltoid, which cannot be seen from behind, and the part of
+  the deltoid that pulls stays in the picture as far in as the Joint. When the front or the middle of the deltoid
+  pulls alone, the ball rides up 3 mm where there is room. Cadaver shoulders lifted by the deltoid alone showed
+  the ball moving up (Sharkey and Marder 1995); the size is the page's own, and the page says so. From the arm
+  hanging, each pull is what the sources say that muscle does. With the arm already lifted the pulls are less
+  sure: the model's back deltoid, teres minor and infraspinatus pull the arm down more than was measured
+  (Ackland 2008), and the page says so.
 - How a muscle bends is a rule, not a simulation: each slice keeps its shape and takes a share of the arm
   bone's turn about the ball's middle (from none at the origin to all of it at the insertion), then is
-  pushed out of any bone it was not already in at rest. At the far ends of the turns (90° out with the
+  pushed out of any bone it was not already in at rest. The subscapularis takes its share later along its
+  length than the other cuff muscles, because it lies on the shoulder blade for three quarters of it. The
+  deltoid is fixed to the arm bone only at its end, so when the bone turns about its length the deltoid is
+  carried sideways by its end and does not go round the arm. At the far ends of the turns (90° out with the
   arm up) the deltoid bunches more untidily than a real one.
 - Labels are DOM elements. Each is shown only where its part is really seen: the page draws a small
   picture of which part is at each pixel, and the label's dot goes to the nearest place its part shows.
@@ -959,7 +973,8 @@ filled in using the stencil buffer); `facts.js` every statement and its source; 
 labels, panel and controls; `geom.js` and `solid.js` helpers. WebGL helpers come from the shared `js/gl/gl.js`. `css/shoulder.css` is the stylesheet.
 `tests/shoulder/`: `build-data.mjs` and `build-pose.mjs` make the data; `review.mjs` checks the muscles
 against the scans; `model.mjs` checks the model at hundreds of random arm positions (bones apart, no new
-points inside bone, no folds, and which muscles lengthen and shorten as the textbooks say); `page.mjs`
+points inside bone, no folds, which muscles lengthen and shorten as the textbooks say, and where each muscle
+pulling alone takes the arm); `page.mjs`
 presses every control and sweeps every slider looking for jumps. After changing any file under
 `js/shoulder/`, `css/shoulder.css` or `shoulder/data/`, run `node tests/stamp.mjs shoulder`.
 

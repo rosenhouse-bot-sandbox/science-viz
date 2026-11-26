@@ -1,16 +1,16 @@
 // Shoulder: the controller. The state is the zoom (0 Shoulder, 1 Joint, 2 Tendon), a condition or an exercise,
 // and the arm's lift and turn. Everything drawn and every number shown comes from model.js.
-import { unpack, makeModel, MUSCLES, clamp, smooth, apply, turn as turnDir } from './model.js?v=a7948fcd';
-import { V } from './geom.js?v=a7948fcd';
-import { makeView, COL } from './view.js?v=a7948fcd';
-import { SRC, DOES, CONDITIONS, EXERCISES, MODEL_NOTE, MODEL_SRC } from './facts.js?v=a7948fcd';
-import { EX_POSE, EX_STILL, EX_SECONDS } from './exercises.js?v=a7948fcd';
-import { gamepad } from '../gamepad/gamepad.js?v=a7948fcd';
-import { touchSliders } from '../touch/slider.js?v=a7948fcd';
+import { unpack, makeModel, MUSCLES, clamp, smooth, apply, turn as turnDir } from './model.js?v=a4800837';
+import { V } from './geom.js?v=a4800837';
+import { makeView, COL } from './view.js?v=a4800837';
+import { SRC, DOES, ALONE, CONDITIONS, EXERCISES, MODEL_NOTE, MODEL_SRC } from './facts.js?v=a4800837';
+import { EX_POSE, EX_STILL, EX_SECONDS } from './exercises.js?v=a4800837';
+import { gamepad } from '../gamepad/gamepad.js?v=a4800837';
+import { touchSliders } from '../touch/slider.js?v=a4800837';
 
 const PINCH = 0.9;   // scales of zoom for each e-fold of finger spread: one full spread is about one scale, as on Maple and Engine
 
-const STAMP = 'a7948fcd';                                        // written by tests/stamp.mjs: the data files' version
+const STAMP = 'a4800837';                                        // written by tests/stamp.mjs: the data files' version
 const $ = (id) => document.getElementById(id);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const cv = $('view'), gl = cv.getContext('webgl2', { antialias: true, alpha: false, stencil: true, powerPreference: 'high-performance' });
@@ -23,8 +23,17 @@ const st = { z: 0, mode: 'explore', cond: 'healthy', ex: 'external', lift: 0, tu
 const FOV = 30 * Math.PI / 180;
 const free = { x: 0, y: 0, w: 1, h: 1 }, cam = { W: 1, H: 1, dpr: 1 };
 // look: while a muscle pulls, the Shoulder view stands back to show the elbow (wide), and the deltoid fades where
-// it is when it hides the muscle that pulls (see); each eases from 0 to 1
-const look = { wide: 0, see: 0 };
+// it is when it hides the muscle that pulls (see); the view goes round to the front for a muscle that cannot be seen
+// from behind (front, in radians); and the part of the deltoid that pulls stays in the picture as the view goes in
+// (deltA, deltM, deltP). Each eases from 0 to where it is wanted.
+const look = { wide: 0, see: 0, front: 0, deltA: 0, deltM: 0, deltP: 0 };
+// how far round: the subscapularis is seen from straight in front; the front of the deltoid from the front and the
+// side, so that the arm it lifts forward is not lifted straight at the eye
+const FRONT = { subscap: 1.8, deltA: 1.1 };
+function looks() {
+  const id = st.flex?.id, cuff = id ? MUSCLES.find((m) => m.id === id).cuff : false;
+  return { wide: id ? 1 : 0, see: cuff ? 1 : 0, front: FRONT[id] || 0, deltA: +(id === 'deltA'), deltM: +(id === 'deltM'), deltP: +(id === 'deltP') };
+}
 let dirty = true, raf = 0, last = 0, fly = null, pull = null;   // pull: the flex easing from one c to another
 const drawn = { n: 0 };
 
@@ -39,6 +48,8 @@ const SHAPE = {
 };
 const BURSA_MM = { healthy: 0.8, bursitis: 3 };
 const RIDE_UP = 3;                                       // mm the ball rides up with a large full-thickness tear (drawn)
+// The front and the middle of the deltoid pulling alone also pull the ball up, by as much (drawn; facts.js ALONE)
+const RIDES = new Set(['deltA', 'deltM']);
 
 const exSeconds = () => EX_SECONDS[st.ex] || 6;
 
@@ -67,7 +78,7 @@ function poseNow() {
   const P = basePose();
   if (!st.flex || !model) return P;
   const q = along(pathFor(st.flex.id, P), st.flex.c);
-  return { elev: q.elev, plane: q.plane, rot: q.rot, elbow: P.elbow, up: P.up };
+  return { elev: q.elev, plane: q.plane, rot: q.rot, elbow: P.elbow, up: Math.max(P.up ?? 0, RIDES.has(st.flex.id) ? RIDE_UP * clamp(st.flex.c) : 0) };
 }
 
 // ---- the scene ----
@@ -78,17 +89,19 @@ function compute() {
   const T = model.pose(P), cond = st.mode === 'explore' ? st.cond : 'healthy';
   const soft = [], len = {};
   const deltFade = (1 - smooth((st.z - 0.3) / 0.55)) * (1 - 0.8 * smooth(look.see));   // the deltoid fades away where it is as the view goes in
+  const stays = (id) => smooth(look[id]) * (1 - smooth((st.z - 1.15) / 0.6));           // but the part that pulls stays, as far in as the Joint
   for (const b of model.built) {
     if (hidden.has(b.id)) continue;
     const shape = b.id === 'supra' ? SHAPE[cond] : null, m = model.muscle(b, T, shape ? { shape } : {});
     len[b.id] = m.length / m.rest;
     const delt = !b.cuff, works = st.mode === 'exercise' && EXERCISES.find((x) => x.id === st.ex).works.includes(b.id);
-    const pulls = st.flex && st.flex.id === b.id ? 0.12 + 0.23 * clamp(st.flex.c) : 0;
+    const pulls = st.flex && st.flex.id === b.id ? 0.08 + 0.14 * clamp(st.flex.c) : 0;   // lit, but still its own color
     const glow = Math.max(st.pick === b.id ? 0.35 : works ? 0.16 : 0, pulls);
-    if (delt && deltFade < 0.01) continue;
+    const alpha = delt ? Math.max(deltFade, stays(b.id)) : 1;
+    if (alpha < 0.01) continue;
     const col = delt ? COL.deltoid : COL[b.id];
     soft.push({ key: b.id, b, pos: m.pos, col, col2: COL.tendon, blend: delt ? [0.93, 1.0] : [0.74, 0.88], glow,
-      hole: b.id === 'supra' && cond === 'full' ? [TEAR.from, 1.01, TEAR.s0, TEAR.s1] : null, capCol: col.map((x) => x * 0.85), capCol2: COL.tendonCut, alpha: delt ? deltFade : 1,
+      hole: b.id === 'supra' && cond === 'full' ? [TEAR.from, 1.01, TEAR.s0, TEAR.s1] : null, capCol: col.map((x) => x * 0.85), capCol2: COL.tendonCut, alpha,
       warm: b.id === 'supra' ? warmFor(b, m, cond) : null });
   }
   // the supraspinatus's cut turns from muscle to tendon along it, as its surface does: each point of the cut takes the
@@ -144,6 +157,10 @@ function aimAt(z) {
   const at = V.add(V.mul(a.at, 1 - f), V.mul(b.at, f)), size = Math.exp(Math.log(a.size) * (1 - f) + Math.log(b.size) * f);
   let dir = V.norm(V.add(V.mul(a.dir, 1 - f), V.mul(b.dir, f)));
   // the visitor's own turn of the view
+  // round to the front for a muscle that cannot be seen from behind (not at the Tendon stop): a turn about the
+  // upright that keeps half the view's height, so that an arm lifted forward passes under the eye, not into it
+  const fa = look.front * (1 - smooth(st.z - 1));
+  if (fa) dir = V.norm(V.add(V.add(V.mul(dir, Math.cos(fa)), V.mul(V.cross([0, 1, 0], dir), Math.sin(fa))), [0, dir[1] * (1 - Math.cos(fa)) * 0.5, 0]));
   const ry = st.yaw, rp = st.pitch, side = V.norm(V.cross([0, 1, 0], dir));
   dir = V.norm(V.add(V.mul(dir, Math.cos(ry)), V.mul(V.cross([0, 1, 0], dir), Math.sin(ry))));
   dir = V.norm(V.add(V.mul(dir, Math.cos(rp)), V.mul([0, 1, 0], Math.sin(rp)))); void side;
@@ -298,6 +315,8 @@ function flexSync() {
   const short = Math.round((1 - q.len / path[0].len) * 100);
   const txt = path.length < 2 ? 'at the limit' : `${short}% shorter`;
   el.setAttribute('aria-valuetext', txt); set('flexV', txt);
+  const note = $('flexNote'), says = ALONE[f.id]?.text || '';
+  if (note.textContent !== says) note.textContent = says;
 }
 // which way the arm is lifted, in words, for the readout
 const toward = (pl) => (pl > 120 ? 'across the body' : pl > 60 ? 'forward' : pl > 20 ? 'forward and out' : pl > -20 ? 'out to the side' : pl > -60 ? 'out and back' : 'back');
@@ -333,8 +352,8 @@ function tick(now) {
   if (broken || !model) return;
   const dt = Math.min(0.05, last ? (now - last) / 1000 : 0.016); last = now;
   if (st.play) { st.phase = (st.phase + dt / exSeconds()) % 1; dirty = true; }
-  const want = { wide: st.flex ? 1 : 0, see: st.flex && MUSCLES.find((m) => m.id === st.flex.id).cuff ? 1 : 0 };
-  for (const k of ['wide', 'see']) if (look[k] !== want[k]) { look[k] = reduced ? want[k] : want[k] > look[k] ? Math.min(want[k], look[k] + dt / 0.5) : Math.max(want[k], look[k] - dt / 0.5); dirty = true; }
+  const want = looks();
+  for (const k in want) if (look[k] !== want[k]) { look[k] = reduced ? want[k] : want[k] > look[k] ? Math.min(want[k], look[k] + dt / 0.5) : Math.max(want[k], look[k] - dt / 0.5); dirty = true; }
   if (pull) {
     pull.u = Math.min(1, pull.u + dt / pull.s); st.flex.c = pull.c0 + (pull.c1 - pull.c0) * smooth(pull.u); dirty = true;
     if (pull.u >= 1) { const then = pull.then; pull = null; if (then) then(); }
@@ -344,7 +363,7 @@ function tick(now) {
     st.z += step; if (Math.abs(fly.to - st.z) < 0.002) { st.z = fly.to; fly = null; } dirty = true;
   }
   if (dirty) { dirty = false; try { compute(); draw(); labels(); sync(); } catch (e) { oops(e); } }
-  const easing = look.wide !== (st.flex ? 1 : 0) || look.see !== (st.flex && MUSCLES.find((m) => m.id === st.flex.id).cuff ? 1 : 0);
+  const now1 = looks(), easing = Object.keys(now1).some((k) => look[k] !== now1[k]);
   if (st.play || fly || pull || easing) kick(); else last = 0;
 }
 function oops(e) { console.error(e); if (broken) return; broken = true; st.play = false; fly = null; $('oops').hidden = false; }
@@ -452,5 +471,5 @@ controls(); makeLabels(); readHash(); measure();
 start().then(() => { measure(); }).catch(oops);
 window.__shoulder = { st, hidden, drawn, free, stops: STOPS, get model() { return model; }, get frame() { return frame; }, get busy() { return !!(fly || st.play || pull); },
   settle() { if (fly) { st.z = fly.to; fly = null; } while (pull) { const p = pull; pull = null; st.flex.c = p.c1; if (p.then) p.then(); }
-    look.wide = st.flex ? 1 : 0; look.see = st.flex && MUSCLES.find((m) => m.id === st.flex.id).cuff ? 1 : 0; st.play = false; touch(); }, tapMuscle, res(k) { res = k; measure(); },
+    Object.assign(look, looks()); st.play = false; touch(); }, tapMuscle, res(k) { res = k; measure(); },
   redraw() { compute(); draw(); labels(); sync(); gl.finish(); } };

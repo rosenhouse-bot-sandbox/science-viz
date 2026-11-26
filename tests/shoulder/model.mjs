@@ -124,6 +124,20 @@ want.push(
   ['the front of the deltoid lifts the arm forward and turns it in', end.deltA.elev > 15 && end.deltA.plane > 45 && end.deltA.plane < 135 && end.deltA.rot < 0],
   ['the middle of the deltoid lifts the arm out to the side', end.deltM.elev > 20 && Math.abs(end.deltM.plane) < 30],
   ['the back of the deltoid takes the arm back and turns it out', end.deltP.elev > 10 && end.deltP.plane < -45 && end.deltP.rot > 0]);
+// a muscle that lifts does so from its first degrees (every pull from hanging once began by only turning the arm:
+// poseOf could not tell which way a lift of under half a degree went)
+const early = Object.fromEntries(pulls.filter((p) => p.S === STARTS[0]).map((p) => [p.b.id, p.path[Math.min(5, p.path.length - 1)]]));
+for (const id of ['supra', 'deltA', 'deltM', 'deltP']) want.push([`${id} moves the hanging arm away from the body within its first 5°`, early[id].elev > 3]);
+// the front of the deltoid still lifts an arm that is turned in as far as it goes (the pull once stopped dead at a limit)
+{ const e = pulls.find((p) => p.S === STARTS[1] && p.b.id === 'deltA').path.at(-1); want.push(['the front of the deltoid lifts an arm that is turned in 60°', e.elev > 15 && e.rot > -61]); }
+// a muscle with nowhere to go does not creep (the subscapularis with the arm turned in as far as it goes)
+{ const pth = pulls.find((p) => p.S === STARTS[1] && p.b.id === 'subscap').path; want.push(['the subscapularis stays put with the arm turned in 60°', pth.length < 4]); }
+// the deltoid turns the arm about its length far less than the cuff does (Hik and Ackland 2019, pooled leverage:
+// back of the deltoid 7 mm, infraspinatus 25 mm). Its slices once went round the arm with every turn, which made
+// the back of it as strong a turner as the infraspinatus.
+{ const mmOf = (id, P) => { const b = model.built.find((x) => x.id === id); return model.length(b, model.pose({ elbow: 90, plane: 30, elev: 0, ...P })) * b.L0; };
+  const turn = (id) => Math.abs(mmOf(id, { rot: 20 }) - mmOf(id, { rot: -20 }));
+  for (const id of ['deltA', 'deltM', 'deltP']) want.push([`turning the hanging arm changes the length of ${id} less than half as much as the infraspinatus's`, turn(id) < 0.5 * turn('infra')]); }
 for (const { b, S, path } of pulls) {
   if (path.some((q, i) => i && q.len > path[i - 1].len + 1e-6)) fail(`${b.id} lengthens somewhere along its own pull`, S);
   if (S === STARTS[0] && path.length < 30) fail(`${b.id} pulls the arm only ${path.length - 1}° from hanging`, S);
