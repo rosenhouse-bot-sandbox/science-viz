@@ -1,19 +1,19 @@
 // Gears on a cube and an octahedron, the workshop: for each part, its dimensioned drawing, and how it is made on a
 // lathe and a mill, step by step. The state is which toy, which part, which view, the machine time, and the camera.
-import { MM, parts, unitMM } from './model.js?v=6ca5dca9';
-import { planOf, startOf, MANDREL, PARTS, NAMES, by, SHOWN } from './plan.js?v=6ca5dca9';
-import { stockOf, gearSpec, screwSpec } from './spec.js?v=6ca5dca9';
-import { timeline, makeReplay, DZ } from './cut.js?v=6ca5dca9';
-import { makeLook } from './look.js?v=6ca5dca9';
-import { makeShop, M4, turnedMesh, milledMesh, holeMesh, slotMesh } from './shop.js?v=6ca5dca9';
-import { grow, lathe, box, gearMesh, smallParts, sphere } from './mesh.js?v=6ca5dca9';
-import { collisions, turnedEnvelope } from './collide.js?v=6ca5dca9';
-import { cutting, chipMesh, rnd } from './chips.js?v=6ca5dca9';
-import { drawing } from './drawing.js?v=6ca5dca9';
-import { perspective, lookAt, mul4 } from '../gl/gl.js?v=6ca5dca9';
-import { dot, cross, norm, bodyFaces } from './model.js?v=6ca5dca9';
-import { gamepad } from '../gamepad/gamepad.js?v=6ca5dca9';
-import { touchSliders } from '../touch/slider.js?v=6ca5dca9';
+import { MM, parts, unitMM } from './model.js?v=e30be9be';
+import { planOf, startOf, MANDREL, PARTS, NAMES, by, SHOWN } from './plan.js?v=e30be9be';
+import { stockOf, gearSpec, screwSpec } from './spec.js?v=e30be9be';
+import { timeline, makeReplay, DZ } from './cut.js?v=e30be9be';
+import { makeLook } from './look.js?v=e30be9be';
+import { makeShop, M4, turnedMesh, milledMesh, holeMesh, slotMesh } from './shop.js?v=e30be9be';
+import { grow, lathe, box, gearMesh, smallParts, sphere } from './mesh.js?v=e30be9be';
+import { collisions, turnedEnvelope } from './collide.js?v=e30be9be';
+import { cutting, chipMesh, rnd } from './chips.js?v=e30be9be';
+import { drawing } from './drawing.js?v=e30be9be';
+import { perspective, lookAt, mul4 } from '../gl/gl.js?v=e30be9be';
+import { dot, cross, norm, bodyFaces } from './model.js?v=e30be9be';
+import { gamepad } from '../gamepad/gamepad.js?v=e30be9be';
+import { touchSliders } from '../touch/slider.js?v=e30be9be';
 
 const $ = (id) => document.getElementById(id);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -21,7 +21,7 @@ const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const TAU = 2 * Math.PI, D = Math.PI / 180;
 const cv = $('view'), gl = cv.getContext('webgl2', { antialias: true, alpha: false, powerPreference: 'high-performance' });
 const SHAPE_NAME = { cube4: 'Cube', octa: 'Octahedron' };
-const st = { shape: 'cube4', part: 'gear', view: 'make', t: 0, play: !reduced, yaw: 0, pitch: 0, zoom: 1, step: 0 };
+const st = { shape: 'cube4', part: 'gear', view: 'make', t: 0, play: !reduced, yaw: 0, pitch: 0, zoom: 1, step: 0, rate: 1 };
 const free = { x: 0, y: 0, w: 1, h: 1 }, view = { W: 1, H: 1, dpr: 1 };
 let shop = null, broken = false, dirty = true, raf = 0, last = 0, cam = null, cur = null, spin = 0;
 const drawn = { t: -1, key: '' };
@@ -34,11 +34,21 @@ function load() {
   const replay = plan.length ? makeReplay(plan, tl, start) : null;
   // the steps in order, with their times
   const steps = []; plan.forEach((op, oi) => op.steps.forEach((s, si) => steps.push({ op: oi, si, s, t0: s.t0, t1: s.t1 })));
-  // a speed that shows the whole part in about a minute and a half
-  const rate = Math.max(4, Math.round(tl.T / 90));
+  // how much faster than the machine it plays: each step's first pass slowly enough to follow (about five seconds),
+  // the passes after it faster, so that a long step still takes under half a minute
+  for (const s of steps) {
+    const segs = tl.segs.filter((g) => g.op === s.op && g.step === s.si), split = segs[1] ? segs[1].t0 : s.t1;
+    s.split = split; s.slow = clamp((split - s.t0) / 5, 1, 8);
+    const rest = s.t1 - split; s.fast = rest > 0 ? Math.max(s.slow, rest / clamp(1.2 * Math.sqrt(rest), 3, 20)) : s.slow;
+  }
+  const rate = Math.max(4, Math.round(tl.T / 90));     // for the pile of chips: one chip for every so many machine seconds
   cur = { sh, plan, tl, replay, steps, rate, key: st.shape + st.part, spans: plan.map((_, oi) => cutting(plan, tl, oi)) };
+  st.rate = rateAt(st.t);
   st.t = clamp(st.t, 0, tl.T);
 }
+
+// machine seconds for each second of playing, at machine time t
+function rateAt(t) { const s = cur.steps[stepAt(t)]; return !s ? 1 : t < s.split ? s.slow : s.fast; }
 
 // ---- the camera: it circles the part ----
 // where the camera starts for each way of holding the part
@@ -154,7 +164,7 @@ function chipsOf(r, op, step, tool) {
     pile = (i) => { const a = rnd(i, 11) * 6.283, d = 12 + 40 * Math.sqrt(rnd(i, 12)), q = [c[0] + d * Math.cos(a), c[1] + d * Math.sin(a), 0]; q[2] = floor(q) + 0.3; return { p: q, size }; };
   }
   const key = 'C' + cur.key + st.t.toFixed(3) + (cutTip ? cutTip.map((x) => x.toFixed(2)).join() : '');
-  chipKey = dynSet(shop.dyn.chips, key, chipKey, () => chipMesh({ spans: cur.spans[r.op], t: st.t, rate: cur.rate, src, up: lathe ? 1 : 2, floor, pile }));
+  chipKey = dynSet(shop.dyn.chips, key, chipKey, () => chipMesh({ spans: cur.spans[r.op], t: st.t, rate: rateAt(st.t), pileRate: cur.rate, src, up: lathe ? 1 : 2, floor, pile }));
   return { name: 'chips', role: 'skip', mesh: shop.dyn.chips, M: M4.id() };
 }
 // how far out the jaws close: the bar's radius where they grip
@@ -294,23 +304,34 @@ function gearOnHead(items, r, op, step, tool, p) {
   items.push({ name: 'dividing head', role: 'static', mesh: MI.dhead, M: M4.mul(M4.t(-10, 0, H), M4.ry(-beta)) });
   const Lm = 26;   // nose to the mandrel's shoulder, along the spindle
   // the gear's frame: its z points back along the spindle; the gap being cut is on top
-  const pose = r.tip || { gap: 0, side: 0, f: 0 }, pitch = 2 * Math.PI / g.N, top = pose.gap * pitch - pitch / 2, psi = top + (pose.side || 0) * 0.035 * (r.away < 1 ? 1 : 0);
+  // where the cutter is along the gap (0: the outer end, 1: the inner), how deep, and how far the head is turned.
+  // A side pass turns the head a little; between passes the table winds back, the crank turns the gap to the top,
+  // and the cutter comes down to the next depth.
+  const pitch = 2 * Math.PI / g.N, psiOf = (q) => q.gap * pitch - pitch / 2 + (q.side || 0) * 0.035;
+  const q = p.k === 'gap' ? p : { gap: 0, side: 0, depth: 0 }, mv = r.move;
+  const before = st.t < r.seg.t0, fr = clamp((r.f - 0.12) / 0.76, -0.25, 1.25);
+  let psi = psiOf(q), along = before ? -0.25 : r.away >= 1 && r.f >= 1 ? 1.25 : fr, dNow = q.depth ?? 1, side = q.side || 0;
+  if (mv) {
+    const q1 = mv.to.p, w = mv.w;
+    psi += (psiOf(q1) - psi) * w; along = 1.25 - 1.5 * w; dNow += ((q1.depth ?? 1) - dNow) * w; side += ((q1.side || 0) - side) * w;
+  }
   const zW = a.map((v) => -v), upW = [-Math.sin(beta), 0, Math.cos(beta)], yW = cross(zW, upW);
   // gear frame axes in the world: the azimuth psi maps to "up"
   const ex = [0, 1, 2].map((k) => Math.cos(psi) * upW[k] - Math.sin(psi) * yW[k]), ey = [0, 1, 2].map((k) => Math.sin(psi) * upW[k] + Math.cos(psi) * yW[k]);
   const shoulder = nose.map((v, k) => v + a[k] * Lm), O = shoulder.map((v, k) => v - zW[k] * g.zo);
   const Mg = new Float32Array([ex[0] * u, ex[1] * u, ex[2] * u, 0, ey[0] * u, ey[1] * u, ey[2] * u, 0, zW[0] * u, zW[1] * u, zW[2] * u, 0, O[0], O[1], O[2], 1]);
-  const gaps = r.mill.gaps ? Array.from(r.mill.gaps, (f) => clamp((f - 0.12) / 0.76, 0, 1)) : new Array(g.N).fill(0);
-  partKey = dynSet(shop.dyn.part, 'G' + cur.key + gaps.map((x) => x.toFixed(3)).join(), partKey, () => gearMesh(sh.profile, P, gaps));
+  const M = r.mill, gaps = Array.from({ length: g.N }, (_, k) => (M.gaps ? [clamp((M.gaps[k] - 0.12) / 0.76, 0, 1), M.gapD[k], M.gapD0[k]] : [0, 0, 0]));
+  partKey = dynSet(shop.dyn.part, 'G' + cur.key + gaps.map((x) => x.map((v) => v.toFixed(3)).join(':')).join(), partKey, () => gearMesh(sh.profile, P, gaps));
   items.push({ name: 'part', role: 'part', mesh: shop.dyn.part, M: Mg, part: true });
   items.push({ name: 'mandrel', role: 'static', mesh: cached('dmandrel', () => rotX((() => { const m = grow(); lathe(m, [[0, -20], [5, -20], [5, Lm - 3], [3.5, Lm - 3], [3.5, Lm], [2, Lm], [2, Lm + 3.2], [1.5, Lm + 3.6], [1.5, Lm + 5], [0, Lm + 5]], 1, 48); return m; })())), M: M4.mul(M4.t(...nose), M4.ry(-beta)) });
   // the cutter: its lowest point runs along the bottom of the gap, from the outer end in
   // (the cutter stays at the top; the indexing turns the gap being cut, at azimuth `top` in the gear's frame, up to it)
-  const rootAt = (s) => { const th = sh.profile.root, rho = s / Math.cos(th - sh.profile.alpha); const q = [Math.sin(th) * rho * Math.cos(psi), Math.sin(th) * rho * Math.sin(psi), Math.cos(th) * rho]; return M4.apply(Mg, q.map((v) => v / u)); };
+  // (short of full depth, the cutter's lowest point runs that much nearer the tips)
+  const rootAt = (s) => { const th = sh.profile.root + (1 - dNow) * (sh.profile.tip - sh.profile.root), rho = s / Math.cos(th - sh.profile.alpha); const q = [Math.sin(th) * rho * Math.cos(psi), Math.sin(th) * rho * Math.sin(psi), Math.cos(th) * rho]; return M4.apply(Mg, q.map((v) => v / u)); };
   const outer = rootAt(g.coneOut + 0.2), inner = rootAt(g.coneIn - 0.2);
-  const fr = clamp((pose.f - 0.12) / 0.76, -0.25, 1.25), lift = r.away * 3;
-  const bottom = [0, 1, 2].map((k) => outer[k] + (inner[k] - outer[k]) * (r.away >= 1 && pose.f >= 1 ? 1.25 : fr));
-  const R = tool.d / 2, c = [bottom[0], bottom[1] + (pose.side || 0) * 0.12, bottom[2] + R + lift];
+  const lift = r.away * 3;
+  const bottom = [0, 1, 2].map((k) => outer[k] + (inner[k] - outer[k]) * along);
+  const R = tool.d / 2, c = [bottom[0], bottom[1] + side * 0.12, bottom[2] + R + lift];
   spinAxis = { p: c, s: [0, 1, 0] }; cutTip = bottom;
   items.push({ name: 'gear cutter', role: 'cut', mesh: cached('gc' + tool.d, () => shop.gearCutter(tool)), M: M4.mul(M4.t(...c), M4.mul(ALONG_Y(), M4.rz(spin))) });
   items.push({ name: 'arbor', role: 'spin', mesh: MI.quill, M: M4.mul(M4.t(c[0], c[1] + 120, c[2]), ALONG_Y()) });
@@ -443,7 +464,9 @@ function tick(now) {
   const moving = st.view === 'make' && st.play && cur.replay && st.part !== 'bearing';
   if (moving) {
     const was = cur.steps[stepAt(st.t)].op;
-    st.t += dt * cur.rate; if (st.t >= cur.tl.T) { st.t = cur.tl.T; st.play = false; }
+    // the speed eases between a step's slow first pass and its faster rest, so nothing jumps
+    st.rate += (rateAt(st.t) - st.rate) * (1 - Math.exp(-dt * 2.5));
+    st.t += dt * st.rate; if (st.t >= cur.tl.T) { st.t = cur.tl.T; st.play = false; }
     if (cur.steps[stepAt(st.t)].op !== was) resetView();
     dirty = true;
   }
@@ -486,7 +509,7 @@ function resetView() {
 function goStep(k) {
   const i = clamp(stepAt(st.t) + k, 0, cur.steps.length - 1), s = cur.steps[i];
   const was = cur.steps[stepAt(st.t)].op;
-  st.t = s.t0 + 1e-3;
+  st.t = s.t0 + 1e-3; st.rate = rateAt(st.t); st.play = !reduced;
   if (s.op !== was) resetView();
   touch();
 }
