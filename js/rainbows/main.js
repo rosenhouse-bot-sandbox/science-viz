@@ -1,4 +1,4 @@
-// Rainbows v2: state, the fenced-in camera, the zoom between scales, and the controls.
+// Rainbows: state, the fenced-in camera, the zoom between scales, and the controls.
 import { createEngine, makeView, project, slerp, V, DEG, clamp, lerp, sstep } from './gl.js';
 import * as O from './optics.js';
 import orbit from './stages/orbit.js';

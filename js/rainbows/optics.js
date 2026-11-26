@@ -1,4 +1,4 @@
-// The physics behind every scale of Rainbows v2. Wavelengths in nanometres, angles in radians
+// The physics behind every scale of Rainbows. Wavelengths in nanometres, angles in radians
 // unless a name says "deg".
 //
 // One model of water runs through the whole experience: a single Lorentz oscillator (bound

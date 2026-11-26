@@ -12,7 +12,7 @@ experience is and where its code lives.
   it needs Node and a Playwright installed outside the repository.)
 - Run it with `python3 -m http.server 8000` from the repository root. ES modules do not load from
   `file://`.
-- Each experience is self-contained: `v2/` (Rainbows), `vesicle/`, `optics/` (Optics workshop),
+- Each experience is self-contained: `rainbows/` (Rainbows), `vesicle/`, `optics/` (Optics workshop),
   `dag/` (Graph layout), `maple/` (Japanese maple), `engine/` (Engine), `shoulder/` (Shoulder), `saccade/` (Overshoot saccades) and `gears/` (Gear fidget) have their own page, stylesheet (`css/`) and modules (`js/`). Do not change one while working on
   another.
   The one thing they share is controller support, `js/gamepad/gamepad.js` and `css/gamepad.css`: each
@@ -40,11 +40,21 @@ experience is and where its code lives.
   shared module the page imports, such as `js/gl/gl.js` or `js/touch/slider.js`), run `node tests/stamp.mjs`.
   The page's tests fail if the stamp is out of date.
 - Physics claims must be true. Numbers shown on screen come from the model in code
-  (`js/v2/optics.js` for v2), not from text typed into a caption. Where a picture simplifies or
+  (`js/rainbows/optics.js` for Rainbows), not from text typed into a caption. Where a picture simplifies or
   exaggerates, say so on screen and in the README.
 - Use wavelength and color correctly. Wavelength is a property of the light; color is what we
   perceive. White light is a mix of many wavelengths, not "every color at once". Write "short
   wavelengths, which we see as blue", and "drawn in gold" for a color that is only the picture's.
+
+## Realism
+
+- Each page's folder has a `REALISM.md`: the laws that page must obey and what each forces the picture to show
+  (`gears/REALISM.md`: only a cutting edge touches the work, and only the work). Read it before changing the page.
+- A rule there is derived from physics, anatomy or geometry. When someone says a picture looks wrong, find the law
+  it breaks and add the law and what follows from it. Do not record the remark, who made it or when.
+- A known defect goes in a GitHub issue, not in `REALISM.md`.
+- To audit a page, use the `realism-audit` skill (`.claude/skills/realism-audit/SKILL.md`). A cheaper model takes
+  frames with `node tests/audit/shots.mjs`, and the strongest model derives the rules and reads the frames.
 
 ## Writing the text
 
@@ -121,7 +131,7 @@ A new page is not done until it does.
 Before pushing:
 
 - `node --check` every changed module.
-- For v2, run the smooth-interaction tests: `node tests/smooth/run.mjs --quick` after any change,
+- For Rainbows, run the smooth-interaction tests: `node tests/smooth/run.mjs --quick` after any change,
   and the full `node tests/smooth/run.mjs` after changing a slider, a flight between scales, the
   particles or the panel's layout. They drag every slider and press every button one frame at a
   time on a stepped clock and report anything that jumps, flashes, shifts under the pointer or
@@ -228,4 +238,4 @@ Before pushing:
   `tests/smooth/scenarios.mjs` and see the report show it, then fix it.
 - Load each affected page in a browser with the console open, at a desktop width, at a phone
   width (390 × 844) and at an iPad width held upright (820 × 1180), and step through every scale and control.
-- For v2, also check with reduced motion switched on, and with only the keyboard.
+- For Rainbows, also check with reduced motion switched on, and with only the keyboard.

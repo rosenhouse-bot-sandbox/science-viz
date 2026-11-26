@@ -2,7 +2,7 @@
 // page what scales it has and which sliders, buttons and tick boxes each one shows (the `model`), and
 // the scenarios are made from that. Rework a scale, rename it, add a slider: it is tested as found.
 //
-// A scenario is a fresh load of /v2/ at `hash`, then `run(h)`; h is the Hand in run.mjs (frames,
+// A scenario is a fresh load of /rainbows/ at `hash`, then `run(h)`; h is the Hand in run.mjs (frames,
 // click, drag, look, land, mark/same ...). When a person finds a jump the tests missed, add the
 // gesture that shows it to `extra` at the bottom.
 

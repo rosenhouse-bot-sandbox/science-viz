@@ -24,7 +24,7 @@ const { server, base } = await serve({ host: '127.0.0.1' });   // 127.0.0.1, not
 
 const PAGES = {
   home: { url: '', ready: () => !!document.querySelector('nav a'), noSliders: true },
-  rainbows: { url: 'v2/?debug=1', ready: () => !!window.__rainbows && !window.__rainbows.busy },
+  rainbows: { url: 'rainbows/?debug=1', ready: () => !!window.__rainbows && !window.__rainbows.busy },
   vesicle: { url: 'vesicle/', ready: () => !!document.getElementById('zoomV')?.textContent },
   optics: { url: 'optics/', ready: () => document.querySelectorAll('input[type=range]').length > 0 },
   graph: { url: 'dag/', ready: () => document.querySelectorAll('input[type=range]').length > 0 },

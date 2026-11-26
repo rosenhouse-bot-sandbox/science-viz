@@ -1,4 +1,4 @@
-/* Rainbows v2. The scene fills the screen; one glass panel holds the story and the controls
+/* Rainbows. The scene fills the screen; one glass panel holds the story and the controls
    (a left rail on wide screens, a bottom sheet on phones). */
 :root{
   --bg:#05070F; --ink:#EAF0FF; --ink2:#AAB6D6; --ink3:#7C88B0; --line:rgba(234,240,255,.14);

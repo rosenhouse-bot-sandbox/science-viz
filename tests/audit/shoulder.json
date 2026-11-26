@@ -1,0 +1,42 @@
+{
+  "page": "shoulder",
+  "about": "About half a second a frame in software, so a screenshot is fine. Hash keys: z, c, lift, turn, ex, p, m, k. Look from the front as well (set __shoulder.st.yaw): the page opens from behind.",
+  "ready": "window.__shoulder?.frame",
+  "settle": "__shoulder.settle(); __shoulder.redraw()",
+  "text": "#panel",
+  "sizes": [
+    "desktop",
+    "phone"
+  ],
+  "sets": [
+    {
+      "name": "lift",
+      "note": "The arm lifts from hanging to 150°. Expect: the ball stays in the socket, no muscle folds or enters bone, the bursa stays on the tendon.",
+      "hash": "z=1&c=healthy&lift={v}&turn=0",
+      "values": [
+        0,
+        30,
+        60,
+        90,
+        120,
+        150
+      ]
+    },
+    {
+      "name": "zoom",
+      "note": "The camera goes from Shoulder to Tendon in small steps. Expect: nothing pops in or out, each part keeps its place and size, and a part that fades does so in place.",
+      "hash": "z={v}&c=healthy&lift=60&turn=0",
+      "values": [
+        0,
+        0.25,
+        0.5,
+        0.75,
+        1,
+        1.25,
+        1.5,
+        1.75,
+        2
+      ]
+    }
+  ]
+}

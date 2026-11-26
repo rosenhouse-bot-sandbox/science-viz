@@ -1,0 +1,19 @@
+{
+  "page": "optics",
+  "about": "A 2D canvas with no animation, so a screenshot is fast. Challenges unlock in order: solve the earlier ones first, as tests/optics/run.mjs does, or only the first opens. Hash: l=<challenge id>.",
+  "ready": "window.__optics && window.__optics.S.out",
+  "text": "body",
+  "sizes": [
+    "desktop",
+    "phone"
+  ],
+  "sets": [
+    {
+      "name": "first-challenge",
+      "note": "The bench as it opens. Expect: rays straight between surfaces, bent at glass by Snell's law, and stopped by anything opaque.",
+      "values": [
+        ""
+      ]
+    }
+  ]
+}

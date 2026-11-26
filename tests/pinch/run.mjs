@@ -28,7 +28,7 @@ const PAGES = {
   shoulder: { url: 'shoulder/?res=0.25', slider: 'zoom', dir: 1, ready: () => !!window.__shoulder && !!window.__shoulder.frame, same: (v, s) => Math.abs(v - s.z) < 0.004 },
   saccade: { url: 'saccade/?res=0.3', slider: 'zoom', dir: 1, ready: () => !!window.__saccade && !!window.__saccade.frame, timed: true, same: (v, s) => Math.abs(v - s.z) < 0.004 },
   vesicle: { url: 'vesicle/', slider: 'zoom', dir: -1, ready: () => !!document.getElementById('zoomV').textContent },
-  rainbows: { url: 'v2/?debug=1', slider: null, dir: -1, wide: 60, ready: () => !!window.__rainbows && !window.__rainbows.busy },       // no Zoom slider here: a pinch moves the camera within the scale
+  rainbows: { url: 'rainbows/?debug=1', slider: null, dir: -1, wide: 60, ready: () => !!window.__rainbows && !window.__rainbows.busy },       // no Zoom slider here: a pinch moves the camera within the scale
 };
 const names = args.filter((a) => PAGES[a]); if (!names.length) names.push(...Object.keys(PAGES));
 

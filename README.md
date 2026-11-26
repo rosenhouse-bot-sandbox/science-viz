@@ -4,7 +4,7 @@ Interactive explorations, served from the landing page `index.html`.
 
 ## Rainbows
 
-A rebuild at `v2/`, in three dimensions at every scale, from the whole Earth down to single molecules.
+A page at `rainbows/`, in three dimensions at every scale, from the whole Earth down to single molecules.
 
 | Scale | Size | What you see |
 | --- | --- | --- |
@@ -47,7 +47,7 @@ A rebuild at `v2/`, in three dimensions at every scale, from the whole Earth dow
   is added over the scene they sit in, and their own backdrop and framing (the block of water, the
   wire frame) arrive last. Those frames are drawing aids, not objects inside the drop.
 
-The physics, all in `js/v2/optics.js`:
+The physics, all in `js/rainbows/optics.js`:
 
 - Water is one Lorentz oscillator (bound electrons with a resonance near 101 nm), fitted to measured
   indices: `n² = 1 + Aλ²/(λ² − λ0²)`. It gives 1.3327 at 589 nm against a measured 1.3330. The same
@@ -80,7 +80,7 @@ The physics, all in `js/v2/optics.js`:
   of light that reflects is left out, which the panel says. Each molecule drawn stands for over a
   hundred layers of real ones.
 - The Surface scale draws the drop cut open along the plane of the ray (`dropSkin` in
-  `js/v2/stages/surface.js`): the half nearer the camera is taken away, so the surface is seen
+  `js/rainbows/stages/surface.js`): the half nearer the camera is taken away, so the surface is seen
   edge-on as a bright line with the water's blue cut face on one side and air on the other, and the
   beams bend at that line. It is a drawing aid and the panel says so: the light is a round beam on
   both sides of the cut. With Waves the crests are drawn in a thin slice through the middle of the
@@ -116,9 +116,9 @@ Molecules scales draw them at their true spacing. Drops are spheres, air's index
 the 5% of light in the bow can be seen beside the 89% that escapes. A toggle spreads the colours 5×
 for visibility; it is off by default.
 
-Code: `js/v2/gl.js` is a small WebGL2 engine (HDR targets, bloom, glowing lines and points,
-full-screen ray shaders), `js/v2/main.js` holds state, cameras and controls, and each scale is a
-module in `js/v2/stages/`. It needs WebGL2 and has no dependencies. On slow machines it draws
+Code: `js/rainbows/gl.js` is a small WebGL2 engine (HDR targets, bloom, glowing lines and points,
+full-screen ray shaders), `js/rainbows/main.js` holds state, cameras and controls, and each scale is a
+module in `js/rainbows/stages/`. It needs WebGL2 and has no dependencies. On slow machines it draws
 fewer pixels to keep the frame rate.
 
 ## Vesicle fusion
@@ -389,7 +389,7 @@ every push to `main`. In the repository settings, set Pages → Source to
   before it uploads the site, which writes `dates.json` (published, never committed), and the page
   works out "5 hours ago" in the browser. Run the script by hand to see the dates locally;
   without the file the date lines stay hidden.
-- `v2/index.html`, `css/v2.css`, `js/v2/`: Rainbows v2 (`gl.js` engine, `optics.js` physics, `main.js` controls, `stages/*.js` one module per scale).
+- `rainbows/index.html`, `css/rainbows.css`, `js/rainbows/`: Rainbows (`gl.js` engine, `optics.js` physics, `main.js` controls, `stages/*.js` one module per scale).
 - `vesicle/index.html`, `css/vesicle.css`, `js/vesicle/*.js`: the vesicle fusion experience
   (`profile.js` geometry, `scene.js` molecules and drawing, `vitro.js` microscope, `shaders.js` GLSL,
   `main.js` controls).
@@ -410,6 +410,12 @@ every push to `main`. In the repository settings, set Pages → Source to
   anything off the screen or covered, a control smaller than a finger, cut-off text, or a page that stops zooming.
 - `tests/touch/run.mjs`: works every slider on every page with a finger at an iPad size, and fails if a tap or
   a drag does not land where the finger is, the knob jumps, or a drag scrolls the panel.
+- `<page>/REALISM.md` (`engine/REALISM.md`, `rainbows/REALISM.md` and so on): the laws that page must obey and what
+  each forces the picture to show, used and kept by the `realism-audit` skill (`.claude/skills/realism-audit/`).
+  These notes are not part of the offline copy.
+- `tests/audit/shots.mjs`: takes the frames for a realism audit from a shot list (one to start from for each page,
+  `tests/audit/<page>.json`), one sheet per set, with an earlier run above the new one when asked.
+- `v2/index.html`, `js/moved.js`: Rainbows was at `v2/`. An old link is sent on to `rainbows/`.
 - `tests/smooth/`: the smooth-interaction tests for Rainbows (`run.mjs` drives the page, `inject.js` is the
   stepped clock and the probes, `scenarios.mjs` the gestures, `analyze.mjs` the checks and the report).
 

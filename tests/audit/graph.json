@@ -1,0 +1,25 @@
+{
+  "page": "graph",
+  "about": "A 2D canvas, so a screenshot is fast. Real TALA takes about 7 s a try. Hash keys: g (graph), m (layered or search), st (step), and each control's id.",
+  "ready": "document.getElementById('graphFacts').textContent.includes('nodes')",
+  "text": "body",
+  "sizes": [
+    "desktop",
+    "phone"
+  ],
+  "sets": [
+    {
+      "name": "layered-steps",
+      "note": "The layered method step by step. Expect: no cycle after the first step, no node changing layer after the second, and the crossings shown equal to those counted.",
+      "hash": "m=layered&st={v}",
+      "values": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ]
+    }
+  ]
+}

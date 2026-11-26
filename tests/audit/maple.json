@@ -1,0 +1,25 @@
+{
+  "page": "maple",
+  "about": "A screenshot takes 20 to 60 s in software, so read the canvas (5 to 10 s; below Leaf 20 to 35 s even after __maple.res(0.5)). Run one capture at a time. A small sheet hides breaks here: also look at phone size at twice the sharpness. Hash: z=2&s=0.56&at=vacuole.",
+  "ready": "window.__maple && document.getElementById('capTitle').textContent",
+  "settle": "__maple.settle(); __maple.redraw()",
+  "canvas": "#view",
+  "text": "#panel",
+  "sizes": [
+    "desktop"
+  ],
+  "sets": [
+    {
+      "name": "zoom-summer",
+      "note": "Tree to Leaf to Tissue in summer. Expect: the date holds still, the leaf keeps its place and color, and the cut is one flat cut.",
+      "hash": "z={v}&s=0.3",
+      "values": [
+        0,
+        0.5,
+        1,
+        1.5,
+        2
+      ]
+    }
+  ]
+}

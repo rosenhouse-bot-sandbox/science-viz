@@ -1,0 +1,26 @@
+{
+  "page": "gears",
+  "query": "?look=0",
+  "about": "?look=0 gives plain lighting, which is fast and right for shapes. Drop it to check the look, at seconds a frame in software. Hash keys: s (shape), c (colors).",
+  "ready": "window.__gears?.drawn.shape",
+  "settle": "__gears.settle(); __gears.redraw()",
+  "text": "#panel",
+  "sizes": [
+    "desktop",
+    "phone"
+  ],
+  "sets": [
+    {
+      "name": "take-apart",
+      "note": "The parts spread along their axes. Expect: each part moves out along its own axis, in the order it was put on, and nothing passes through anything.",
+      "js": "__gears.st.e = {v}",
+      "values": [
+        0,
+        0.25,
+        0.5,
+        0.75,
+        1
+      ]
+    }
+  ]
+}

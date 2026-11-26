@@ -1,0 +1,29 @@
+{
+  "page": "saccade",
+  "about": "About half a second a frame in software. Move time with __saccade.sim.advance(seconds). Hash keys: z, c, s, sp, ts, auto.",
+  "ready": "window.__saccade?.frame",
+  "settle": "__saccade.settle(); __saccade.redraw()",
+  "text": "#panel",
+  "sizes": [
+    "desktop",
+    "phone"
+  ],
+  "sets": [
+    {
+      "name": "zoom",
+      "note": "Screen to Eyes to Muscles in small steps. Expect: the eyes keep their place and size, both aim at one point on the screen, and no muscle enters an eye.",
+      "hash": "z={v}&c=poor&s=overshoot",
+      "values": [
+        0,
+        0.25,
+        0.5,
+        0.75,
+        1,
+        1.25,
+        1.5,
+        1.75,
+        2
+      ]
+    }
+  ]
+}

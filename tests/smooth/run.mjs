@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Smooth-interaction tests for the Rainbows page (/v2/).
+// Smooth-interaction tests for the Rainbows page (/rainbows/).
 //
 //   node tests/smooth/run.mjs               run everything (about a quarter of an hour)
 //   node tests/smooth/run.mjs --quick       a short pass over every kind of check
@@ -118,7 +118,7 @@ if (!flag('analyze')) {
     page.on('console', m => { if (m.type() === 'error' && !/ERR_FAILED/.test(m.text())) h.errors.push('console error: ' + m.text()); });
     const t0 = Date.now();
     try {
-      await page.goto(`${base}/v2/#${sc.hash ?? ''}`);
+      await page.goto(`${base}/rainbows/#${sc.hash ?? ''}`);
       await page.waitForFunction(() => window.__smooth?.ready(), null, { timeout: 120000, polling: 100 });
       if (sc.paused) await h.click('#pause');
       await page.evaluate(() => window.__smooth.skip(4, 1000 / 60));
@@ -137,7 +137,7 @@ if (!flag('analyze')) {
     await ctx.route(/fonts\.(googleapis|gstatic)\.com/, r => r.abort());
     await ctx.addInitScript({ path: path.join(here, 'inject.js') });
     const page = await ctx.newPage();
-    await page.goto(`${base}/v2/`);
+    await page.goto(`${base}/rainbows/`);
     await page.waitForFunction(() => window.__smooth?.ready(), null, { timeout: 120000, polling: 100 });
     const model = await page.evaluate(async () => {
       const r = window.__rainbows, buttons = [...document.querySelectorAll('#stages button')], stages = [];
@@ -161,7 +161,7 @@ if (!flag('analyze')) {
       return { stages };
     });
     for (const st of model.stages) {      // how long a frame of each scale takes here
-      await page.goto(`${base}/v2/#s=${st.id}`); await page.reload();
+      await page.goto(`${base}/rainbows/#s=${st.id}`); await page.reload();
       await page.waitForFunction(() => window.__smooth?.ready(), null, { timeout: 120000, polling: 100 });
       await page.evaluate(() => window.__smooth.skip(3, 16.7));
       const t = Date.now(); for (let i = 0; i < 4; i++) await page.evaluate(() => window.__smooth.step(16.7));

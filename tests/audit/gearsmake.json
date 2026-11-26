@@ -1,0 +1,32 @@
+{
+  "page": "gearsmake",
+  "query": "?look=0",
+  "about": "__make.at(seconds) moves along a part's plan, which is __make.cur.tl.T seconds long. Hash keys: s (shape), p (part), v (draw or make). ?look=0 for speed; drop it to check the look.",
+  "ready": "window.__make?.cur",
+  "settle": "__make.settle(); __make.redraw()",
+  "text": "#panel",
+  "sizes": [
+    "desktop"
+  ],
+  "sets": [
+    {
+      "name": "plan",
+      "note": "One part from stock to finished, in tenths of its plan. Expect: metal only comes off, only where the tool has been, and only the cutting edge touches the work.",
+      "before": "location.hash = 'v=make'",
+      "js": "__make.at({v} * __make.cur.tl.T)",
+      "values": [
+        0,
+        0.1,
+        0.2,
+        0.3,
+        0.4,
+        0.5,
+        0.6,
+        0.7,
+        0.8,
+        0.9,
+        1
+      ]
+    }
+  ]
+}
