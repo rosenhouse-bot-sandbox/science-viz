@@ -1,4 +1,4 @@
-// A small WebGL2 engine for Rainbows v2: HDR render targets with bloom, glowing instanced lines
+// A small WebGL2 engine for Rainbows: HDR render targets with bloom, glowing instanced lines
 // and points, lit meshes, and full-screen ray shaders that share one camera convention.
 // No dependencies.
 

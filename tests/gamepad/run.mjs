@@ -22,7 +22,7 @@ const ALL = ['move', 'a', 'b', 'view', 'rs', 'lt', 'rt', 'lb', 'rb'];
 const PAGES = {
   home: { path: '', keys: ['move', 'a', 'view'] },
   rainbows: {
-    path: 'v2/', keys: ALL, ready: () => !!window.__rainbows,
+    path: 'rainbows/', keys: ALL, ready: () => !!window.__rainbows,
     look: () => window.__rainbows.cams[window.__rainbows.S.stage].gy, zoom: () => window.__rainbows.cams[window.__rainbows.S.stage].gd,
     stage: () => (window.__rainbows.busy ? null : window.__rainbows.S.stage), idle: () => !window.__rainbows.busy, everyStage: 5,
   },

@@ -1,0 +1,37 @@
+{
+  "page": "engine",
+  "query": "?res=0.5",
+  "about": "Ray-marched, so slow in software (about 2 minutes a frame): ?res=0.5 and the canvas. Labels are not on the canvas. __engine.set(z, phi) poses the engine; phi is the crank angle, 0 to 720. Wait for __engine.flow (the gas paths).",
+  "ready": "window.__engine?.flow",
+  "settle": "__engine.redraw()",
+  "canvas": "#view",
+  "text": "#panel",
+  "sizes": [
+    "desktop"
+  ],
+  "sets": [
+    {
+      "name": "cycle-at-cylinder",
+      "note": "One cycle at the Cylinder stop. Expect: gas enters and leaves only through an open valve, its amount is fixed while both are shut, and the flame starts at the plug.",
+      "js": "__engine.set(2, {v})",
+      "values": [
+        0,
+        60,
+        120,
+        180,
+        240,
+        300,
+        335,
+        350,
+        370,
+        400,
+        450,
+        500,
+        540,
+        600,
+        660,
+        720
+      ]
+    }
+  ]
+}

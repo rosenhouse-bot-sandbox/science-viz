@@ -1,5 +1,6 @@
 {
   "page": "shoulder",
+  "about": "About half a second a frame in software, so a screenshot is fine. Hash keys: z, c, lift, turn, ex, p, m, k. Look from the front as well (set __shoulder.st.yaw): the page opens from behind.",
   "ready": "window.__shoulder?.frame",
   "settle": "__shoulder.settle(); __shoulder.redraw()",
   "text": "#panel",

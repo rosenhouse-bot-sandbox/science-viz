@@ -8,9 +8,9 @@ import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 
 // The folders and files that make up each experience. Rainbows began as the drafts board in
-// September 2026, before v2/ existed.
+// September 2026, before the page had a folder. It was v2/ until November 2026, so those paths still count.
 const PAGES = {
-  'v2': ['v2', 'js/v2', 'css/v2.css', 'drafts'],
+  'rainbows': ['rainbows', 'js/rainbows', 'css/rainbows.css', 'v2', 'js/v2', 'css/v2.css', 'drafts'],
   'vesicle': ['vesicle', 'js/vesicle', 'css/vesicle.css'],
   'optics': ['optics', 'js/optics', 'css/optics.css'],
   'dag': ['dag', 'js/dag', 'css/dag.css'],

@@ -8,13 +8,17 @@
 // is not taken again, so a run that was cut off can be started again. With --against, each sheet shows the frames of
 // that earlier run above the new ones (before above, after below).
 //
-// The plan (see example.json):
+// The plan (tests/audit/<page>.json is one to start from for each page):
 //   page    a name from tests/lib/pages.mjs
+//   about   notes for whoever writes the sets: how slow the page is and what to avoid
 //   query   optional, added to the address ("?res=0.5")
 //   ready   an expression that is true once the page can be driven ("window.__shoulder?.frame")
 //   settle  optional script run after every change, to end flights and draw ("__shoulder.settle(); __shoulder.redraw()")
+//   idle    optional expression waited for after every change, where a change starts a flight ("!__rainbows.busy")
+//   wait    optional milliseconds to wait before every picture; a set's own wait is added
 //   canvas  optional selector. The picture is read from this canvas, which is many times faster than a screenshot
-//           where WebGL is drawn in software. It leaves out the panel and the labels.
+//           where WebGL is drawn in software. It leaves out the panel and the labels. A WebGL canvas reads as black
+//           unless it was drawn in the same frame, so give a settle that draws.
 //   text    optional selector for the words to save with each frame (default "body")
 //   sizes   optional, any of desktop, phone, ipad (default desktop and phone)
 //   sets    [{ name, note, values, hash, js, before, wait }]
@@ -52,9 +56,12 @@ for (const size of sizeArg || plan.sizes || ['desktop', 'phone']) {
   page.setDefaultTimeout(600000);
   const errors = []; page.on('pageerror', (e) => errors.push(e.message)); page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   await page.goto(base + (plan.query || ''));
-  if (plan.ready) await page.waitForFunction(plan.ready, null, { timeout: 600000 });
   // a script given as text is run by the browser's debugger, so the page's Content-Security-Policy does not stop it
+  // (page.waitForFunction would run its text inside the page, which the policy forbids)
   const run = (script) => page.evaluate(`(() => { ${script} })()`);
+  const until = async (expr) => { for (const t0 = Date.now(); !(await page.evaluate(`!!(${expr})`));) { if (Date.now() - t0 > 600000) throw new Error(`still waiting after 10 minutes for: ${expr}`); await page.waitForTimeout(100); } };
+  if (plan.ready) await until(plan.ready);
+  await page.waitForTimeout(600);                         // a page writes its own address a moment after it starts, which would undo a hash set too soon
   const frames = () => page.evaluate('new Promise((r) => setTimeout(() => setTimeout(() => requestAnimationFrame(() => requestAnimationFrame(() => r())))))');
 
   for (const set of sets) {
@@ -73,7 +80,8 @@ for (const size of sizeArg || plan.sizes || ['desktop', 'phone']) {
         if (hash !== null) { await page.evaluate((h) => { location.hash = h; }, hash); await frames(); }
         if (set.js) await run(fill(set.js, v));
         if (plan.settle) await run(plan.settle);
-        if (set.wait) await page.waitForTimeout(set.wait);
+        if (plan.idle) { await frames(); await until(plan.idle); }
+        if (plan.wait || set.wait) await page.waitForTimeout((plan.wait || 0) + (set.wait || 0));
         if (plan.canvas) {
           const url = await page.evaluate(`new Promise((r) => requestAnimationFrame(() => { ${plan.settle || ''}; r(document.querySelector(${JSON.stringify(plan.canvas)}).toDataURL('image/jpeg', 0.92)); }))`);
           fs.writeFileSync(file, Buffer.from(url.split(',')[1], 'base64'));

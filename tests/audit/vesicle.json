@@ -1,0 +1,28 @@
+{
+  "page": "vesicle",
+  "about": "About a minute a frame as a screenshot in software, and twice the sharpness times out, so read the canvas. The page has no test hook: step the hash on one page and do not reload. p runs from the arrival (below 0) to 1. Hash keys: mode (vivo, vitro, infer), p, angle, irm, wl, focus, sub, cut, orbit.",
+  "ready": "document.querySelector('#view') && document.body.innerText.length > 200",
+  "canvas": "#view",
+  "text": "body",
+  "sizes": [
+    "desktop"
+  ],
+  "wait": 1500,
+  "sets": [
+    {
+      "name": "fusion",
+      "note": "The whole event in the cell. Expect: every protein stays in its membrane the same way up, nothing leaks before the pore opens, and the vesicle's lipid ends up in the cell membrane.",
+      "hash": "mode=vivo&p={v}",
+      "values": [
+        -0.1,
+        0,
+        0.2,
+        0.4,
+        0.5,
+        0.6,
+        0.8,
+        1
+      ]
+    }
+  ]
+}

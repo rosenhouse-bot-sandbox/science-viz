@@ -1,0 +1,25 @@
+{
+  "page": "rainbows",
+  "about": "A screenshot takes 20 to 60 s in software. A change of scale is a flight, which can take two minutes in software, so wait for it (idle). The page lowers its canvas resolution when frames are slow, so frames in one run can differ in size. Time can be stepped through __rainbows.dbg; tests/smooth/inject.js shows how. Hash keys: s (orbit, rain, drop, surface, molecules), m, f, x, sun, nm, bow, tilt, a.",
+  "ready": "window.__rainbows && !window.__rainbows.busy",
+  "idle": "!window.__rainbows.busy",
+  "canvas": "#view",
+  "text": "#panel",
+  "sizes": [
+    "desktop"
+  ],
+  "sets": [
+    {
+      "name": "scales",
+      "note": "Each scale as it opens. Expect: the Sun in one direction at Orbit, Rain and Drop, and each scale inside the one before.",
+      "hash": "s={v}",
+      "values": [
+        "orbit",
+        "rain",
+        "drop",
+        "surface",
+        "molecules"
+      ]
+    }
+  ]
+}

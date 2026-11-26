@@ -5,11 +5,13 @@ import path from 'node:path';
 import { root } from './serve.mjs';
 
 export const PAGES = {
-  home: '', rainbows: 'v2/', vesicle: 'vesicle/', optics: 'optics/', graph: 'dag/', maple: 'maple/',
+  home: '', rainbows: 'rainbows/', vesicle: 'vesicle/', optics: 'optics/', graph: 'dag/', maple: 'maple/',
   engine: 'engine/', shoulder: 'shoulder/', saccade: 'saccade/', gears: 'gears/', gearsmake: 'gears/make.html',
 };
 
 // Pages on disk that are not in PAGES: a folder with an index.html, or another .html beside one. drafts/ is not part of the site.
+// v2/ only sends an old link on to rainbows/ (js/moved.js), so it is not a page to test.
+const MOVED = ['v2/index.html'];
 export function unlisted() {
   const listed = new Set(Object.values(PAGES).map((u) => (u.endsWith('/') || u === '' ? u + 'index.html' : u)));
   const found = ['index.html'];
@@ -19,7 +21,7 @@ export function unlisted() {
     if (!fs.existsSync(path.join(dir, 'index.html'))) continue;
     for (const f of fs.readdirSync(dir)) if (f.endsWith('.html')) found.push(`${d.name}/${f}`);
   }
-  return found.filter((f) => !listed.has(f));
+  return found.filter((f) => !listed.has(f) && !MOVED.includes(f));
 }
 
 // Stops a test whose own table (by page name) is missing a page, or names one that does not exist.
