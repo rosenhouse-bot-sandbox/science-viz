@@ -1,7 +1,7 @@
 // Gears on a cube and an octahedron: building the parts as triangle meshes, for the assembled toy (scene.js) and
 // for the workshop (shop.js). Every size comes from model.js. A mesh is plain arrays: positions, normals, and three
 // numbers per corner for the shader (the first says which material).
-import { R_IN, R_OUT, endAt } from './model.js?v=6ca5dca9';
+import { R_IN, R_OUT, endAt } from './model.js?v=e30be9be';
 
 export function grow() {
   const P = [], N = [], T = [], I = [];
@@ -70,10 +70,18 @@ export function gearMesh(pr, P, cut = null, kind = 0) {
     for (let s = 3; s >= 1; s--) pts.push({ th: pr.root, ps: c + half - (half - rootW) * s / 3 * 0.999, sharp: s === 3, gap: R });
   }
   const n = pts.length, g = grow(), K = [kind, 0, 0];
-  // the polar angle of a point at cone distance s: an uncut stretch of a gap is still at the blank's top
-  const partial = cut && cut.some((f) => f > 0 && f < 1);
-  const bands = partial ? 28 : 1;
-  const thAt = (j, s) => { const p = pts[j]; if (!cut || p.gap < 0) return p.th; const f = cut[p.gap]; return f > 0 && s >= R_OUT - f * (R_OUT - R_IN) - 1e-9 ? p.th : pr.tip; };
+  // the polar angle of a point at cone distance s. cut[k] is [f, d, d0]: the pass cutting gap k has gone f of the way
+  // along it, from the outer end, to depth d (1: full depth); behind it the gap is d0 deep (0: still the blank's top).
+  // A form cutter short of full depth leaves the gap's shape raised toward the tips by what is still to come off.
+  const partial = cut && cut.some((c) => c[0] > 0 && c[0] < 1 && c[1] !== c[2]);
+  const bands = partial ? 28 : 1, rise = pr.tip - pr.root;
+  const thAt = (j, s) => {
+    const p = pts[j]; if (!cut || p.gap < 0) return p.th;
+    const [f, d, d0] = cut[p.gap], dep = f > 0 && s >= R_OUT - f * (R_OUT - R_IN) - 1e-9 ? d : d0;
+    if (dep <= 0) return pr.tip;
+    const th = p.th + (1 - dep) * rise;
+    return (th - pr.tip) * Math.sign(rise) > 0 ? pr.tip : th;
+  };
   const at = (j, s) => { const th = thAt(j, s); return sc(dir(th, pts[j].ps), endAt(pr, th, s)); };
   const S = []; for (let b = 0; b <= bands; b++) S.push(R_IN + (R_OUT - R_IN) * b / bands);
   // smooth normals across a tooth's flank, sharp at the tooth's top corners and the root fillet's ends

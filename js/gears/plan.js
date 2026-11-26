@@ -6,8 +6,8 @@
 // faces (dir +1: its +z end toward the tailstock) and where the chuck's jaws end (zJaw). Mill passes are in the
 // part's frame too; a setup says how the part sits on the machine (rot: part to machine) and how far the head
 // is tilted. Speeds are real; feeds are real, in mm a second.
-import { by, SHOWN, gearSpec, spacerSpec, screwSpec, coreSpec, stockOf } from './spec.js?v=6ca5dca9';
-import { norm, cross, dot } from './model.js?v=6ca5dca9';
+import { by, SHOWN, gearSpec, spacerSpec, screwSpec, coreSpec, stockOf } from './spec.js?v=e30be9be';
+import { norm, cross, dot } from './model.js?v=e30be9be';
 
 const D = Math.PI / 180;
 // spindle speed for a cut at surface speed v (m/min) on diameter d (mm), within what the machine can do
@@ -16,12 +16,19 @@ const rpm = (v, d, max) => Math.min(max, Math.round(1000 * v / (Math.PI * d) / 5
 const lrpm = (d, v = 60) => rpm(v, d, LATHE_MAX), mrpm = (d, v = 60) => rpm(v, d, MILL_MAX);
 const perRev = (f, n) => f * n / 60;            // feed in mm a revolution to mm a second
 const steps = (from, to, cut) => { const n = Math.max(1, Math.ceil(Math.abs(from - to) / cut - 1e-9)), out = []; for (let k = 1; k <= n; k++) out.push(from + (to - from) * k / n); return out; };
+// Brass on a small lathe or mill: roughing passes of at most `rough`, stopping `fin` short, then one light finishing
+// pass to size. Returns where each pass ends, from `from` (the metal as it is) to `to` (the size wanted).
+const FIN = 0.05;
+const passes = (from, to, rough, fin = FIN) => (Math.abs(from - to) <= fin + 1e-9 ? [to] : [...steps(from, to + Math.sign(from - to) * fin, rough), to]);
+// a drill fed in pecks: each peck starts just short of the last one's bottom and goes `peck` deeper; the drill comes
+// right out of the hole between pecks to clear the chips. `face` is where the hole starts.
+const pecks = (z0, z1, peck, face, extra) => steps(z0, z1, peck).map((z, i, a) => ({ k: 'drill', z0: i ? a[i - 1] + Math.sign(z0 - z1) * 0.3 : z0, z1: z, face, ...extra }));
 
 // ---- lathe parts ----
 // roughing passes down a straight line from (z0, r0) to (z1, r1), each pass offset out from it, then the finish pass
 function taper(z0, r0, z1, r1, depth, cut, feed, side = 1) {
   const l = Math.hypot(z1 - z0, r1 - r0), nz = -(r1 - r0) / l * side, nr = (z1 - z0) / l * side, out = [];
-  for (const off of steps(depth, 0, cut)) out.push({ k: 'turn', pts: [[z0 + nz * off, r0 + nr * off], [z1 + nz * off, r1 + nr * off]], feed });
+  for (const off of passes(depth, 0, cut)) out.push({ k: 'turn', pts: [[z0 + nz * off, r0 + nr * off], [z1 + nz * off, r1 + nr * off]], feed });
   return out;
 }
 // how far the expanding mandrel's shoulder stands out from the chuck's jaws: far enough that the tool post, which
@@ -40,15 +47,15 @@ function gearPlan(sh) {
     machine: 'lathe', hold: 'chuck', dir: 1, zJaw: zo - 16, stock: { r: R0, free: zo + 0.5 }, title: 'Lathe: outer side',
     steps: [
       { title: 'Face the end', line: `Takes 0.5 off the sawn end. This face is the gear's outer side.`, tool: { type: 'turn' }, rpm: n1,
-        passes: [{ k: 'face', z: zo, r0: R0 + 0.5, r1: 0, feed: perRev(0.05, n1) }] },
+        passes: passes(zo + 0.5, zo, 0.25).map((z) => ({ k: 'face', z, r0: R0 + 0.5, r1: 0, feed: perRev(0.05, n1) })) },
       { title: 'Turn the outside', line: `Ø${(2 * R0).toFixed(0)} down to Ø${g.od.toFixed(2)}, the teeth's tips.`, tool: { type: 'turn' }, rpm: n1,
-        passes: steps(R0, T.r, 0.4).map((r) => ({ k: 'turn', pts: [[zo + 0.2, r], [cutZ - 1.6, r]], feed: perRev(0.06, n1) })) },
+        passes: passes(R0, T.r, 0.25).map((r) => ({ k: 'turn', pts: [[zo + 0.2, r], [cutZ - 1.6, r]], feed: perRev(0.06, n1) })) },
       { title: 'Turn the back cone', line: `Compound set to ${(90 - a / D).toFixed(2)}°.`, tool: { type: 'turn', compound: Math.PI / 2 - a }, rpm: n1,
-        passes: taper(bc(T.r + 0.3), T.r + 0.3, zo + 0.02, B.r - 0.02 * Math.tan(a), (T.r - B.r) * Math.cos(a), 0.35, perRev(0.04, n1)) },
+        passes: taper(bc(T.r + 0.3), T.r + 0.3, zo + 0.02, B.r - 0.02 * Math.tan(a), (T.r - B.r) * Math.cos(a), 0.2, perRev(0.04, n1)) },
       { title: 'Center drill', line: 'A No. 1 center drill, so the drill starts true.', tool: { type: 'center', d: 1 }, rpm: LATHE_MAX,
         passes: [{ k: 'drill', z0: zo + 1, z1: zo - 1.2, d: 2.5, pilot: 1, feed: perRev(0.02, LATHE_MAX) }] },
       { title: 'Drill Ø3.8', line: `Through, past where it will be parted off. Peck to clear the chips.`, tool: { type: 'drill', d: 3.8 }, rpm: nD,
-        passes: [{ k: 'drill', z0: zo + 1, z1: cutZ - 2.5, d: 3.8, feed: perRev(0.05, nD) }] },
+        passes: pecks(zo + 1, cutZ - 2.5, 2.5, zo, { d: 3.8, feed: perRev(0.05, nD) }) },
       { title: 'Ream Ø4 H7', line: 'Slow, for a round, smooth bore. The bearing goes in here.', tool: { type: 'reamer', d: 4 }, rpm: nR,
         passes: [{ k: 'bore', pts: [[zo + 1, rb], [cutZ - 1.5, rb]], feed: perRev(0.1, nR) }] },
       { title: 'Part off', line: `A 1 mm blade, 0.3 longer than the gear.`, tool: { type: 'part', w: 1 }, rpm: lrpm(st.d, 30),
@@ -56,14 +63,14 @@ function gearPlan(sh) {
     ],
   };
   const n2 = lrpm(g.od);
-  const recess = steps(Ti.z, zi, 0.35);
+  const recess = passes(Ti.z, zi, 0.2);
   const op2 = {
     machine: 'lathe', hold: 'mandrel', dir: -1, zJaw: zo + MANDREL, title: 'Lathe: inner side, on a mandrel',
     steps: [
       { title: 'Face to the teeth\'s ends', line: 'A 4 mm expanding mandrel holds it by the bore.', tool: { type: 'turn' }, rpm: n2,
-        passes: [{ k: 'face', z: Ti.z, r0: T.r + 0.5, r1: rb + 0.2, feed: perRev(0.04, n2) }] },
+        passes: passes(cutZ, Ti.z, 0.25).map((z) => ({ k: 'face', z, r0: T.r + 0.5, r1: rb + 0.2, feed: perRev(0.04, n2) })) },
       { title: 'Turn the teeth\'s tops', line: `Compound set to ${(g.tip / D).toFixed(2)}°.`, tool: { type: 'turn', compound: g.tip }, rpm: n2,
-        passes: taper(Ti.z - 0.3 * Math.cos(g.tip), Ti.r - 0.3 * Math.sin(g.tip), T.z + 0.02 * Math.cos(g.tip), T.r + 0.02 * Math.sin(g.tip), (T.r - Ti.r) * Math.cos(g.tip) + 0.05, 0.35, perRev(0.04, n2)) },
+        passes: taper(Ti.z - 0.3 * Math.cos(g.tip), Ti.r - 0.3 * Math.sin(g.tip), T.z + 0.02 * Math.cos(g.tip), T.r + 0.02 * Math.sin(g.tip), (T.r - Ti.r) * Math.cos(g.tip) + 0.05, 0.2, perRev(0.04, n2)) },
       { title: 'Cut the recess', line: `${(zi - Ti.z).toFixed(2)} deep, from the outside in. Too small for a square bit.`, tool: { type: 'boring' }, rpm: n2,
         passes: recess.map((z) => ({ k: 'faceIn', z, r0: Math.min(Ti.r - 0.05, Bi.r + (zi - z) * Math.tan(Math.PI / 2 - a)) - 0.3, r1: rb + 0.1, feed: perRev(0.04, n2) })) },
       { title: 'Turn the front cone', line: `Compound set to ${(90 - a / D).toFixed(2)}°, the other way.`, tool: { type: 'boring', compound: -(Math.PI / 2 - a) }, rpm: n2,
@@ -71,16 +78,19 @@ function gearPlan(sh) {
     ],
   };
   // the teeth: a form cutter, one gap at a time. The dividing head is tilted to the root angle, so that the bottom of
-  // each gap runs level under the cutter.
-  const nC = mrpm(40, 30), gaps = [];
-  for (let k = 0; k < g.N; k++) gaps.push({ k: 'gap', gap: k, side: 0, feed: 0.8 });
+  // each gap runs level under the cutter. Each gap is roughed to two thirds of its depth, then taken to full depth,
+  // then trimmed with one pass each side (the head turned a little each way), which thins the teeth toward the
+  // small end as a bevel gear's must be.
+  const nC = mrpm(40, 30), ROUGH = 2 / 3;
+  const gap = (k) => [{ k: 'gap', gap: k, side: 0, depth: ROUGH, from: 0, feed: 0.5 }, { k: 'gap', gap: k, side: 0, depth: 1, from: ROUGH, feed: 0.4 },
+    { k: 'gap', gap: k, side: 1, depth: 1, from: 1, feed: 0.6 }, { k: 'gap', gap: k, side: -1, depth: 1, from: 1, feed: 0.6 }];
   const op3 = {
     machine: 'mill', hold: 'dividing', tilt: g.root, title: 'Mill: the teeth, in the dividing head',
     steps: [
       { title: 'Cut the first gap', line: `Module ${g.m} cutter, No. ${g.cutter}. Head tilted ${(g.root / D).toFixed(2)}°.`, tool: { type: 'gearcutter', d: 40, w: 4 }, rpm: nC,
-        passes: [gaps[0], { k: 'gap', gap: 0, side: 1, feed: 0.8 }, { k: 'gap', gap: 0, side: -1, feed: 0.8 }] },
-      { title: `Index and cut the rest`, line: `${g.N - 1} more gaps, ${360 / g.N % 1 ? (360 / g.N).toFixed(2) : 360 / g.N}° apart. Each gets a middle pass, then one each side.`, tool: { type: 'gearcutter', d: 40, w: 4 }, rpm: nC,
-        passes: gaps.slice(1).flatMap((p) => [p, { ...p, side: 1 }, { ...p, side: -1 }]) },
+        passes: gap(0) },
+      { title: `Index and cut the rest`, line: `${g.N - 1} more gaps, ${360 / g.N % 1 ? (360 / g.N).toFixed(2) : 360 / g.N}° apart. Two passes deep, then one each side.`, tool: { type: 'gearcutter', d: 40, w: 4 }, rpm: nC,
+        passes: Array.from({ length: g.N - 1 }, (_, k) => gap(k + 1)).flat() },
     ],
   };
   return [op1, op2, op3];
@@ -93,8 +103,8 @@ function spacerPlan(sh) {
     steps: [
       { title: 'Face the end', line: 'Ø3 rod in a 3 mm collet.', tool: { type: 'turn' }, rpm: n, passes: [{ k: 'face', z: L, r0: R0 + 0.3, r1: 0, feed: perRev(0.03, n) }] },
       { title: 'Center drill', line: 'No. 00 center drill, just deep enough for the drill to start.', tool: { type: 'center', d: 0.5 }, rpm: n, passes: [{ k: 'drill', z0: L + 1, z1: L - 0.5, d: 1.2, pilot: 0.5, feed: perRev(0.01, n) }] },
-      { title: 'Drill Ø1.6', line: 'Through, and 1.5 past.', tool: { type: 'drill', d: 1.6 }, rpm: nd, passes: [{ k: 'drill', z0: L + 1, z1: -1.8, d: 1.6, feed: perRev(0.02, nd) }] },
-      { title: `Turn to Ø${s.od}`, line: 'One pass.', tool: { type: 'turn' }, rpm: n, passes: [{ k: 'turn', pts: [[L + 0.2, s.od / 2], [-1.4, s.od / 2]], feed: perRev(0.03, n) }] },
+      { title: 'Drill Ø1.6', line: 'Through, and 1.5 past.', tool: { type: 'drill', d: 1.6 }, rpm: nd, passes: pecks(L + 1, -1.8, 1.6, L, { d: 1.6, feed: perRev(0.02, nd) }) },
+      { title: `Turn to Ø${s.od}`, line: 'Two light passes, then a finishing pass.', tool: { type: 'turn' }, rpm: n, passes: passes(R0, s.od / 2, 0.2).map((r) => ({ k: 'turn', pts: [[L + 0.2, r], [-1.4, r]], feed: perRev(0.03, n) })) },
       { title: 'Chamfer', line: '0.1 × 45°, inside and out.', tool: { type: 'turn' }, rpm: n, passes: [{ k: 'turn', pts: [[L + 0.05, s.od / 2 - 0.15], [L - 0.15, s.od / 2 + 0.05]], feed: perRev(0.02, n) }, { k: 'bore', pts: [[L + 0.05, s.id / 2 + 0.15], [L - 0.15, s.id / 2 - 0.05]], feed: perRev(0.02, n) }] },
       { title: 'Part off', line: 'A 0.8 mm blade. Leave it 0.1 long.', tool: { type: 'part', w: 0.8 }, rpm: n, passes: [{ k: 'part', z: -0.1, w: 0.8, r0: R0 + 0.2, r1: s.id / 2 - 0.1, feed: perRev(0.01, n) }] },
     ],
@@ -113,9 +123,9 @@ function screwPlan(sh) {
     machine: 'lathe', hold: 'collet', dir: -1, zJaw: z.top + 3, stock: { r: R0, free: -0.3 }, title: 'Lathe: the shank, from 7 mm rod',
     steps: [
       { title: 'Face the end', line: 'This end becomes the thread\'s tip.', tool: { type: 'turn' }, rpm: n, passes: [{ k: 'face', z: 0, r0: R0 + 0.3, r1: 0, feed: perRev(0.04, n) }] },
-      { title: 'Turn the flange to Ø6', line: 'Right back past the flange.', tool: { type: 'turn' }, rpm: n, passes: steps(R0, s.flange / 2, 0.5).map((r) => ({ k: 'turn', pts: [[-0.2, r], [z.top + 1.6, r]], feed: perRev(0.05, n) })) },
-      { title: 'Turn the boss, Ø2.2', line: 'Light passes. The shank gets thin.', tool: { type: 'turn' }, rpm: nf, passes: steps(s.flange / 2, s.boss / 2, 0.4).map((r) => ({ k: 'turn', pts: [[-0.2, r], [z.boss, r]], feed: perRev(0.03, nf) })) },
-      { title: 'Turn the shoulder, Ø1.5', line: `${s.shoulderL.toFixed(2)} long. The bearing turns on this.`, tool: { type: 'turn' }, rpm: LATHE_MAX, passes: [...steps(s.boss / 2, s.shoulder / 2 + 0.05, 0.3), s.shoulder / 2].map((r) => ({ k: 'turn', pts: [[-0.2, r], [z.shoulder, r]], feed: perRev(0.02, LATHE_MAX) })) },
+      { title: 'Turn the flange to Ø6', line: 'Right back past the flange.', tool: { type: 'turn' }, rpm: n, passes: passes(R0, s.flange / 2, 0.25).map((r) => ({ k: 'turn', pts: [[-0.2, r], [z.top + 1.6, r]], feed: perRev(0.05, n) })) },
+      { title: 'Turn the boss, Ø2.2', line: 'Light passes. The shank gets thin.', tool: { type: 'turn' }, rpm: nf, passes: passes(s.flange / 2, s.boss / 2, 0.25).map((r) => ({ k: 'turn', pts: [[-0.2, r], [z.boss, r]], feed: perRev(0.03, nf) })) },
+      { title: 'Turn the shoulder, Ø1.5', line: `${s.shoulderL.toFixed(2)} long. The bearing turns on this.`, tool: { type: 'turn' }, rpm: LATHE_MAX, passes: passes(s.boss / 2, s.shoulder / 2, 0.15).map((r) => ({ k: 'turn', pts: [[-0.2, r], [z.shoulder, r]], feed: perRev(0.02, LATHE_MAX) })) },
       { title: 'Turn for the thread', line: 'Ø1.38, a hair under 1.4, so the die cuts clean.', tool: { type: 'turn' }, rpm: LATHE_MAX, passes: [{ k: 'turn', pts: [[-0.2, 0.69], [z.thread, 0.69]], feed: perRev(0.02, LATHE_MAX) }, { k: 'turn', pts: [[-0.1, 0.69 - 0.25], [0.2, 0.69 + 0.05]], feed: perRev(0.02, LATHE_MAX) }] },
       { title: 'Cut the thread', line: 'An M1.4 die in the tailstock holder. Turn the chuck by hand.', tool: { type: 'die' }, rpm: 0, passes: [{ k: 'thread', z0: 0, z1: z.thread - 0.15, feed: 0.15 }] },
       { title: 'Part off', line: '0.2 long, to face in the next setup.', tool: { type: 'part', w: 1 }, rpm: lrpm(7, 30), passes: [{ k: 'part', z: z.top + 0.2, w: 1, r0: R0 + 0.2, r1: 0, feed: perRev(0.02, lrpm(7, 30)) }] },
@@ -124,7 +134,7 @@ function screwPlan(sh) {
   const op2 = {
     machine: 'lathe', hold: 'collet', dir: 1, zJaw: z.shoulder - 0.4, title: 'Lathe: the head, held by the shoulder',
     steps: [
-      { title: 'Face the head', line: `To ${s.thick} thick. A 1.5 mm collet grips the shoulder.`, tool: { type: 'turn' }, rpm: n, passes: steps(z.top + 0.2, z.top, 0.2).map((zz) => ({ k: 'face', z: zz, r0: s.flange / 2 + 0.3, r1: 0, feed: perRev(0.03, n) })) },
+      { title: 'Face the head', line: `To ${s.thick} thick. A 1.5 mm collet grips the shoulder.`, tool: { type: 'turn' }, rpm: n, passes: passes(z.top + 0.2, z.top, 0.15).map((zz) => ({ k: 'face', z: zz, r0: s.flange / 2 + 0.3, r1: 0, feed: perRev(0.03, n) })) },
       { title: 'Chamfer the edge', line: '0.1 × 45°.', tool: { type: 'turn' }, rpm: n, passes: [{ k: 'turn', pts: [[z.top + 0.05, s.flange / 2 - 0.15], [z.top - 0.15, s.flange / 2 + 0.05]], feed: perRev(0.02, n) }] },
     ],
   };
@@ -141,7 +151,7 @@ function screwPlan(sh) {
 // Faces are cut with a fly cutter or an end mill whose bottom lies on the face; edges with a 90° chamfer mill;
 // holes with a spot drill, a drill and a tap. Every cut is a plane, taken in passes of at most `cut` deep.
 function planePasses(n, from, to, cut, u, extent, feed, extra = {}) {
-  return steps(from, to, cut).map((d) => ({ k: 'plane', n, d, u, span: extent, feed, ...extra }));
+  return passes(from, to, cut).map((d) => ({ k: 'plane', n, d, u, span: extent, feed, ...extra }));
 }
 // a turn that takes the part's vector v to w (both unit), and keeps `keep` (part) toward `toward` (machine) as nearly as it can
 function frameTo(pairs) {
@@ -165,7 +175,7 @@ function corePlan(sh) {
   for (const [up, jaw] of SIDES) {
     const from = Math.abs(up[1]) ? h : a, rot = frameTo([[up, Z], [jaw, Y]]);
     vise.steps.push({ title: `Face the ${['top', 'bottom', 'right', 'left', 'front', 'back'][SIDES.findIndex((s) => s[0] === up)]}`, line: `To ${(2 * big).toFixed(2)} square. Fly cutter, ${nF} rpm.`,
-      tool: fly, rpm: nF, rot, passes: planePasses(up, from, big, 0.5, cross(up, jaw), 18, 1.2) });
+      tool: fly, rpm: nF, rot, passes: planePasses(up, from, big, 0.25, cross(up, jaw), 18, 1.2) });
   }
   ops.push(vise);
   // the edges: four setups, a 90° chamfer mill along each top edge
@@ -178,7 +188,7 @@ function corePlan(sh) {
     const passes = [];
     for (const q of here) {
       const e = big * Math.SQRT2, along = norm(cross(q.n, up));
-      passes.push(...planePasses(q.n, e, q.d, cube ? 1 : 1.2, along, 20, 0.8, { tool: 'chamfer' }));
+      passes.push(...planePasses(q.n, e, q.d, 0.5, along, 20, 0.8, { tool: 'chamfer' }));
     }
     cham.steps.push({ title: `Chamfer ${here.length} edges`, line: `${cube ? `${c.chamfer} × 45°` : `${c.chamfer} wide`}, with a 90° chamfer mill. Turn the part between.`, tool: ch, rpm: nC, rot, passes });
   }
@@ -187,7 +197,8 @@ function corePlan(sh) {
   const sd = { type: 'spot', d: 3 }, dr = { type: 'drill', d: c.tap.drill }, tp = { type: 'tap', d: 1.4 };
   const holes = (list) => [
     { title: 'Spot', line: 'A 90° spot drill, to Ø1.5. The drill starts here.', tool: sd, rpm: MILL_MAX, passes: list.map((n) => ({ k: 'hole', n, d: 1.5, depth: 0.75, spot: true, feed: 0.4 })) },
-    { title: `Drill Ø${c.tap.drill}`, line: `${c.tap.drillDepth} deep, in pecks of 0.5.`, tool: dr, rpm: MILL_MAX, passes: list.map((n) => ({ k: 'hole', n, d: c.tap.drill, depth: c.tap.drillDepth, feed: 0.4 })) },
+    { title: `Drill Ø${c.tap.drill}`, line: `${c.tap.drillDepth} deep, in pecks of 0.5.`, tool: dr, rpm: MILL_MAX,
+      passes: list.flatMap((n) => steps(0, c.tap.drillDepth, 0.5).map((d, i, a) => ({ k: 'hole', n, d: c.tap.drill, from: i ? a[i - 1] - 0.2 : 0, depth: d, feed: 0.4 }))) },
     { title: 'Tap M1.4', line: `${c.tap.depth} deep, by hand, the tap guided by the spindle.`, tool: tp, rpm: 0, passes: list.map((n) => ({ k: 'tap', n, d: 1.4, depth: c.tap.depth, feed: 0.15 })) },
   ];
   if (cube) {
@@ -209,7 +220,7 @@ function corePlan(sh) {
       const passes = [];
       for (const n of faces) {
         const top = Math.max(...c.faces.flatMap((f) => f.poly).map((p) => dot(p, n)));
-        passes.push(...planePasses(n, Math.max(top, big * 1.4), c.planes.find((q) => q.kind === 'face').d, 1.0, norm(cross(n, end > 0 ? Y : neg(Y))), 24, 1.5, { tool: 'end' }));
+        passes.push(...planePasses(n, Math.max(top, big * 1.4), c.planes.find((q) => q.kind === 'face').d, 0.5, norm(cross(n, end > 0 ? Y : neg(Y))), 24, 1.5, { tool: 'end' }));
       }
       op.steps.push({ title: 'Mill the faces', line: `Head tilted ${(tilt / D).toFixed(2)}°. Index 90° between faces.`, tool: em, rpm: nE, passes });
       op.steps.push(...holes(faces));

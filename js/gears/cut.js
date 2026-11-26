@@ -4,11 +4,11 @@
 // A lathe part is kept as two radii along its axis, sampled every 0.01 mm: the outside (ro) and the inside (ri).
 // Where ro <= ri there is no metal. A mill part is a list of planes (it stays convex), with holes, gear gaps and a
 // slot on top.
-import { dot, cross, norm } from './model.js?v=6ca5dca9';
-import { bodyFaces } from './model.js?v=6ca5dca9';
+import { dot, cross, norm } from './model.js?v=e30be9be';
+import { bodyFaces } from './model.js?v=e30be9be';
 
 export const DZ = 0.01;
-const RAPID = 0.8, CHANGE = 2.5;        // seconds to bring a tool in between passes, and to change tools between steps
+const RAPID = 0.8, CHANGE = 2.5;        // seconds to bring a tool in or pull it clear, and to change tools between steps
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const lerp = (a, b, f) => a + (b - a) * f;
 
@@ -22,20 +22,32 @@ export function timeline(plan) {
     st.passes.forEach((p, pi) => {
       const len = passLength(p, op);
       const dur = Math.max(0.4, len / (p.feed || 1));
-      out.push({ op: oi, step: si, pass: pi, t0: t + RAPID, t1: t + RAPID + dur, p });
-      t += RAPID + dur;
+      const gap = pi ? between(st.passes[pi - 1], p, op) : RAPID;
+      out.push({ op: oi, step: si, pass: pi, t0: t + gap, t1: t + gap + dur, p });
+      t += gap + dur;
     });
     t += RAPID;
     st.t0 = s0; st.t1 = t;
   }));
   return { segs: out, T: t };
 }
+// the time from the end of one pass to the start of the next, by hand on a small machine: pull the tool clear, wind
+// back to the start, turn the part if it must be turned (the dividing head's crank, the indexer), and feed in again
+function between(a, b, op) {
+  const same = (u, v) => u && v && dot(u, v) > 0.999;
+  if (a.tool !== b.tool) return CHANGE + 1;
+  if (op.machine === 'lathe') return 2;
+  if (b.k === 'gap') return a.gap === b.gap ? 4 : 10;
+  if (b.k === 'plane') return same(a.n, b.n) ? 4 : 6;
+  if (b.k === 'hole' || b.k === 'tap') return same(a.n, b.n) ? 1.5 : 5;
+  return 2;
+}
 function passLength(p, op) {
   if (p.k === 'face' || p.k === 'faceIn' || p.k === 'part') return Math.abs(p.r1 - p.r0);
   if (p.k === 'turn' || p.k === 'bore') { let l = 0; for (let i = 1; i < p.pts.length; i++) l += Math.hypot(p.pts[i][0] - p.pts[i - 1][0], p.pts[i][1] - p.pts[i - 1][1]); return l; }
   if (p.k === 'drill') return Math.abs(p.z1 - p.z0);
   if (p.k === 'thread') return Math.abs(p.z1 - p.z0);
-  if (p.k === 'hole' || p.k === 'tap') return p.depth + 0.5;
+  if (p.k === 'hole' || p.k === 'tap') return p.depth - (p.from || 0) + 0.5;
   if (p.k === 'plane') return p.len || 20;
   if (p.k === 'gap') return 8;
   if (p.k === 'slot') return Math.abs(p.to - p.from);
@@ -213,24 +225,47 @@ export function makeReplay(plan, tl, start) {
       if (cur && op.machine === 'lathe' && t > cur.t1) {
         // on the lathe: out the way it came (off the face, or out of a bore or recess, along the axis; off a turned
         // diameter, outward), across while clear, and in again at the next pass's start
-        const next = segs[segs.indexOf(cur) + 1], o1 = liftOf(cur.p, op), end = tip, u = t - cur.t1;
+        const next = segs[segs.indexOf(cur) + 1], end = tip, o1 = liftOf(cur.p, op, end), u = t - cur.t1;
         const gap = next && next.op === oi ? next.t0 - cur.t1 : Infinity, R = Math.min(RAPID, gap / 3);
         const at = (q, o, k) => [q[0] + o[0] * k, q[1] + o[1] * k];
         if (u < R || gap === Infinity) { away = Math.min(1, u / R); tip = at(end, o1, away); }
         else {
-          const start = lathePass({ ...s, ro: s.ro.slice(), ri: s.ri.slice() }, op, next.p, 0), o2 = liftOf(next.p, op);
+          const start = lathePass({ ...s, ro: s.ro.slice(), ri: s.ri.slice() }, op, next.p, 0), o2 = liftOf(next.p, op, start);
           if (gap - u < R) { away = (gap - u) / R; tip = at(start, o2, away); }
           else { const w = smooth((u - R) / (gap - 2 * R)), a = at(end, o1, 1), b = at(start, o2, 1); tip = [a[0] + (b[0] - a[0]) * w, a[1] + (b[1] - a[1]) * w]; }
           if (u > gap / 2) cur = next;     // the next pass's tool, once this one is clear
         }
         return { op: oi, step: cur.step, seg: cur, f: cur === next ? 0 : f, tip, away, lathe: s, mill: m };
       }
+      if (cur && t > cur.t1) {
+        // on the mill: up off the work, back to where the next pass starts (turning the part to the next face or gap
+        // on the way), and down again. `move` says how far through the move between the two passes it is.
+        const next = segs[segs.indexOf(cur) + 1];
+        if (next && next.op === oi && op.steps[next.step].rot === op.steps[cur.step].rot) {
+          const gap = next.t0 - cur.t1, u = t - cur.t1, R = Math.min(RAPID, gap / 3);
+          away = Math.min(1, u / R, (gap - u) / R);
+          const w = smooth(clamp((u - R) / (gap - 2 * R), 0, 1));
+          const move = { from: cur, to: next, w };
+          if (next.p.k !== 'gap') {      // the gear's moves are drawn by the page, from `move`
+            const to = millPass(clone(m), op, next.p, 0, start);
+            if (tip && to && tip.at && to.at && dot(tip.n, to.n) > 0.999) tip = { ...tip, at: tip.at.map((v, i) => v + (to.at[i] - v) * w) };
+            else if (w > 0.5) tip = to;
+            if (w > 0.5) { cur = next; f = 0; }
+          }
+          return { op: oi, step: cur.step, seg: cur, f, tip, away, lathe: s, mill: m, move };
+        }
+      }
       if (cur) {
         if (t <= cur.t1) away = 0;
         else away = clamp((t - cur.t1) / RAPID, 0, 1);
         const next = segs[segs.indexOf(cur) + 1];
         if (next && next.op === oi && next.step === cur.step && t > next.t0 - RAPID) away = Math.min(away, clamp((next.t0 - t) / RAPID, 0, 1));
-      } else { cur = segs.find((q) => q.op === oi); away = 1; }
+      } else {
+        // before the setup's first pass: the tool waits clear of the work, then comes in to where that pass starts
+        cur = segs.find((q) => q.op === oi); away = clamp((cur.t0 - t) / RAPID, 0, 1);
+        if (op.machine === 'lathe') { const q = lathePass({ ...s, ro: s.ro.slice(), ri: s.ri.slice() }, op, cur.p, 0), o = liftOf(cur.p, op, q); tip = [q[0] + o[0] * away, q[1] + o[1] * away]; }
+        else tip = millPass(clone(m), op, cur.p, 0, start);
+      }
       // a parted-off piece stays in view until the setup ends
       return { op: oi, step: cur.step, seg: cur, f, tip, away, lathe: s, mill: m };
     },
@@ -238,9 +273,10 @@ export function makeReplay(plan, tl, start) {
 }
 // which way a lathe tool comes off the work after a pass, in the part's [z, r]: off a turned diameter or a parting cut,
 // outward; everything else (a face, a recess, a bore, a drill, the die) back along the axis toward the free end
-function liftOf(p, op) { return p.k === 'turn' || p.k === 'part' ? [0, 4] : [op.dir * 5, 0]; }
+// A drill fed in pecks comes right out of its hole, to 2 past the face, from wherever its tip is (q).
+function liftOf(p, op, q) { return p.k === 'turn' || p.k === 'part' ? [0, 4] : p.k === 'drill' && p.face !== undefined ? [op.dir * Math.max(5, op.dir * (p.face - q[0]) + 2), 0] : [op.dir * 5, 0]; }
 const smooth = (x) => x * x * (3 - 2 * x);
-const clone = (M) => ({ ...M, planes: M.planes.slice(), holes: M.holes.map((h) => ({ ...h })), gaps: M.gaps && M.gaps.slice(), slot: M.slot && M.slot.slice(), cut: null });
+const clone = (M) => ({ ...M, planes: M.planes.slice(), holes: M.holes.map((h) => ({ ...h })), gaps: M.gaps && M.gaps.slice(), gapD: M.gapD && M.gapD.slice(), gapD0: M.gapD0 && M.gapD0.slice(), slot: M.slot && M.slot.slice(), cut: null });
 
 // a plane cut replaces any shallower cut with the same normal
 function addPlane(planes, n, d) {
@@ -264,15 +300,17 @@ export function millPass(M, op, p, f, start) {
     const c = p.n.map((x) => x * face);
     let h = M.holes.find((q) => dot(q.n, p.n) > 0.999);
     if (!h) { h = { n: p.n, c, d: 0, depth: 0, spot: 0, tap: 0 }; M.holes.push(h); }
-    const dep = p.depth * f;
+    const dep = lerp(p.from || 0, p.depth, f);
     if (p.k === 'tap') h.tap = Math.max(h.tap, dep);
     else if (p.spot) h.spot = Math.max(h.spot, dep);
     else { h.d = p.d; h.depth = Math.max(h.depth, dep); }
     return { at: c.map((x, k) => x - p.n[k] * dep), n: p.n, hole: true };
   }
   if (p.k === 'gap') {
-    if (!M.gaps) M.gaps = new Float32Array(start.N);
-    if (p.side === 0) M.gaps[p.gap] = Math.max(M.gaps[p.gap], f);
+    // gaps: how far along its length the pass now cutting a gap has got; gapD: that pass's depth (1: full depth);
+    // gapD0: the depth the gap had before it
+    if (!M.gaps) { M.gaps = new Float32Array(start.N); M.gapD = new Float32Array(start.N); M.gapD0 = new Float32Array(start.N); }
+    if (p.side === 0 && f > 0) { M.gaps[p.gap] = f; M.gapD[p.gap] = p.depth ?? 1; M.gapD0[p.gap] = p.from ?? 0; }
     return { gap: p.gap, side: p.side, f };
   }
   if (p.k === 'slot') { const y = lerp(p.from, p.to, f); M.slot = [p.from, y]; return { slot: y }; }

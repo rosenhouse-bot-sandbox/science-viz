@@ -18,9 +18,10 @@ const fail = (what) => { fails++; console.log('FAIL ' + what); };
 const browser = await findChromium().launch({ args: SOFT_GL });
 const SHAPES = ['cube4', 'octa'], PARTS = ['gear', 'core', 'spacer', 'screw'], args = process.argv.slice(2);
 const pick = (all) => (all.some((x) => args.includes(x)) ? all.filter((x) => args.includes(x)) : all);
-const page = await browser.newPage({ viewport: { width: 800, height: 600 } });
+// plain lighting, and paused: the lit look takes seconds a frame without a graphics card, and only the geometry is checked
+const page = await browser.newPage({ viewport: { width: 800, height: 600 }, reducedMotion: 'reduce' });
 page.on('pageerror', (e) => fail(e.message));
-await page.goto(base + 'make.html?res=0.25#v=make');
+await page.goto(base + 'make.html?res=0.25&look=0#v=make');
 await page.waitForFunction(() => window.__make?.cur && document.querySelector('#parts button'), null, { timeout: 120000 });
 for (const shape of pick(SHAPES)) for (const part of pick(PARTS)) {
   await page.click(`#shapes button[data-id="${shape}"]`); await page.click(`#parts button[data-id="${part}"]`);
