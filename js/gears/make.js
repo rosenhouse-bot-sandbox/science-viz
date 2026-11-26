@@ -1,19 +1,19 @@
 // Gears on a cube and an octahedron, the workshop: for each part, its dimensioned drawing, and how it is made on a
 // lathe and a mill, step by step. The state is which toy, which part, which view, the machine time, and the camera.
-import { MM, parts, unitMM } from './model.js?v=e30be9be';
-import { planOf, startOf, MANDREL, PARTS, NAMES, by, SHOWN } from './plan.js?v=e30be9be';
-import { stockOf, gearSpec, screwSpec } from './spec.js?v=e30be9be';
-import { timeline, makeReplay, DZ } from './cut.js?v=e30be9be';
-import { makeLook } from './look.js?v=e30be9be';
-import { makeShop, M4, turnedMesh, milledMesh, holeMesh, slotMesh } from './shop.js?v=e30be9be';
-import { grow, lathe, box, gearMesh, smallParts, sphere } from './mesh.js?v=e30be9be';
-import { collisions, turnedEnvelope } from './collide.js?v=e30be9be';
-import { cutting, chipMesh, rnd } from './chips.js?v=e30be9be';
-import { drawing } from './drawing.js?v=e30be9be';
-import { perspective, lookAt, mul4 } from '../gl/gl.js?v=e30be9be';
-import { dot, cross, norm, bodyFaces } from './model.js?v=e30be9be';
-import { gamepad } from '../gamepad/gamepad.js?v=e30be9be';
-import { touchSliders } from '../touch/slider.js?v=e30be9be';
+import { MM, parts, unitMM } from './model.js?v=5fd3917c';
+import { planOf, startOf, MANDREL, PARTS, NAMES, by, SHOWN } from './plan.js?v=5fd3917c';
+import { stockOf, gearSpec, screwSpec } from './spec.js?v=5fd3917c';
+import { timeline, makeReplay, DZ } from './cut.js?v=5fd3917c';
+import { makeLook } from './look.js?v=5fd3917c';
+import { makeShop, M4, turnedMesh, milledMesh, holeMesh, slotMesh } from './shop.js?v=5fd3917c';
+import { grow, lathe, box, gearMesh, smallParts, sphere } from './mesh.js?v=5fd3917c';
+import { collisions, turnedEnvelope } from './collide.js?v=5fd3917c';
+import { cutting, chipMesh, rnd } from './chips.js?v=5fd3917c';
+import { drawing } from './drawing.js?v=5fd3917c';
+import { perspective, lookAt, mul4 } from '../gl/gl.js?v=5fd3917c';
+import { dot, cross, norm, bodyFaces } from './model.js?v=5fd3917c';
+import { gamepad } from '../gamepad/gamepad.js?v=5fd3917c';
+import { touchSliders } from '../touch/slider.js?v=5fd3917c';
 
 const $ = (id) => document.getElementById(id);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;

@@ -2,11 +2,11 @@
 // carriage, cross slide, compound, tool post, tailstock) and a knee mill (table, vise, spin indexer, tilting dividing
 // head, a head that tilts), drawn round the part being made. All sizes in millimeters; the machines are a typical
 // bench lathe's and a small knee mill's. The part's shape comes from cut.js; nothing here decides it.
-import { program } from '../gl/gl.js?v=e30be9be';
-import { GLSL, withLit } from './look.js?v=e30be9be';
-import { grow, lathe, box, poly, sphere, gearMesh } from './mesh.js?v=e30be9be';
-import { bodyFaces, dot, cross, norm } from './model.js?v=e30be9be';
-import { outline } from './cut.js?v=e30be9be';
+import { program } from '../gl/gl.js?v=5fd3917c';
+import { GLSL, withLit } from './look.js?v=5fd3917c';
+import { grow, lathe, box, poly, sphere, gearMesh } from './mesh.js?v=5fd3917c';
+import { bodyFaces, dot, cross, norm } from './model.js?v=5fd3917c';
+import { outline } from './cut.js?v=5fd3917c';
 
 const VS = `#version 300 es
 layout(location=0) in vec3 aPos; layout(location=1) in vec3 aNor; layout(location=2) in vec3 aT;
@@ -61,6 +61,8 @@ void main(){
   else if (kind == 13) { base = vec3(0.42, 0.44, 0.47); rough = 0.45; }                                       // chuck jaws, hardened and ground
   else if (kind == 14) { base = uTint * vec3(0.7, 0.62, 0.52) * (0.94 + 0.06 * hash(floor(vL * 2.5))); rough = 0.75; }  // brass bar as it came: dull, sawn
   else { base = vec3(0.6, 0.62, 0.66); rough = 0.4; }                                                            // tool holders, plain steel
+  if (kind == 1 || kind == 13) { base *= 0.75; rough = max(rough, 0.62); }                         // the machines' steel is used, not polished
+  else if (kind == 3 || kind == 10) { base *= 0.85; rough = max(rough, 0.45); }
 #ifdef LIT
   {
     // as in photos of real shops: brass bright, steel a satin mid gray, black oxide a dark gray, cast iron lumpy under its paint
@@ -69,10 +71,18 @@ void main(){
     if (kind == 14) base = vec3(0.86, 0.76, 0.55) * (0.94 + 0.06 * hash(floor(vL * 2.5)));
     int fin = (kind == 0 || kind == 5) ? 1 : (kind == 1 ? 4 : (mtl ? 0 : 3));
     float rr = mtl ? (brass && kind != 14 ? rough * 0.5 : max(rough, 0.42)) : 0.55;
-    if (!brass && mtl && kind != 4 && kind != 10) base = vec3(0.80, 0.80, 0.79);
-    if (kind == 4) { base = vec3(0.50, 0.50, 0.51); rr = 0.45; }
-    if (kind == 13) base = vec3(0.72, 0.72, 0.71);
-    if (kind == 2) base = uPaint;                                 // (its texture comes from shade)
+    // the machines and tools are used, not polished: satin steel dulled by an oil film, wear and grime, which stay put
+    // on each part (its own coordinates, in millimeters) as it moves
+    if (!brass && mtl && kind != 4 && kind != 10) { base = vec3(0.62, 0.62, 0.61); rr = max(rough, 0.64); }
+    if (kind == 3) { base = vec3(0.68, 0.68, 0.67); rr = 0.52; }    // ground tool steel keeps a finer finish
+    if (kind == 4) { base = vec3(0.32, 0.32, 0.33); rr = 0.62; }
+    if (kind == 13) { base = vec3(0.56, 0.56, 0.55); rr = 0.62; }
+    if (kind == 10) rr = 0.48;
+    if (!brass && mtl) {
+      float grime = smoothstep(0.35, 0.85, vnoise(vL * 0.05)) * 0.6 + 0.25 * vnoise(vL * 0.6) + 0.15 * vnoise(vL * 3.);
+      base *= 1. - 0.28 * grime; rr = min(rr + 0.18 * grime, 0.85);
+    }
+    if (kind == 2) { base = uPaint; rr = 0.85; }                   // (its texture comes from shade)
     o = vec4(shade(base, rr, mtl, fin, n, v, vW, vL), 1.); return;
   }
 #endif
