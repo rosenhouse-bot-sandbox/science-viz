@@ -13,6 +13,9 @@
 //      arrive, on a console error, or if a page's own text is missing.
 //   4. The server comes back with one file changed. Fails if the page does not get the new file at
 //      once, or if the service worker does not install the new version and drop the old copy.
+//   5. As a Home Screen app: each launch checks for a new version, and a small note says how it went.
+//      Fails if a launch with nothing new does not say "Up to date", if a new version does not reload
+//      the page once and say so, or if a failed update, a stopped server or no network says nothing.
 import fs from 'node:fs';
 import path from 'node:path';
 import { build } from '../../.github/sw.mjs';
@@ -37,12 +40,13 @@ const madeDates = !fs.existsSync(path.join(root, 'dates.json'));
 if (madeDates) { const { execFileSync } = await import('node:child_process'); execFileSync('node', [path.join(root, '.github/dates.mjs')], { cwd: root }); }
 process.on('exit', () => { if (madeDates) fs.rmSync(path.join(root, 'dates.json'), { force: true }); });
 
-let sw = build(), changed = null, up = true;
+let sw = build(), changed = null, up = true, bad = null; // bad: a path answered with an error (test 5)
 const kept = new Set(JSON.parse(sw.text.match(/^const FILES = (.*);$/m)[1]));
 const { server, base } = await serve({
   host: '127.0.0.1', headers: { 'cache-control': 'no-cache' },
   handle(p, req, res) {
     if (!up) { req.socket.destroy(); return true; }
+    if (p === bad) { res.writeHead(500); res.end(); return true; }
     if (p === '/sw.js') { res.writeHead(200, { 'content-type': 'text/javascript', 'cache-control': 'no-cache' }); res.end(sw.text); return true; }
     return false;
   },
@@ -132,6 +136,45 @@ if (!swapped) fail('after a deploy: the new version did not replace the old copy
 down();
 await p.reload();
 if (!(await p.evaluate(() => window.__changed))) fail('after a deploy, offline: the kept copy is the old file');
+
+// 5. The Home Screen app. Each new tab is a launch (a new session); navigator.standalone says "app".
+up = true;
+const app = await browser.newContext({ viewport: { width: 820, height: 1180 }, hasTouch: true, serviceWorkers: 'allow' });
+await app.addInitScript(() => Object.defineProperty(Navigator.prototype, 'standalone', { get: () => true }));
+async function launch(name, expect, { reloads = false } = {}) {
+  const page = await app.newPage(), errors = [];
+  let loads = 0;
+  page.on('load', () => loads++);
+  page.on('pageerror', (e) => errors.push(String(e)));
+  try { await page.goto(base, { waitUntil: 'load', timeout: 60000 }); } catch (e) { fail(`app ${name}: did not open: ${e.message.split('\n')[0]}`); }
+  let said = '';
+  for (let i = 0; i < 300 && !said; i++) {
+    said = await page.evaluate(() => document.querySelector('.pwa-note')?.textContent || '').catch(() => '');
+    if (!said) await page.waitForTimeout(100);
+  }
+  if (expect === null) { if (said) fail(`app ${name}: said "${said}", expected nothing`); }
+  else if (!expect.test(said)) fail(`app ${name}: said "${said || 'nothing'}", expected ${expect}`);
+  if (reloads !== (loads > 1)) fail(`app ${name}: ${loads > 1 ? 'reloaded' : 'did not reload'}`);
+  for (const e of errors) fail(`app ${name}: ${e.slice(0, 200)}`);
+  console.log(`app ${name}: ${said ? '"' + said + '"' : 'no note'}${loads > 1 ? ' (reloaded once)' : ''}`);
+  return page;
+}
+const version = (v) => { sw = { text: sw.text.replace(/^const VERSION = '(\w+)';$/m, `const VERSION = '${v}';`) }; };
+version('app0first');
+await (await launch('first launch', null)).evaluate(() => navigator.serviceWorker.ready);
+await new Promise((r) => setTimeout(r, 1500));
+await launch('nothing new', /^Up to date$/);
+version('app1update');
+const upd = await launch('new version', /^Updated to the latest version$/, { reloads: true });
+if (!(await upd.evaluate(() => caches.keys())).includes('site-app1update')) fail('app new version: the new copy is not kept');
+version('app2broken'); bad = '/css/slider.css';
+await launch('update fails', /^Could not update/);
+bad = null; version('app1update');
+down();
+await launch('server stopped', /^(Could not check|Offline)/);
+up = true; await app.setOffline(true);
+await launch('no network', /^Offline/);
+await app.close();
 
 await browser.close(); server.close();
 console.log(fails ? `${fails} failure(s)` : 'all passed');
