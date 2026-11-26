@@ -46,6 +46,15 @@ experience is and where its code lives.
   perceive. White light is a mix of many wavelengths, not "every color at once". Write "short
   wavelengths, which we see as blue", and "drawn in gold" for a color that is only the picture's.
 
+## Realism
+
+- Each page's folder has a `README.md` that lists what must stay true on that page (`gears/README.md`: tools touch
+  the work and never the machine). Read it before changing the page. When Gabe corrects something on a page, add the
+  rule there in one line.
+- To audit a page, use the `realism-audit` skill (`.claude/skills/realism-audit/SKILL.md`). A cheaper model takes
+  frames with `node tests/audit/shots.mjs`, the strongest model reads them, and the audit ends by updating that
+  README. Rules for one page go in its README, never in the skill.
+
 ## Writing the text
 
 - Write on-screen text, captions, briefs, info cards and README prose with the `prose-lint` skill

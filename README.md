@@ -410,6 +410,10 @@ every push to `main`. In the repository settings, set Pages → Source to
   anything off the screen or covered, a control smaller than a finger, cut-off text, or a page that stops zooming.
 - `tests/touch/run.mjs`: works every slider on every page with a finger at an iPad size, and fails if a tap or
   a drag does not land where the finger is, the knob jumps, or a drag scrolls the panel.
+- `<page>/README.md` (`engine/README.md`, `v2/README.md` and so on): what must stay true on that page, kept by the
+  `realism-audit` skill (`.claude/skills/realism-audit/`). These notes are not part of the offline copy.
+- `tests/audit/shots.mjs`: takes the frames for a realism audit from a shot list (`example.json`), one sheet per
+  set, with an earlier run above the new one when asked.
 - `tests/smooth/`: the smooth-interaction tests for Rainbows (`run.mjs` drives the page, `inject.js` is the
   stepped clock and the probes, `scenarios.mjs` the gestures, `analyze.mjs` the checks and the report).
 
