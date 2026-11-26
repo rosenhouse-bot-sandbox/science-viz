@@ -2,11 +2,11 @@
 // carriage, cross slide, compound, tool post, tailstock) and a knee mill (table, vise, spin indexer, tilting dividing
 // head, a head that tilts), drawn round the part being made. All sizes in millimeters; the machines are a typical
 // bench lathe's and a small knee mill's. The part's shape comes from cut.js; nothing here decides it.
-import { program } from '../gl/gl.js?v=5fd3917c';
-import { GLSL, withLit } from './look.js?v=5fd3917c';
-import { grow, lathe, box, poly, sphere, gearMesh } from './mesh.js?v=5fd3917c';
-import { bodyFaces, dot, cross, norm } from './model.js?v=5fd3917c';
-import { outline } from './cut.js?v=5fd3917c';
+import { program } from '../gl/gl.js?v=57c9eaea';
+import { GLSL, withLit } from './look.js?v=57c9eaea';
+import { grow, lathe, box, poly, sphere, gearMesh } from './mesh.js?v=57c9eaea';
+import { bodyFaces, dot, cross, norm } from './model.js?v=57c9eaea';
+import { outline } from './cut.js?v=57c9eaea';
 
 const VS = `#version 300 es
 layout(location=0) in vec3 aPos; layout(location=1) in vec3 aNor; layout(location=2) in vec3 aT;
@@ -282,11 +282,11 @@ function dividingParts() {
   return { base, head };
 }
 // mill tools, local: the tip (bottom) at the origin, axis +z up into the spindle
-function millTool(t) {
+export function millTool(t) {
   const g = grow();
   if (t.type === 'fly') {
     cyl(g, 12, 6, 40, 4); box(g, [-15, -6, 6], [15, 6, 16], K(4));
-    box(g, [12, -2, 0], [15.5, 2, 10], K(3));
+    box(g, [t.d / 2 - 3.5, -2, 0], [t.d / 2, 2, 10], K(3));   // the bit: its outer corner cuts at radius d / 2
     return g;
   }
   if (t.type === 'end') { const r = t.d / 2; lathe(g, [[0, 0], [r, 0], [r, t.d * 2]], 10, 48); lathe(g, [[r, t.d * 2], [r, 60], [0, 60]], 3, 48);
@@ -358,9 +358,22 @@ export function turnedMesh(S, kind = 0) {
 }
 // a convex milled part from its planes; with a plane part-way cut, two pieces: the part cut so far and the rest
 export function milledMesh(M) {
-  const g = grow(), add = (planes, skip) => { for (const f of bodyFaces(planes)) { if (f.kind === skip) continue; poly(g, f.poly, f.n, K(f.kind === 'stock' ? 14 : 0, 0)); } };
+  const g = grow(), add = (planes, ...skip) => { for (const f of bodyFaces(planes)) { if (skip.includes(f.kind)) continue; poly(g, f.poly, f.n, K(f.kind === 'stock' ? 14 : 0, 0)); } };
   if (!M.cut) add(M.planes);
-  else {
+  else if (M.cut.R) {
+    // a fly cutter or end mill: the edge of the cut is the front arc of its circle, taken as chords in bands across the feed
+    const c = M.cut, { R, v, vc } = c, a = c.s - R, vs = bodyFaces(M.planes).flatMap((f) => f.poly.map((q) => dot(q, v)));
+    const v0 = Math.min(...vs) - 0.01, v1 = Math.max(...vs) + 0.01, N = 12;
+    const at = (y) => { const k = Math.min(Math.abs(y - vc), R); return a + Math.sqrt(R * R - k * k); };
+    for (let i = 0; i < N; i++) {
+      const y0 = v0 + (v1 - v0) * i / N, y1 = v0 + (v1 - v0) * (i + 1) / N, x0 = at(y0), x1 = at(y1);
+      // the chord's normal, pointing ahead: m · p = m · A on the chord
+      const m = norm([0, 1, 2].map((k) => c.u[k] * (y1 - y0) - v[k] * (x1 - x0))), A = [0, 1, 2].map((k) => c.u[k] * x0 + v[k] * y0);
+      const md = dot(m, A), band = [{ n: v, d: y1, kind: 'band' }, { n: v.map((x) => -x), d: -y0, kind: 'band' }];
+      add([...M.planes, ...band, { n: m.map((x) => -x), d: -md, kind: 'split' }], 'band');
+      add([...M.planes, ...band, { n: m, d: md, kind: 'split' }, { n: c.n, d: c.d, kind: 'cut' }], 'split', 'band');
+    }
+  } else {
     const c = M.cut;
     add([...M.planes, { n: c.u.map((x) => -x), d: -c.s, kind: 'split' }]);                 // ahead of the tool: still whole
     add([...M.planes, { n: c.u, d: c.s, kind: 'split' }, { n: c.n, d: c.d, kind: 'cut' }], 'split');   // behind it: cut

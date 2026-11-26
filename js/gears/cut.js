@@ -4,8 +4,8 @@
 // A lathe part is kept as two radii along its axis, sampled every 0.01 mm: the outside (ro) and the inside (ri).
 // Where ro <= ri there is no metal. A mill part is a list of planes (it stays convex), with holes, gear gaps and a
 // slot on top.
-import { dot, cross, norm } from './model.js?v=5fd3917c';
-import { bodyFaces } from './model.js?v=5fd3917c';
+import { dot, cross, norm } from './model.js?v=57c9eaea';
+import { bodyFaces } from './model.js?v=57c9eaea';
 
 export const DZ = 0.01;
 const RAPID = 0.8, CHANGE = 2.5;        // seconds to bring a tool in or pull it clear, and to change tools between steps
@@ -180,12 +180,16 @@ function simplify(pts) {
 }
 
 // ---- mill ----
-// the cut a plane pass makes, laid out once: where the tool starts and ends along u, and the face's middle
-export function planeGeometry(planes, p, R) {
+// the cut a plane pass makes, laid out once: where the tool's axis starts and ends along u, and the face's middle.
+// A fly cutter's bit (or an end mill's bottom edge) cuts on a circle of radius R round the axis, so the edge between cut and uncut is that circle's
+// front arc; the pass ends once the arc has crossed the whole face (v: across the feed; vc: the axis's line).
+export function planeGeometry(planes, p, R, arc = false) {
   const f = bodyFaces([...planes, { n: p.n, d: p.d, kind: 'this' }]).find((q) => q.kind === 'this');
   if (!f) return null;
   const us = f.poly.map((q) => dot(q, p.u)), c = f.poly.reduce((s, q) => [s[0] + q[0] / f.poly.length, s[1] + q[1] / f.poly.length, s[2] + q[2] / f.poly.length], [0, 0, 0]);
-  return { s0: Math.min(...us) - R - 0.5, s1: Math.max(...us) + R + 0.5, c, poly: f.poly };
+  if (!arc) return { s0: Math.min(...us) - R - 0.5, s1: Math.max(...us) + R + 0.5, c, poly: f.poly };
+  const v = cross(p.n, p.u), vc = dot(c, v), w = Math.max(...f.poly.map((q) => Math.abs(dot(q, v) - vc))), sag = w < R ? R - Math.sqrt(R * R - w * w) : R;
+  return { s0: Math.min(...us) - R - 0.5, s1: Math.max(...us) - R + sag + 0.5, c, poly: f.poly, v, vc, w };
 }
 // a mill state: planes (the part so far), the plane being cut (with how far along), holes, gaps, slot
 export function millStart(planes, extra = {}) { return { planes: planes.slice(), cut: null, holes: [], gaps: null, slot: null, ...extra }; }
@@ -286,12 +290,12 @@ function addPlane(planes, n, d) {
 // apply mill pass p as far as f; returns the tool's position: { at: point in part frame, axis, ... }
 export function millPass(M, op, p, f, start) {
   if (p.k === 'plane') {
-    const R = p.tool === 'chamfer' ? 2 : (start.toolR || 6);
-    const geo = p.geo || (p.geo = planeGeometry(M.planes, p, R));
+    const R = p.r || (p.tool === 'chamfer' ? 2 : (start.toolR || 6)), arc = p.tool === 'fly' || p.tool === 'end';
+    const geo = p.geo || (p.geo = planeGeometry(M.planes, p, R, arc));
     if (!geo) { if (f >= 1) addPlane(M.planes, p.n, p.d); return null; }
     const s = lerp(geo.s0, geo.s1, f);
     if (f >= 1) { addPlane(M.planes, p.n, p.d); M.cut = null; }
-    else M.cut = { n: p.n, d: p.d, u: p.u, s: s + R };
+    else M.cut = { n: p.n, d: p.d, u: p.u, s: s + R, ...(arc ? { R, v: geo.v, vc: geo.vc } : {}) };
     const c = geo.c, cu = dot(c, p.u);
     return { at: [0, 1, 2].map((k) => c[k] + p.u[k] * (s - cu)), n: p.n, u: p.u };
   }

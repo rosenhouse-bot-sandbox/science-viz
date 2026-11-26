@@ -6,8 +6,8 @@
 // faces (dir +1: its +z end toward the tailstock) and where the chuck's jaws end (zJaw). Mill passes are in the
 // part's frame too; a setup says how the part sits on the machine (rot: part to machine) and how far the head
 // is tilted. Speeds are real; feeds are real, in mm a second.
-import { by, SHOWN, gearSpec, spacerSpec, screwSpec, coreSpec, stockOf } from './spec.js?v=5fd3917c';
-import { norm, cross, dot } from './model.js?v=5fd3917c';
+import { by, SHOWN, gearSpec, spacerSpec, screwSpec, coreSpec, stockOf } from './spec.js?v=57c9eaea';
+import { norm, cross, dot } from './model.js?v=57c9eaea';
 
 const D = Math.PI / 180;
 // spindle speed for a cut at surface speed v (m/min) on diameter d (mm), within what the machine can do
@@ -175,7 +175,7 @@ function corePlan(sh) {
   for (const [up, jaw] of SIDES) {
     const from = Math.abs(up[1]) ? h : a, rot = frameTo([[up, Z], [jaw, Y]]);
     vise.steps.push({ title: `Face the ${['top', 'bottom', 'right', 'left', 'front', 'back'][SIDES.findIndex((s) => s[0] === up)]}`, line: `To ${(2 * big).toFixed(2)} square. Fly cutter, ${nF} rpm.`,
-      tool: fly, rpm: nF, rot, passes: planePasses(up, from, big, 0.25, cross(up, jaw), 18, 1.2) });
+      tool: fly, rpm: nF, rot, passes: planePasses(up, from, big, 0.25, cross(up, jaw), 18, 1.2, { tool: 'fly', r: fly.d / 2 }) });
   }
   ops.push(vise);
   // the edges: four setups, a 90° chamfer mill along each top edge
@@ -220,7 +220,7 @@ function corePlan(sh) {
       const passes = [];
       for (const n of faces) {
         const top = Math.max(...c.faces.flatMap((f) => f.poly).map((p) => dot(p, n)));
-        passes.push(...planePasses(n, Math.max(top, big * 1.4), c.planes.find((q) => q.kind === 'face').d, 0.5, norm(cross(n, end > 0 ? Y : neg(Y))), 24, 1.5, { tool: 'end' }));
+        passes.push(...planePasses(n, Math.max(top, big * 1.4), c.planes.find((q) => q.kind === 'face').d, 0.5, norm(cross(n, end > 0 ? Y : neg(Y))), 24, 1.5, { tool: 'end', r: em.d / 2 }));
       }
       op.steps.push({ title: 'Mill the faces', line: `Head tilted ${(tilt / D).toFixed(2)}°. Index 90° between faces.`, tool: em, rpm: nE, passes });
       op.steps.push(...holes(faces));
