@@ -1,12 +1,12 @@
 // Gears on a cube and an octahedron: the controller. The state is which solid, how far the gears have turned, and
 // the camera. Dragging a gear turns it about its own axis, and every gear it meshes with follows.
-import { SHAPES, angles, dot, cross, norm, R_IN, R_OUT, MM, unitMM } from './model.js?v=e30be9be';
-import { makeScene } from './scene.js?v=e30be9be';
-import { makeLook } from './look.js?v=e30be9be';
-import { KEY } from './facts.js?v=e30be9be';
-import { perspective, lookAt, mul4 } from '../gl/gl.js?v=e30be9be';
-import { gamepad } from '../gamepad/gamepad.js?v=e30be9be';
-import { touchSliders } from '../touch/slider.js?v=e30be9be';
+import { SHAPES, angles, dot, cross, norm, R_IN, R_OUT, MM, unitMM } from './model.js?v=57c9eaea';
+import { makeScene } from './scene.js?v=57c9eaea';
+import { makeLook } from './look.js?v=57c9eaea';
+import { KEY } from './facts.js?v=57c9eaea';
+import { perspective, lookAt, mul4 } from '../gl/gl.js?v=57c9eaea';
+import { gamepad } from '../gamepad/gamepad.js?v=57c9eaea';
+import { touchSliders } from '../touch/slider.js?v=57c9eaea';
 
 const $ = (id) => document.getElementById(id);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;

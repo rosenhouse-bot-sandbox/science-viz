@@ -1,19 +1,19 @@
 // Gears on a cube and an octahedron, the workshop: for each part, its dimensioned drawing, and how it is made on a
 // lathe and a mill, step by step. The state is which toy, which part, which view, the machine time, and the camera.
-import { MM, parts, unitMM } from './model.js?v=e30be9be';
-import { planOf, startOf, MANDREL, PARTS, NAMES, by, SHOWN } from './plan.js?v=e30be9be';
-import { stockOf, gearSpec, screwSpec } from './spec.js?v=e30be9be';
-import { timeline, makeReplay, DZ } from './cut.js?v=e30be9be';
-import { makeLook } from './look.js?v=e30be9be';
-import { makeShop, M4, turnedMesh, milledMesh, holeMesh, slotMesh } from './shop.js?v=e30be9be';
-import { grow, lathe, box, gearMesh, smallParts, sphere } from './mesh.js?v=e30be9be';
-import { collisions, turnedEnvelope } from './collide.js?v=e30be9be';
-import { cutting, chipMesh, rnd } from './chips.js?v=e30be9be';
-import { drawing } from './drawing.js?v=e30be9be';
-import { perspective, lookAt, mul4 } from '../gl/gl.js?v=e30be9be';
-import { dot, cross, norm, bodyFaces } from './model.js?v=e30be9be';
-import { gamepad } from '../gamepad/gamepad.js?v=e30be9be';
-import { touchSliders } from '../touch/slider.js?v=e30be9be';
+import { MM, parts, unitMM } from './model.js?v=57c9eaea';
+import { planOf, startOf, MANDREL, PARTS, NAMES, by, SHOWN } from './plan.js?v=57c9eaea';
+import { stockOf, gearSpec, screwSpec } from './spec.js?v=57c9eaea';
+import { timeline, makeReplay, DZ } from './cut.js?v=57c9eaea';
+import { makeLook } from './look.js?v=57c9eaea';
+import { makeShop, M4, turnedMesh, milledMesh, holeMesh, slotMesh } from './shop.js?v=57c9eaea';
+import { grow, lathe, box, gearMesh, smallParts, sphere } from './mesh.js?v=57c9eaea';
+import { collisions, turnedEnvelope } from './collide.js?v=57c9eaea';
+import { cutting, chipMesh, rnd } from './chips.js?v=57c9eaea';
+import { drawing } from './drawing.js?v=57c9eaea';
+import { perspective, lookAt, mul4 } from '../gl/gl.js?v=57c9eaea';
+import { dot, cross, norm, bodyFaces } from './model.js?v=57c9eaea';
+import { gamepad } from '../gamepad/gamepad.js?v=57c9eaea';
+import { touchSliders } from '../touch/slider.js?v=57c9eaea';
 
 const $ = (id) => document.getElementById(id);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -58,7 +58,7 @@ const VIEWS = { chuck: { yaw: 0.95, pitch: 0.85, zoom: 0.55 }, collet: { yaw: 0.
   bench: { yaw: 0.5, pitch: 0.45, zoom: 1 } };
 let target = [0, 0, 0], frameDist = 100, upAxis = [0, 1, 0];
 // what turns in this frame, for the collision check: the lathe's spindle, or the mill's tool; and the cutting edge
-let spinAxis = null, cutTip = null, slide = null, viseW = 0;
+let spinAxis = null, cutTip = null, slide = null, viseW = 0, spinRate = 2.4;
 function camera() {
   const p = st.pitch, y = st.yaw, R = frameDist * st.zoom;
   // the lathe's world has y up; the mill's has z up
@@ -84,7 +84,7 @@ const P_LATHE = (dir) => new Float32Array([0, dir, 0, 0, 0, 0, 1, 0, dir, 0, 0, 
 function frameOf() {
   const items = [], R = cur.replay;
   if (st.part === 'bearing' || !R) return bench(items);
-  spinAxis = null; cutTip = null;
+  spinAxis = null; cutTip = null; spinRate = 2.4;
   const r = R.at(st.t), op = cur.plan[r.op], step = op.steps[r.step], p = r.seg.p, tool = p.tool && typeof p.tool === 'object' ? p.tool : step.tool;
   const L = shop.lathe3, MI = shop.mill;
   const cutting = r.away < 1 && r.seg.t0 <= st.t && st.t <= r.seg.t1;
@@ -247,6 +247,10 @@ function millFrame(items, r, op, step, tool, p) {
   const Mt = M4.mul(M4.axis(spindle, tipW), M4.rz(spin));
   items.push({ name: 'cutter', role: 'cut', mesh: tm, M: Mt });
   spinAxis = { p: tipW, s: spindle }; cutTip = tipW;
+  // a fly cutter cuts with a bit out at its radius, on the front of its circle
+  // its one bit meets the work on a short arc of each turn, so it is shown turning fast enough to cut on every few frames
+  if (tool.type === 'fly') spinRate = 20;
+  if (tool.type === 'fly' && partM && r.tip && r.tip.u) { const uW = norm(M4.dir(partM, r.tip.u)); cutTip = tipW.map((x, i) => x + uW[i] * tool.d / 2); }
   const tl = toolLength(tool), small = tool.type === 'drill' || tool.type === 'spot' || tool.type === 'tap';
   // small drills and taps go in a drill chuck; cutters in a collet, under its nut
   const holder = tipW.map((v, i) => v + spindle[i] * (tl - (small ? 8 : 6)));
@@ -471,7 +475,7 @@ function tick(now) {
     dirty = true;
   }
   // the spindle turns while a cut is being made; shown far slower than it really turns
-  if (st.view === 'make' && shop) { spin += dt * 2.4; dirty = true; }
+  if (st.view === 'make' && shop) { spin += dt * spinRate; dirty = true; }
   if (dirty) {
     dirty = false;
     try {

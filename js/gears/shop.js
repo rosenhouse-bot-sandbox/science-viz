@@ -2,11 +2,11 @@
 // carriage, cross slide, compound, tool post, tailstock) and a knee mill (table, vise, spin indexer, tilting dividing
 // head, a head that tilts), drawn round the part being made. All sizes in millimeters; the machines are a typical
 // bench lathe's and a small knee mill's. The part's shape comes from cut.js; nothing here decides it.
-import { program } from '../gl/gl.js?v=e30be9be';
-import { GLSL, withLit } from './look.js?v=e30be9be';
-import { grow, lathe, box, poly, sphere, gearMesh } from './mesh.js?v=e30be9be';
-import { bodyFaces, dot, cross, norm } from './model.js?v=e30be9be';
-import { outline } from './cut.js?v=e30be9be';
+import { program } from '../gl/gl.js?v=57c9eaea';
+import { GLSL, withLit } from './look.js?v=57c9eaea';
+import { grow, lathe, box, poly, sphere, gearMesh } from './mesh.js?v=57c9eaea';
+import { bodyFaces, dot, cross, norm } from './model.js?v=57c9eaea';
+import { outline } from './cut.js?v=57c9eaea';
 
 const VS = `#version 300 es
 layout(location=0) in vec3 aPos; layout(location=1) in vec3 aNor; layout(location=2) in vec3 aT;
@@ -61,6 +61,8 @@ void main(){
   else if (kind == 13) { base = vec3(0.42, 0.44, 0.47); rough = 0.45; }                                       // chuck jaws, hardened and ground
   else if (kind == 14) { base = uTint * vec3(0.7, 0.62, 0.52) * (0.94 + 0.06 * hash(floor(vL * 2.5))); rough = 0.75; }  // brass bar as it came: dull, sawn
   else { base = vec3(0.6, 0.62, 0.66); rough = 0.4; }                                                            // tool holders, plain steel
+  if (kind == 1 || kind == 13) { base *= 0.75; rough = max(rough, 0.62); }                         // the machines' steel is used, not polished
+  else if (kind == 3 || kind == 10) { base *= 0.85; rough = max(rough, 0.45); }
 #ifdef LIT
   {
     // as in photos of real shops: brass bright, steel a satin mid gray, black oxide a dark gray, cast iron lumpy under its paint
@@ -69,10 +71,18 @@ void main(){
     if (kind == 14) base = vec3(0.86, 0.76, 0.55) * (0.94 + 0.06 * hash(floor(vL * 2.5)));
     int fin = (kind == 0 || kind == 5) ? 1 : (kind == 1 ? 4 : (mtl ? 0 : 3));
     float rr = mtl ? (brass && kind != 14 ? rough * 0.5 : max(rough, 0.42)) : 0.55;
-    if (!brass && mtl && kind != 4 && kind != 10) base = vec3(0.80, 0.80, 0.79);
-    if (kind == 4) { base = vec3(0.50, 0.50, 0.51); rr = 0.45; }
-    if (kind == 13) base = vec3(0.72, 0.72, 0.71);
-    if (kind == 2) base = uPaint;                                 // (its texture comes from shade)
+    // the machines and tools are used, not polished: satin steel dulled by an oil film, wear and grime, which stay put
+    // on each part (its own coordinates, in millimeters) as it moves
+    if (!brass && mtl && kind != 4 && kind != 10) { base = vec3(0.62, 0.62, 0.61); rr = max(rough, 0.64); }
+    if (kind == 3) { base = vec3(0.68, 0.68, 0.67); rr = 0.52; }    // ground tool steel keeps a finer finish
+    if (kind == 4) { base = vec3(0.32, 0.32, 0.33); rr = 0.62; }
+    if (kind == 13) { base = vec3(0.56, 0.56, 0.55); rr = 0.62; }
+    if (kind == 10) rr = 0.48;
+    if (!brass && mtl) {
+      float grime = smoothstep(0.35, 0.85, vnoise(vL * 0.05)) * 0.6 + 0.25 * vnoise(vL * 0.6) + 0.15 * vnoise(vL * 3.);
+      base *= 1. - 0.28 * grime; rr = min(rr + 0.18 * grime, 0.85);
+    }
+    if (kind == 2) { base = uPaint; rr = 0.85; }                   // (its texture comes from shade)
     o = vec4(shade(base, rr, mtl, fin, n, v, vW, vL), 1.); return;
   }
 #endif
@@ -272,11 +282,11 @@ function dividingParts() {
   return { base, head };
 }
 // mill tools, local: the tip (bottom) at the origin, axis +z up into the spindle
-function millTool(t) {
+export function millTool(t) {
   const g = grow();
   if (t.type === 'fly') {
     cyl(g, 12, 6, 40, 4); box(g, [-15, -6, 6], [15, 6, 16], K(4));
-    box(g, [12, -2, 0], [15.5, 2, 10], K(3));
+    box(g, [t.d / 2 - 3.5, -2, 0], [t.d / 2, 2, 10], K(3));   // the bit: its outer corner cuts at radius d / 2
     return g;
   }
   if (t.type === 'end') { const r = t.d / 2; lathe(g, [[0, 0], [r, 0], [r, t.d * 2]], 10, 48); lathe(g, [[r, t.d * 2], [r, 60], [0, 60]], 3, 48);
@@ -348,9 +358,22 @@ export function turnedMesh(S, kind = 0) {
 }
 // a convex milled part from its planes; with a plane part-way cut, two pieces: the part cut so far and the rest
 export function milledMesh(M) {
-  const g = grow(), add = (planes, skip) => { for (const f of bodyFaces(planes)) { if (f.kind === skip) continue; poly(g, f.poly, f.n, K(f.kind === 'stock' ? 14 : 0, 0)); } };
+  const g = grow(), add = (planes, ...skip) => { for (const f of bodyFaces(planes)) { if (skip.includes(f.kind)) continue; poly(g, f.poly, f.n, K(f.kind === 'stock' ? 14 : 0, 0)); } };
   if (!M.cut) add(M.planes);
-  else {
+  else if (M.cut.R) {
+    // a fly cutter or end mill: the edge of the cut is the front arc of its circle, taken as chords in bands across the feed
+    const c = M.cut, { R, v, vc } = c, a = c.s - R, vs = bodyFaces(M.planes).flatMap((f) => f.poly.map((q) => dot(q, v)));
+    const v0 = Math.min(...vs) - 0.01, v1 = Math.max(...vs) + 0.01, N = 12;
+    const at = (y) => { const k = Math.min(Math.abs(y - vc), R); return a + Math.sqrt(R * R - k * k); };
+    for (let i = 0; i < N; i++) {
+      const y0 = v0 + (v1 - v0) * i / N, y1 = v0 + (v1 - v0) * (i + 1) / N, x0 = at(y0), x1 = at(y1);
+      // the chord's normal, pointing ahead: m · p = m · A on the chord
+      const m = norm([0, 1, 2].map((k) => c.u[k] * (y1 - y0) - v[k] * (x1 - x0))), A = [0, 1, 2].map((k) => c.u[k] * x0 + v[k] * y0);
+      const md = dot(m, A), band = [{ n: v, d: y1, kind: 'band' }, { n: v.map((x) => -x), d: -y0, kind: 'band' }];
+      add([...M.planes, ...band, { n: m.map((x) => -x), d: -md, kind: 'split' }], 'band');
+      add([...M.planes, ...band, { n: m, d: md, kind: 'split' }, { n: c.n, d: c.d, kind: 'cut' }], 'split', 'band');
+    }
+  } else {
     const c = M.cut;
     add([...M.planes, { n: c.u.map((x) => -x), d: -c.s, kind: 'split' }]);                 // ahead of the tool: still whole
     add([...M.planes, { n: c.u, d: c.s, kind: 'split' }, { n: c.n, d: c.d, kind: 'cut' }], 'split');   // behind it: cut
