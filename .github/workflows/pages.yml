@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url || steps.again.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -30,5 +30,13 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: .
+      # The deploy step sometimes cannot find the artifact just uploaded ("Fetching artifact metadata
+      # failed"), and the site then stays at the last good deploy. Wait and try once more.
       - id: deployment
+        uses: actions/deploy-pages@v4
+        continue-on-error: true
+      - if: steps.deployment.outcome == 'failure'
+        run: sleep 60
+      - id: again
+        if: steps.deployment.outcome == 'failure'
         uses: actions/deploy-pages@v4
