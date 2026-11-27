@@ -61,8 +61,7 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family
 .ticks i.on{background:var(--ink);height:9px}
 
 
-.cap{display:grid;gap:3px;align-content:start;transition:opacity .2s}
-.cap.swap{opacity:0}
+.cap{display:grid;gap:3px;align-content:start}
 .eyebrow{font-family:var(--mono);font-size:0.6562rem;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3)}
 .cap h2{min-height:2.4em;font-family:var(--display);font-weight:600;font-size:1.1875rem;letter-spacing:-.015em;line-height:1.15;margin:0;text-wrap:balance}
 .cap p{margin:0;font-size:0.875rem;line-height:1.42;color:var(--ink2);max-width:62ch}
@@ -113,7 +112,6 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family
 @media (max-width:899px) and (orientation:landscape) and (max-height:520px){
   .panel{left:0;right:auto;top:calc(60px + env(safe-area-inset-top));bottom:0;width:min(372px,46%);height:auto;border-top:1px solid var(--line);border-right:1px solid var(--line);border-radius:0 18px 0 0}
 }
-@media (prefers-reduced-motion:reduce){.cap{transition:none}}
 
 /* the four strokes beside the dial, each with its arc's color, and the burn */
 .prog .lab{display:grid;justify-content:start;gap:1px}

@@ -3,7 +3,9 @@
 //  - checks that Play loops over the burn at the Flame and Molecules scales, and that time is slower further in;
 //  - checks that the zoom and the crank angle never move in the same frame;
 //  - checks the labels on the picture: on the screen, clear of the panel and of each other, and not too many at once;
-//  - sweeps the Zoom slider end to end at three crank angles and the cycle slider end to end at every scale, one
+//  - checks that the card, its heading and the key change together and name what the picture shows, that every
+//    cylinder's gas is drawn at the Cylinder scale, and that the "Flame front" label goes when the front leaves the view;
+//  - sweeps the Zoom slider end to end at four crank angles and the cycle slider end to end at every scale, one
 //    small step at a time, comparing each picture with the one before. A step that changes the picture far more
 //    than its neighbours do is reported as a jump;
 //  - checks that neither slider nor the Play button moves or changes size during a sweep.
@@ -116,6 +118,32 @@ for (const [name, width, height, motion] of quick ? SIZES.slice(0, 1) : SIZES) {
   // the four strokes each have their own text at the Cylinder scale
   await put('zoom', 2);
   { const t = new Set(); for (const a of [90, 270, 450, 630]) { await put('cycle', a); await page.waitForTimeout(260); t.add(await page.textContent('#capTitle')); } if (t.size !== 4) fail(`${name}: the caption does not name four strokes (${[...t].join('; ')})`); }
+  // the card changes with its heading, in the same frame: at each stroke's first degree both name that stroke
+  for (const [a, stroke] of [[0, 'Intake'], [180, 'Compression'], [360, 'Power'], [540, 'Exhaust'], [539.5, 'Power']]) {
+    await put('cycle', a);
+    const [title, phase] = await page.evaluate(() => [document.getElementById('capTitle').textContent, document.getElementById('capPhase').textContent]);
+    if (!title.startsWith(stroke) || !phase.includes(stroke.toLowerCase())) fail(`${name}: at ${a}° the card is titled "${title}" under the heading "${phase}" (both should name ${stroke})`);
+  }
+  // every cylinder's gas is drawn at the Cylinder scale, not only that of the cylinder looked into
+  for (const a of [130, 310, 490, 670]) {
+    await put('cycle', a);
+    const d = await page.evaluate(() => { window.__engine.redraw(); const e = window.__engine, m = e.model; return [1, 2, 3, 4].map((c) => ({ c, drawn: e.dotsDrawn ? e.dotsDrawn[c - 1] : -1, full: m.massIn(m.phiOf(e.st.phi, c)) / m.massIn(m.IVC + 1) })); });
+    for (const x of d) if (x.full > 0.5 && !(x.drawn > 60)) fail(`${name}: at the Cylinder scale, ${a}°, cylinder ${x.c} holds ${(x.full * 100).toFixed(0)}% of a charge and ${x.drawn} dots of it are drawn`);
+  }
+  // the heading, the Zoom line and the key name the scale the picture shows: Molecules only once the molecules are drawn
+  for (const z of [3.5, 3.7, 3.8, 4]) {
+    await put('zoom', z); await put('cycle', 300);
+    const [scale, line, key] = await page.evaluate(() => [document.getElementById('capScale').textContent, document.getElementById('zoomV').textContent, document.getElementById('key').textContent]);
+    const atoms = /carbon/.test(key);
+    if ((scale === 'Molecules') !== atoms || (line === 'Molecules') !== atoms || (z === 4 && !atoms)) fail(`${name}: at zoom ${z} the heading says ${scale}, the Zoom line ${line}, and the key lists ${atoms ? 'atoms' : 'gas'}`);
+  }
+  // the "Flame front" label is on the front, and goes when the front has left the view
+  await put('zoom', 3);
+  for (const [a, want] of [[356, true], [384, false]]) {
+    await put('cycle', a);
+    const shown = await page.evaluate(() => [...document.querySelectorAll('#labels .tag')].some((e) => e.style.display !== 'none' && e.firstChild.textContent === 'Flame front'));
+    if (shown !== want) fail(`${name}: at the Flame scale, ${a}°, the "Flame front" label is ${shown ? 'shown' : 'not shown'}`);
+  }
 
   // keyboard: both sliders and Play
   await put('zoom', 1); await put('cycle', 100); await page.focus('#zoom'); await page.keyboard.press('ArrowRight'); await frame();
@@ -196,7 +224,8 @@ for (const [name, width, height, motion] of quick ? SIZES.slice(0, 1) : SIZES) {
   };
   if (name === 'desktop' || motion === 'reduce') {                                   // the phone without reduced motion draws the same pictures as with it
     const full = name === 'desktop' && !quick;
-    for (const a of full ? [95, 362, 600] : [362]) { await put('cycle', a); await sweep('zoom', 0, 4, full ? 0.01 : 0.02, `a zoom in at ${a}°`); }
+    // (450°: the burned gas glows, and its glow and the gas's cut must not step with the zoom)
+    for (const a of full ? [95, 362, 450, 600] : [362, 450]) { await put('cycle', a); await sweep('zoom', 0, 4, full ? 0.01 : 0.02, `a zoom in at ${a}°`); }
     for (const z of full ? [0, 1, 2, 3] : [2]) { await put('zoom', z); await sweep('cycle', 0, 720, full ? 2 : 4, `one cycle at scale ${z}`); }
     await put('zoom', 3); await sweep('cycle', 325, 402, 0.5, 'the burn at the Flame scale');
     await put('zoom', 4); await sweep('cycle', Math.round(burns) - 6, Math.round(burns) + 10, 0.5, 'the burn at the Molecules scale');

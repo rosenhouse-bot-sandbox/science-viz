@@ -799,12 +799,12 @@ flame. Two controls drive it, as on the maple page.
 
 - **Zoom** is continuous, with five named stops: Car (the view is about 5 m wide), Engine (0.7 m),
   Cylinder (0.3 m), Flame (0.13 m) and Molecules (8 nm). The page is one 3D model. Between stops the
-  camera moves, and no picture is swapped for another. Three cuts open the model as the zoom goes in,
+  camera moves, and no picture is swapped for another. Four cuts open the model as the zoom goes in,
   each a straight plane whose face is drawn pale and hatched. A cut piece does not move: it fades away
   where it is, so that the only things that move on the page are the things that move in an engine. The
   pieces are the hood and near fender (with the near front wheel); the near half of the engine block
   and its cover; and the end slice of the engine at cylinder 4, cut through the middle of its nearer
-  pair of valves. Moving parts (pistons, rods, crankshaft, camshafts, valves, spark plug, injector) are
+  pair of valves; and, between Cylinder and Flame, the slab from there to just in front of cylinder 4's spark plug. Each cut takes the gas with the metal, in every cylinder. Moving parts (pistons, rods, crankshaft, camshafts, valves, spark plug, injector) are
   never cut.
 - **One cycle** is the crank angle of cylinder 4, from 0° to 720° (two turns of the crankshaft, four
   strokes), with a Play button. Time is slower the further in the zoom is: slowed 60, 60, 600,
@@ -836,41 +836,38 @@ What is computed, not typed:
   the camshafts' bumps are drawn from the same lift curve, at half the crankshaft's speed.
 - Pressure and temperature, in half-degree steps: intake at half an atmosphere (a light load, with the
   throttle mostly shut), compression of the trapped gas without heat exchange, a burn that releases the
-  fuel's heat along an S-shaped curve from the spark over about 60°, expansion, and the fall to exhaust
-  pressure once the exhaust valve opens. The peak is about 21 atmospheres, 14° after the top. The air comes in at 385 K, warmed by the hot
-  port and valve.
+  fuel's heat along an S-shaped curve from the spark over about 60°, expansion, and, while a valve is open, flow through the ring between its head and its seat, from the higher pressure to the lower and no faster than sound, with the pressure following from the gas that is left. At the top, with both valves a little open, some burned gas goes back into the intake port and comes in again. The peak is about 24 atmospheres, 14° after the top. The air in the intake pipe is at 320 K; mixed with the burned gas left from the last cycle (6% of the charge), the charge is at 383 K when the intake valve shuts.
   Seventy-two percent of the fuel's heat is kept in the gas; the rest is taken as lost to the walls.
 - How the gas moves (`js/engine/flow.js`). Each dot of gas is followed the whole way: in along the
   intake pipe (air) or out of the injector's tip (fuel), past the intake valves, through compression and the burn, out past the exhaust valves
   and down the exhaust pipe. No dot is made or lost on the way, so the number of dots in the cylinder
-  at each crank angle is the mass of gas the model has there, to within a few percent: about a third
+  at each crank angle is the mass of gas the model has there, to within a few percent: about a quarter
   of the burned gas rushes out by its own pressure when the exhaust valve opens, before the piston
   starts back up, and the rising piston pushes out most of the rest. While a valve is open the gas under
   the cylinder head moves as a flow without swirl (a potential flow), worked out on a grid of
   1.75 mm cells when the page loads; below the head it moves with the piston; with both valves shut it
   is squeezed evenly. A dot of fuel leaves the injector's tip at its moment in the spray (70° to 95°) and flies out
   along the cone, slowing as it drags air along (from about 100 m/s, 62 mm at most); 30° later it goes where the gas
-  goes, and drifts to its own place in the evenly spread gas by the time the intake valve shuts, which stands for
-  the turbulent mixing that is not modeled. While the flame spreads, the burned gas is as many times thinner than
+  goes, and drifts its own way through the evenly spread gas until 310°, which stands for
+  the turbulent mixing that is not modeled. So the fuel and the burned gas left from the last cycle end up all through the charge, the fuel reaches the spot the Molecules stop looks at only at 268°, and every dot leaves by the exhaust pipe in the end. While the flame spreads, the burned gas is as many times thinner than
   the gas ahead of it as it is hotter (about 2.7 times, from the model's two temperatures, at the same pressure).
   The dots are moved sideways out from the cylinder's axis, where the plug is: along each line out from the axis
   at one height, the burned gas fills the stretch inside the flame's sphere and the unburned gas is squeezed into
   the rest. The burned gas glows faintly, so the dots in it can be seen. The dots' paths are worked out once, in a few seconds after the page opens,
   and the picture at any angle is read from them, so it is the same however that angle was reached.
-- The flame front's distance from the plug, which sets where the glow is drawn and when the spot the
-  Molecules stop looks at burns. That spot is 13 mm from the plug, so it burns about 6° before the
+- The flame front's distance from the plug: the ball about the plug that holds the burned share of the mass, in the chamber's own shape, so that the pressure, the front and the dots agree. It sets where the glow is drawn and when the spot the
+  Molecules stop looks at burns. That spot is 13 mm from the plug, so it burns about 8° before the
   piston reaches the top, while the cycle dial is still in Compression. The captions and the line
   above them say so, and a pale arc on the cycle dial marks the burn, from the spark (25° before
-  the top) until the front has crossed the cylinder (19° after it).
+  the top) until the front has crossed the cylinder (34° after it).
 - The cycle is a dial, because it repeats. Its hand goes around once for the four strokes: two turns
   of the crankshaft, one of a camshaft. Intake starts at 12 o'clock, so the piston is at the top of its
   travel at 12 and at 6. A real range input lies in the dial, unseen, for
   the keyboard, a screen reader and a controller; a mouse or a finger turns the hand.
 - At Molecules, a group of 121 molecules (2 fuel, 25 oxygen, 94 nitrogen) in a cube whose edge
-  follows the pressure and temperature at that spot (about 23 nm during intake, 13 nm at the spark).
+  follows the pressure and temperature at that spot (about 24 nm during intake, 12 nm at the spark).
   Every atom is followed through the reaction into 16 carbon dioxide and 18 water molecules; the
-  nitrogen is unchanged. As the exhaust stroke ends the burned molecules leave the view one after
-  another and fresh air arrives the same way, so the count goes from 128 back to 121 without a jump.
+  nitrogen is unchanged. Early in the intake stroke (about 35°), when the dots bring fresh air to the spot, the burned group and the fresh one cross the view together, so the count goes from 128 back to 121 and the view never empties.
 
 Where the picture simplifies, which the page also says:
 
@@ -883,7 +880,7 @@ Where the picture simplifies, which the page also says:
   something is in view at every zoom; past them, the space between molecules is drawn dark. These dots are scattered
   at random (each cell of a lattice holds none to three, one on average), wander on the molecules' clock while the
   page plays, and are squeezed together with the gas: their spacing goes with the cube root of its density, so a
-  view holds about six times as many at the top of compression as during intake, as it holds molecules.
+  view holds about seven times as many at the spark as during intake, as it holds molecules.
 - Burned gas is drawn glowing orange. A real gasoline flame gives off only faint light, at short
   visible wavelengths, which we see as blue.
 - Iso-octane stands for the hundreds of hydrocarbons in gasoline. The burn is drawn as one step; the
@@ -894,8 +891,7 @@ Where the picture simplifies, which the page also says:
 - The injector is drawn 12 mm to one side of the middle of the cylinder so that the cut shows it.
   The engine is drawn set lengthwise with its belt end toward the driver; in a car that end faces the
   front, or the side when the engine is set crosswise, as in most cars. Burned gas left from the last
-  cycle is drawn as a tan layer on the piston; really it mixes through the fresh air, and at
-  Molecules it is not drawn. Real molecules fly straight between collisions; here each drifts about
+  cycle is drawn tan, mixed through the charge; at Molecules it is not drawn. Real molecules fly straight between collisions; here each drifts about
   one place so that it stays in view. Atoms are drawn a little smaller than their real size so that
   each molecule's shape can be seen. The group of molecules is repeated side by side, each copy
   turned a different way, to fill the view.

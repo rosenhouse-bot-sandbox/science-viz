@@ -14,10 +14,10 @@
 // so it takes three times the room: the dots are moved out from the plug, so that the burned gas fills the flame's
 // sphere and the unburned gas is squeezed into what is left (see expand).
 // Not modeled: turbulence, the tumble and swirl of a real intake, and pressure waves in the pipes.
-import * as M from './model.js?v=d521ef1f';
+import * as M from './model.js?v=b5b7ec31';
 
 const { clamp, mix, DECK, BORE, ROOF, ROOF_SLOPE, EVO, IVC, SPARK } = M;
-export const FUEL_SHARE = 1 / 15;                                    // fuel to air, by mass
+export const FUEL_SHARE = 1 / (M.AIR_FUEL + 1);                      // the fuel's share of the mixture, by mass
 export const INJ = [-0.012, DECK + 0.0015, 0.0375];                  // the injector's tip (as in shaders.js)
 const SPRAY_DIR = (() => { const l = Math.hypot(0.3, 0.62, 0.79); return [0.3 / l, -0.62 / l, -0.79 / l]; })();      // down, and in toward the cylinder's axis
 const SPRAY_LEN = 0.062, SPRAY_K = 9, SPRAY_DEG = 30, SPRAY_SPREAD = 0.15;   // how far a drop could fly, m; the degrees in which its speed falls by e; how long it is followed as spray; the cone's spread
@@ -57,8 +57,9 @@ const YB = DECK - 0.007;                                             // the flow
 const LIFT_D = 0.006, HEAD_R = 0.0149;                               // the valve as the grid has it: 6 mm open
 const H = 0.00175, X0 = -25 * H, Z0 = -25 * H, NX = 50, NY = 46, NZ = 90, ZG = Z0 + NZ * H;   // the grid; past ZG the pipe's flow is even
 export const Z_IN = 0.23, Z_END = 0.19;                             // a dot is followed from here in the intake pipe; the pipes are drawn to Z_END
+export const BURNS = 6;                                              // a dot can be left in the cylinder for several cycles: the times it burned that are kept
 export const SPACING = 0.0054;                                       // one dot for each cube of gas this wide, at the intake pipe's density
-const LIFE = 4 * 720;                                                // a dot still inside after four cycles is let go
+const MIXED = 310;                                                   // by this angle the gas in the cylinder is evenly mixed
 
 const roofAt = (z) => DECK + ROOF - ROOF_SLOPE * Math.abs(z);
 const AREA = M.AREA, V_HEAD = AREA * (DECK - YB) + AREA * ROOF - ROOF_SLOPE * 4 * BORE ** 3 / 3;     // the chamber above YB
@@ -107,6 +108,8 @@ function copyDist(x, y, z, floor) {
   return Math.max(d, -Math.max(rad - HEAD_R, HB_D - t, t + LIFT_D), -Math.max(rad - 0.003, -t, t - 0.098));      // the copy's valve: a flat head and a stem
 }
 
+const inStem = (x, y, z) => { const qx = Math.abs(x) - VX, qy = y - VS[1], qz = z - VS[2], t = qy * AX[1] + qz * AX[2]; return t > 0 && t < 0.098 && Math.hypot(qx, qy - AX[1] * t, qz - AX[2] * t) < 0.003; };
+
 // ---- evenly squeezed gas: a point of the chamber keeps its share of the gas to each side of it, below it and behind it
 const zArea = (z, Hh) => { const s = Math.sqrt(Math.max(BORE * BORE - z * z, 0)), i1 = z * s + BORE * BORE * (Math.asin(clamp(z / BORE, -1, 1)) + Math.PI / 2);
   const i2 = z <= 0 ? 2 / 3 * s * s * s : 4 / 3 * BORE ** 3 - 2 / 3 * s * s * s; return Hh * i1 - ROOF_SLOPE * i2; };
@@ -127,10 +130,12 @@ function fromLabel(lx, ly, lz, top, out) {
 }
 
 // ---- the model's gas: how much is in the cylinder, and how crowded, with the intake pipe's gas as 1
-const RHO0 = M.P_IN / M.T_IN;
+const RHO0 = M.P_IN / M.T_FRESH, KG = M.P_IN / (287 * M.T_FRESH);     // KG: kg in 1 m3 of the intake pipe's gas
 export const density = (phi) => M.pressure(phi) / M.tempMean(phi) / RHO0;
 export const gasIn = (phi) => density(phi) * M.volume(phi);            // m3 of intake-pipe gas
-const RHO_OUT = density(700);                                          // in the exhaust pipe: what the cylinder's gas settles to
+const RHO_OUT = M.P_OUT / M.T_EX / RHO0, RHO_BACK = M.T_FRESH / M.T_BACK;      // the gas in the exhaust pipe; burned gas pushed back into the intake port
+// m3 of intake-pipe gas that leaves the cylinder through one side's valves between two angles (1 intake, -1 exhaust)
+export const leaves = (side, a, b) => (side > 0 ? -M.throughIntake(a, b) : M.throughExhaust(a, b)) / KG;
 const d_ = (f, phi) => (f(phi + 0.25) - f(phi - 0.25)) / 0.5;
 // the piston's top passes YB at these angles: nearer the top of its travel the chamber is handled squeezed
 const PHI_B = (() => { let a = 0, b = 90; for (let i = 0; i < 50; i++) { const m = (a + b) / 2; if (M.pistonTop(m) > YB) a = m; else b = m; } return a; })();
@@ -241,7 +246,7 @@ const hash = (a, b) => { let h = (a * 374761393 + b * 668265263) | 0; h = Math.i
 export function* build() {
   const G = yield* makeGrid();
   // the dots waiting in the intake pipe: one cycle's worth, evenly spread
-  const perCycle = gasIn(IVC) - gasIn(719.75), LEN = perCycle / A_PIPE, layers = Math.round(LEN / SPACING), dl = LEN / layers;
+  const perCycle = -leaves(1, 0, 720), LEN = perCycle / A_PIPE, layers = Math.round(LEN / SPACING), dl = LEN / layers;
   const X = [], Y = [], Z = [];
   for (let l = 0; l < layers; l++) for (let a = -4; a <= 4; a++) for (let b = -2; b <= 2; b++) {
     const s = l * 45 + (a + 4) * 5 + b + 2, jx = 0.56 * (hash(s, 1) - 0.5), jy = 0.56 * (hash(s, 2) - 0.5), jl = 0.56 * (hash(s, 3) - 0.5);
@@ -265,90 +270,107 @@ export function* build() {
   const v = [0, 0, 0], w = [0, 0, 0], q = [0, 0, 0], o3 = [0, 0, 0];
   // where dot i is in the engine: out of the copy, and squeezed with the chamber when the piston is near the top
   const phys = (i, top, squeezed, side, lift) => {
-    if (lab[i]) { fromLabel(px[i], py[i], pz[i], top, o3); if (room) expand(o3, top, room.Rf, room.E); return o3; }
+    if (lab[i]) { fromLabel(2 * stir(px[i], hx[i]) - 1, stir(py[i], hy[i]), stir(pz[i], hz[i]), top, o3); if (room) expand(o3, top, room.Rf, room.E); return o3; }
     if (side) { warp(px[i], py[i], pz[i] * side, lift, squeezed ? YB : top, o3); o3[2] *= side; } else { o3[0] = px[i]; o3[1] = py[i]; o3[2] = pz[i]; }
     if (squeezed && inChamber(o3[0], o3[1], o3[2]) && o3[1] >= YB - 1e-6) { toLabel(o3[0], o3[1], o3[2], YB, q); fromLabel(q[0], q[1], q[2], top, o3); }
     return o3;
   };
-  let room = null;      // the burned gas's room at the angle being kept
-  // Once out of the spray, the fuel mixes into the air (turbulence, not modeled as such): each dot of fuel drifts to its own
-  // place in gas spread evenly, which it reaches as the intake valve closes. Air and fuel are then both spread evenly.
-  const fuelHome = new Float32Array(N * 3); for (let i = 0; i < N; i++) if (fuel[i]) { fuelHome[i * 3] = 0.94 * (2 * hash(i, 11) - 1); fuelHome[i * 3 + 1] = 0.05 + 0.9 * hash(i, 12); fuelHome[i * 3 + 2] = 0.03 + 0.94 * hash(i, 13); }
-  const fh = [0, 0, 0];
-  const mixFuel = (i, b, top, p) => {
-    if (!fuel[i] || b <= injT[i] + SPRAY_DEG || b > IVC) return p;
-    const w = M.smooth(injT[i] + SPRAY_DEG, IVC, b); fromLabel(fuelHome[i * 3], fuelHome[i * 3 + 1], fuelHome[i * 3 + 2], top, fh);
-    p[0] = mix(p[0], fh[0], w); p[1] = mix(p[1], fh[1], w); p[2] = mix(p[2], fh[2], w); return p;
-  };
+  let room = null, mixed = 0;      // the burned gas's room at the angle being kept, and how far the gas in the cylinder has mixed by then
+  // While the gas is squeezed it mixes (the tumble and turbulence of a real cylinder, not modeled as such): each dot drifts its
+  // own way at its own steady pace through the evenly spread gas, turning back at a wall, until MIXED. Dots that start evenly
+  // spread stay evenly spread all the while, and each ends anywhere in the chamber with the same chance. So the fuel and the
+  // burned gas left from the last cycle end up all through the charge, and which dots are left over the next time is a matter of chance.
+  // px, py, pz then hold a dot's place in the evenly spread gas, each 0 to 1, and hx, hy, hz how far it drifts, in chambers.
+  const hx = new Float32Array(N), hy = new Float32Array(N), hz = new Float32Array(N), EDGE = 0.004;
+  const stir = (l, drift) => { const v = (((l + drift * mixed) % 2) + 2) % 2; return EDGE + (1 - 2 * EDGE) * (1 - Math.abs(v - 1)); };
+  const unEdge = (l) => clamp((l - EDGE) / (1 - 2 * EDGE), 0, 1);
   const toCopy = (i, side, lift, floor) => { warp(px[i], py[i], pz[i] * side, lift, floor, q, true); py[i] = q[1]; pz[i] = q[2] * side; };
   const marks = []; for (let d = 0; d <= 720; d += 2) marks.push(d); marks.push(PHI_B, 720 - PHI_B); marks.sort((a, b) => a - b);
   let alive = N, tMax = 0;
-  for (let cyc = 0; cyc < 6 && alive > 0; cyc++) {
+  for (let cyc = 0; cyc < 12 && alive > 0; cyc++) {
     for (let s = 0; s + 1 < marks.length; s++) {
       const a = marks[s], b = marks[s + 1], dphi = b - a; if (dphi < 1e-9) continue;
       const mid = (a + b) / 2, T = cyc * 720;
       const closed = mid > IVC && mid < EVO, side = mid < 360 ? 1 : -1, squeezed = !closed && (mid < PHI_B || mid > 720 - PHI_B);
-      const top = M.pistonTop(mid), vp = d_(M.pistonTop, mid), rho = density(mid), D = -d_(density, mid) / rho, out = -d_(gasIn, mid);     // out: intake-pipe m3 leaving the cylinder per degree
-      const rhoPort = side > 0 ? 1 : RHO_OUT;
+      const top = M.pistonTop(mid), vp = d_(M.pistonTop, mid), rho = density(mid), D = -d_(density, mid) / rho;
       const liftOf = (phi, sd) => (sd > 0 ? M.liftIn(phi) : M.liftEx(phi));
       if (closed) {
-        if (a === IVC) for (let i = 0; i < N; i++) if (!gone[i]) { let p = phys(i, M.pistonTop(IVC), false, 1, 0); if (cyc === 0) p = mixFuel(i, IVC, M.pistonTop(IVC), p); if (inChamber(p[0], p[1], p[2])) { toLabel(p[0], p[1], p[2], M.pistonTop(IVC), q); px[i] = q[0]; py[i] = q[1]; pz[i] = q[2]; lab[i] = 1; } else { px[i] = p[0]; py[i] = p[1]; pz[i] = p[2]; } }
+        if (a === IVC) for (let i = 0; i < N; i++) if (!gone[i]) { const p = phys(i, M.pistonTop(IVC), false, 1, 0); if (inChamber(p[0], p[1] - 0.0001, p[2])) {      // (with the gas that the closing valve pressed flat against its seat)
+          toLabel(p[0], p[1], p[2], M.pistonTop(IVC), q); px[i] = unEdge((q[0] + 1) / 2); py[i] = unEdge(q[1]); pz[i] = unEdge(q[2]); lab[i] = 1; hx[i] = 4 * hash(i, 311 + 7 * cyc) - 2; hy[i] = 4 * hash(i, 312 + 7 * cyc) - 2; hz[i] = 4 * hash(i, 313 + 7 * cyc) - 2; } else { px[i] = p[0]; py[i] = p[1]; pz[i] = p[2]; } }
       } else {
-        if (a === EVO) for (let i = 0; i < N; i++) if (!gone[i]) { if (lab[i]) { fromLabel(px[i], py[i], pz[i], M.pistonTop(EVO), q); px[i] = q[0]; py[i] = q[1]; pz[i] = q[2]; lab[i] = 0; } toCopy(i, -1, 0, M.pistonTop(EVO)); }
+        if (a === EVO) for (let i = 0; i < N; i++) if (!gone[i]) { if (lab[i]) { mixed = 1; fromLabel(2 * stir(px[i], hx[i]) - 1, stir(py[i], hy[i]), stir(pz[i], hz[i]), M.pistonTop(EVO), q); px[i] = q[0]; py[i] = q[1]; pz[i] = q[2]; lab[i] = 0; } toCopy(i, -1, 0, M.pistonTop(EVO)); }
         if (a === 0 && cyc > 0) for (let i = 0; i < N; i++) if (!gone[i]) { warp(px[i], py[i], -pz[i], M.liftEx(720), YB, q); px[i] = q[0]; py[i] = q[1]; pz[i] = -q[2]; toCopy(i, 1, M.liftIn(0), YB); }
-        let Qc, Qp;
-        if (squeezed) { const rhoD = gasIn(mid) / V_HEAD; w[0] = 0; w[1] = Qc = out / rhoD; Qp = out / rhoPort; w[2] = Qp - Qc; }
-        else { const alpha = (vp + D * (YB - top)) * AREA, beta = D * V_HEAD; Qc = alpha + beta; Qp = Qc * rho / rhoPort; w[0] = alpha; w[1] = beta; w[2] = Qp - Qc; }
-        const pipeV = Qp / A_PIPE, floor = squeezed ? YB : top, lift = liftOf(mid, side);
-        for (let i = 0; i < N; i++) {
-          if (gone[i]) continue;
-          if (fuel[i] && cyc === 0 && b <= injT[i] + SPRAY_DEG) {      // fuel waiting in the injector, or flying out in the spray
-            if (b > injT[i]) { sprayAt(b - injT[i], sprayA[i], sprayB[i], M.pistonTop(b), o3); px[i] = o3[0]; py[i] = o3[1]; pz[i] = o3[2]; toCopy(i, side, lift, floor); }
-            continue;
-          }
-          let x = px[i], y = py[i], z = pz[i], left = dphi, guard = 0;
-          while (left > 1e-9 && guard++ < 400) {
-            const zs = z * side; let mode;
-            if (zs > ZG) { mode = 2; v[0] = 0; v[1] = pipeV * PIPE[0]; v[2] = pipeV * PIPE[1]; }
-            else if (!squeezed && y < YB && inChamber(x, y, z)) { mode = 1; v[0] = 0; v[1] = vp + D * (y - top); v[2] = 0; }
-            else { mode = 0; sample(G, w, x, y, zs, v); }
-            const sp = Math.hypot(v[0], v[1], v[2]), h = mode === 0 ? Math.min(left, 0.4 * H / Math.max(sp, 1e-12)) : left;
-            if (sp < 1e-9 && mode === 0) break;      // gas that is not moving, as in the port whose valves are shut
-            if (mode === 0) {      // midpoint step
-              const mx = x + v[0] * h / 2, my = y + v[1] * h / 2, mz = zs + v[2] * h / 2; sample(G, w, mx, my, mz, v);
-              x += v[0] * h; y += v[1] * h; z += v[2] * h * side;
-            } else if (mode === 1) { y += (vp + D * (y + v[1] * h / 2 - top)) * h; }
-            else { y += v[1] * h; z += v[2] * h * side; }
-            left -= h; trav[i] += sp * h;
-            if (mode !== 2 && y > DECK - 0.010) {      // keep out of the metal
-              for (let it = 0; it < 2; it++) {
-                const zf = z * side, d = copyDist(x, y, zf, floor) + 0.0001; if (d <= 0) break;
-                const e = 0.0002, gx = copyDist(x + e, y, zf, floor) - copyDist(x - e, y, zf, floor), gy = copyDist(x, y + e, zf, floor) - copyDist(x, y - e, zf, floor), gz = copyDist(x, y, zf + e, floor) - copyDist(x, y, zf - e, floor), gl = Math.hypot(gx, gy, gz) || 1;
-                x -= gx / gl * d; y -= gy / gl * d; z -= gz / gl * d * side;
+        const floor = squeezed ? YB : top, lift = liftOf(mid, side), lift2 = liftOf(mid, -side), out1 = leaves(side, a, b) / dphi, out2 = leaves(-side, a, b) / dphi;
+        // The dots are moved by the flow through one side's valves: `out` m3 of intake-pipe gas leaves that way per degree.
+        // The paths between the steps are kept over the clock from ta to tb.
+        const run = (sd, lf, out, ta, tb, first) => {
+          const rhoPort = sd > 0 ? (M.backIn(mid) > 1e-9 ? RHO_BACK : 1) : RHO_OUT; let Qc, Qp;
+          if (squeezed) { const rhoD = gasIn(mid) / V_HEAD; w[0] = 0; w[1] = Qc = out / rhoD; Qp = out / rhoPort; w[2] = Qp - Qc; }
+          else { const alpha = (vp + D * (YB - top)) * AREA, beta = D * V_HEAD; Qc = alpha + beta; Qp = Qc * rho / rhoPort; w[0] = alpha; w[1] = beta; w[2] = Qp - Qc; }
+          const pipeV = Qp / A_PIPE, clock = (left) => tb - left * (tb - ta) / dphi;
+          for (let i = 0; i < N; i++) {
+            if (gone[i]) continue;
+            if (fuel[i] && cyc === 0 && b <= injT[i] + SPRAY_DEG) {      // fuel waiting in the injector, or flying out in the spray
+              if (first && b > injT[i]) { sprayAt(b - injT[i], sprayA[i], sprayB[i], M.pistonTop(b), o3); px[i] = o3[0]; py[i] = o3[1]; pz[i] = o3[2]; toCopy(i, sd, lf, floor); }
+              continue;
+            }
+            let x = px[i], y = py[i], z = pz[i], left = dphi, guard = 0, went = 0;
+            while (left > 1e-9 && guard++ < 400) {
+              const zs = z * sd; let mode;
+              if (zs > ZG) { mode = 2; v[0] = 0; v[1] = pipeV * PIPE[0]; v[2] = pipeV * PIPE[1]; }
+              else if (!squeezed && y < YB && inChamber(x, y, z)) { mode = 1; v[0] = 0; v[1] = vp + D * (y - top); v[2] = 0; }
+              else { mode = 0; sample(G, w, x, y, zs, v); }
+              const sp = Math.hypot(v[0], v[1], v[2]), h = mode === 0 ? Math.min(left, 0.4 * H / Math.max(sp, 1e-12)) : left;
+              if (sp < 1e-9 && mode === 0) {      // gas that is not moving, as in the port whose valves are shut
+                if (!inStem(x, y, zs)) break;
+                x += 0.0005; left -= dphi / 40; continue;      // (a dot that the last step left in metal where the grid has no flow, such as a valve's stem: out sideways)
+              }
+              if (mode === 0) {      // midpoint step
+                const mx = x + v[0] * h / 2, my = y + v[1] * h / 2, mz = zs + v[2] * h / 2; sample(G, w, mx, my, mz, v);
+                x += v[0] * h; y += v[1] * h; z += v[2] * h * sd;
+              } else if (mode === 1) { y += (vp + D * (y + v[1] * h / 2 - top)) * h; }
+              else { y += v[1] * h; z += v[2] * h * sd; }
+              left -= h; trav[i] += sp * h; went += sp * h;
+              if (mode !== 2 && y > DECK - 0.010) {      // keep out of the metal
+                for (let it = 0; it < 2; it++) {
+                  const zf = z * sd, d = copyDist(x, y, zf, floor) + 0.0001; if (d <= 0) break;
+                  const e = 0.0002, gx = copyDist(x + e, y, zf, floor) - copyDist(x - e, y, zf, floor), gy = copyDist(x, y + e, zf, floor) - copyDist(x, y - e, zf, floor), gz = copyDist(x, y, zf + e, floor) - copyDist(x, y, zf - e, floor), gl = Math.hypot(gx, gy, gz);
+                  if (gl < 1e-9) x += d;      // on the middle line of a valve's stem no way out is the nearest: any way will do
+                  else { x -= gx / gl * d; y -= gy / gl * d; z -= gz / gl * d * sd; }
+                }
+              }
+              if (trav[i] > 0.004 && left > 1e-9 && t0[i] >= 0) {      // a quick dot: keep its path between the steps too
+                const tc = clock(left), tn = T + tc, fl = squeezed ? YB : M.pistonTop(tc); warp(x, y, z * sd, lf, fl, o3); o3[2] *= sd;
+                if (squeezed && inChamber(o3[0], o3[1], o3[2]) && o3[1] >= YB - 1e-6) { toLabel(o3[0], o3[1], o3[2], YB, q); fromLabel(q[0], q[1], q[2], M.pistonTop(tc), o3); }
+                if (tn > lastT[i] + 1e-4) { rec[i].push(tn, o3[0], o3[1], o3[2]); lastT[i] = tn; hasPrev[i] = 0; } trav[i] = 0;
               }
             }
-            if (trav[i] > 0.004 && left > 1e-9 && t0[i] >= 0) {      // a quick dot: keep its path between the steps too
-              const tn = T + b - left, fl = squeezed ? YB : M.pistonTop(b - left); warp(x, y, z * side, lift, fl, o3); o3[2] *= side;
-              if (squeezed && inChamber(o3[0], o3[1], o3[2]) && o3[1] >= YB - 1e-6) { toLabel(o3[0], o3[1], o3[2], YB, q); fromLabel(q[0], q[1], q[2], M.pistonTop(b - left), o3); }
-              if (cyc === 0) mixFuel(i, b - left, M.pistonTop(b - left), o3);
-              rec[i].push(tn, o3[0], o3[1], o3[2]); lastT[i] = tn; hasPrev[i] = 0; trav[i] = 0;
+            if (!squeezed && inChamber(x, y, z) && y < M.pistonTop(b) + 0.0003) y = M.pistonTop(b) + 0.0003;
+            // A dot at rest in a corner of a port while the gas beside it moves: real gas there is stirred back into the stream, so
+            // the dot is drawn a little toward the port's middle line, until the flow takes it.
+            if (went < 5e-5 && Math.abs(pipeV) * dphi > 0.001 && z * sd > 0 && z * sd <= ZG && !inChamber(x, y, z)) {
+              const zf = z * sd, e = 0.0002; if (portDist(x, y, zf) > RP - 0.003) { const gx = portDist(x + e, y, zf) - portDist(x - e, y, zf), gy = portDist(x, y + e, zf) - portDist(x, y - e, zf), gz = portDist(x, y, zf + e) - portDist(x, y, zf - e), gl = Math.hypot(gx, gy, gz) || 1; x -= gx / gl * 0.0005; y -= gy / gl * 0.0005; z -= gz / gl * 0.0005 * sd; }
             }
+            px[i] = x; py[i] = y; pz[i] = z;
           }
-          if (!squeezed && inChamber(x, y, z) && y < M.pistonTop(b) + 0.0003) y = M.pistonTop(b) + 0.0003;
-          px[i] = x; py[i] = y; pz[i] = z;
-        }
+        };
+        // to the copy in which the other side's valves are the open ones, and back
+        const swap = (from, lfFrom, to, lfTo) => { for (let i = 0; i < N; i++) if (!gone[i] && !(fuel[i] && t0[i] < 0)) { warp(px[i], py[i], pz[i] * from, lfFrom, floor, q); px[i] = q[0]; py[i] = q[1]; pz[i] = q[2] * from; toCopy(i, to, lfTo, floor); } };
+        if (Math.abs(out2) > 1e-12 && squeezed && lift2 > 0) {      // both valves open, at the top: first the flow through one side's, then through the other's
+          run(side, lift, out1, a, mid, true); swap(side, lift, -side, lift2); run(-side, lift2, out2, mid, b, false); swap(-side, lift2, side, lift);
+        } else run(side, lift, out1, a, b, true);
         if (b === 720 - PHI_B) for (let i = 0; i < N; i++) if (!gone[i] && inChamber(px[i], py[i], pz[i]) && py[i] < YB) py[i] = YB;
       }
       // keep the path, and note when a dot is reached by the fuel and by the flame
       const tb = T + b, topB = M.pistonTop(b), shut = b > IVC && b <= EVO, sqB = !shut && (b <= PHI_B || b > 720 - PHI_B), Rf = M.flameR(b), sideB = shut ? 0 : side, liftB = shut ? 0 : liftOf(b, side);
-      room = shut ? burnRoom(b) : null;
+      room = shut ? burnRoom(b) : null; mixed = shut ? M.smooth(IVC, MIXED, b) : 0;
       for (let i = 0; i < N; i++) {
         if (gone[i]) continue;
         if (fuel[i] && t0[i] < 0) {      // a dot of fuel starts at the injector's tip, the moment it leaves it
           if (cyc > 0 || b <= injT[i]) continue;
           t0[i] = T + injT[i]; fuelAt[i] = t0[i]; rec[i].push(t0[i], INJ[0], INJ[1], INJ[2]); lastT[i] = t0[i];
         }
-        const p = phys(i, topB, sqB, sideB, liftB); if (cyc === 0) mixFuel(i, b, topB, p);
+        const p = phys(i, topB, sqB, sideB, liftB);
         const x = p[0], y = p[1], z = p[2];
         if (t0[i] < 0) { if (z < Z_IN) t0[i] = tb; else continue; }
         const inside = inChamber(x, y, z), r = rec[i];
@@ -356,10 +378,10 @@ export function* build() {
           if (b > SPARK && b < 400 && Math.hypot(x, y - M.PLUG_GAP[1], z) < Rf && (!burns[i].length || tb - burns[i][burns[i].length - 1] > 360)) burns[i].push(tb);
         }
         const n = r.length, far = n ? Math.hypot(x - r[n - 3], y - r[n - 2], z - r[n - 1]) : 1;
-        const end = -z > 0.20 || tb - t0[i] >= LIFE;
+        const end = -z > 0.20;
         if (!n || far > 0.003 || tb - lastT[i] >= 8 || end || (room && inside)) {      // (while the flame spreads, every step: the gas it pushes moves unevenly)
           if (n && hasPrev[i] && far > 0.003 && prevS[i * 4] > lastT[i] + 1e-6) r.push(prevS[i * 4], prevS[i * 4 + 1], prevS[i * 4 + 2], prevS[i * 4 + 3]);
-          r.push(tb, x, y, z); lastT[i] = tb; hasPrev[i] = 0; trav[i] = 0;
+          if (tb > lastT[i] + 1e-6) { r.push(tb, x, y, z); lastT[i] = tb; } hasPrev[i] = 0; trav[i] = 0;
         } else { prevS[i * 4] = tb; prevS[i * 4 + 1] = x; prevS[i * 4 + 2] = y; prevS[i * 4 + 3] = z; hasPrev[i] = 1; }
         if (end) { gone[i] = 1; alive--; tMax = Math.max(tMax, tb); }
       }
@@ -367,22 +389,23 @@ export function* build() {
       if (s % 2 === 1) yield;
     }
   }
+  const left = alive;      // dots that never left (there should be none)
   // pack
   let total = 0; for (const r of rec) total += r.length / 4;
-  const start = new Uint32Array(N + 1), time = new Float32Array(total), pos = new Int16Array(total * 3), burn = new Float32Array(N * 4).fill(1e9);
+  const start = new Uint32Array(N + 1), time = new Float32Array(total), pos = new Int16Array(total * 3), burn = new Float32Array(N * BURNS).fill(1e9);
   for (let i = 0, o = 0; i < N; i++) {
     start[i] = o; const r = rec[i];
     for (let k = 0; k < r.length; k += 4, o++) { time[o] = r[k]; pos[o * 3] = Math.round(r[k + 1] * 1e5); pos[o * 3 + 1] = Math.round(r[k + 2] * 1e5); pos[o * 3 + 2] = Math.round(r[k + 3] * 1e5); }
-    start[i + 1] = o; for (let k = 0; k < Math.min(4, burns[i].length); k++) burn[i * 4 + k] = burns[i][k];
+    start[i + 1] = o; for (let k = 0; k < Math.min(BURNS, burns[i].length); k++) burn[i * BURNS + k] = burns[i][k];
   }
-  return { n: N, start, time, pos, burn, fuel, fuelAt, injT, perDot, cells: G.cells, cycles: Math.ceil(tMax / 720), hint: new Uint32Array(N * 8) };
+  return { n: N, start, time, pos, burn, fuel, fuelAt, injT, perDot, left, cells: G.cells, cycles: Math.ceil(tMax / 720), hint: new Uint32Array(N * 16) };
 }
 
 // The paths are kept as points a few millimeters apart, with straight lines between.
 // Where dot i of the paths is at time t (degrees since the paths began), into out; false if it is not in the engine then.
 export function at(F, i, t, out, slot = 0) {
   const a = F.start[i], b = F.start[i + 1] - 1; if (b <= a || t < F.time[a] || t > F.time[b]) return false;
-  let k = F.hint[i * 8 + slot]; if (k < a || k >= b || F.time[k] > t || F.time[k + 1] < t) { let lo = a, hi = b; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (F.time[m] <= t) lo = m; else hi = m; } k = lo; F.hint[i * 8 + slot] = k; }
+  const hs = i * (F.hint.length / F.n) + slot; let k = F.hint[hs]; if (k < a || k >= b || F.time[k] > t || F.time[k + 1] < t) { let lo = a, hi = b; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (F.time[m] <= t) lo = m; else hi = m; } k = lo; F.hint[hs] = k; }
   const u = (t - F.time[k]) / Math.max(F.time[k + 1] - F.time[k], 1e-9), p = F.pos, o = k * 3;
   out[0] = (p[o] + (p[o + 3] - p[o]) * u) * 1e-5; out[1] = (p[o + 1] + (p[o + 4] - p[o + 1]) * u) * 1e-5; out[2] = (p[o + 2] + (p[o + 5] - p[o + 2]) * u) * 1e-5;      // kept in hundredths of a millimeter
   return true;
