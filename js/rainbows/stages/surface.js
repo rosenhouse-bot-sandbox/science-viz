@@ -16,6 +16,11 @@ const THIN = 0.11;
 const WAIST = 1.25, BOX = [46, 46, 2.3], LEN = 30, RD = 1000;      // BOX: how far the beams are drawn; LEN: how far the photons run;      // RD: the drop's radius
 let prog = null, photons = [], photonKey = '', omegaT = 0, lastT = null;
 const rand = rng(23);
+// A photon's random numbers come from its own index and how many runs it has made, not from a shared
+// stream: so after a control is moved and moved back, each photon is where it was (the shared stream
+// would have moved on and dealt every photon new numbers).
+const hashU = (i, g, k) => { const x = Math.sin(i * 12.9898 + g * 78.233 + k * 37.719) * 43758.5453; return x - Math.floor(x); };
+const hashGauss = (i, g, k) => Math.sqrt(-2 * Math.log(Math.max(1e-12, hashU(i, g, k)))) * Math.cos(2 * Math.PI * hashU(i, g, k + 1));
 
 // The angle at which the rainbow ray meets the surface at each of its three crossings.
 export function presetAngle(S) {
@@ -295,9 +300,11 @@ void main(){
         const over = T - ph.t0 - ph.dur;
         if (fresh || ph.u === undefined || over > 0) {
           const carry = !fresh && ph.u !== undefined && over < 0.15;
-          ph.u = rand.gauss() * WAIST * 0.5; ph.v = rand.gauss() * WAIST * 0.5;
-          ph.refl = rand() < c.F.R; ph.dur = dur * (0.7 + 0.3 * rand());
-          ph.t0 = T - (carry ? over : rand() * ph.dur);
+          if (!fresh && ph.u !== undefined) ph.g = (ph.g ?? 0) + 1;      // a new run, with new numbers; a control moved keeps the run
+          const g = ph.g ?? 0;
+          ph.u = hashGauss(i, g, 0) * WAIST * 0.5; ph.v = hashGauss(i, g, 2) * WAIST * 0.5;
+          ph.refl = hashU(i, g, 4) < c.F.R; ph.dur = dur * (0.7 + 0.3 * hashU(i, g, 5));
+          ph.t0 = T - (carry ? over : hashU(i, g, 6) * ph.dur);
         }
         const tHit = LEN * c.n1 / speed, t = T - ph.t0, x0 = ph.u / ci;
         let q, w;

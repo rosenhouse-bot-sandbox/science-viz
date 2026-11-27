@@ -407,6 +407,7 @@ function drawLabels(list, view) {
 // replaces the clock: each frame then advances by dbg.dt seconds while dbg.steps lasts, and not at all after.
 const dbg = {};
 let last = 0, time = 0, scale = 1, slow = 0, fast = 0, readoutClock = 0;
+const lambdaEase = {};      // the colour's last step along its path, so that it rests a frame before turning (see O.easeWavelength)
 const dprCap = () => Math.min(window.devicePixelRatio || 1, 2);
 function frame(now) {
   requestAnimationFrame(frame);
@@ -442,8 +443,8 @@ function frame(now) {
     else if (at !== D.cross) { D.cross = at; D.theta = presetAngle(D); }
   }
   // (The colour drawn eases to the slider's along the path the colour takes on screen, so that it changes
-  // steadily, and arrives: see O.easeWavelength. The place on the drop moves with the colour.)
-  D.lambda = RM.matches ? S.lambda : O.easeWavelength(D.lambda, S.lambda, dt);
+  // steadily, turns without a jump, and arrives: see O.easeWavelength. The place on the drop moves with the colour.)
+  D.lambda = RM.matches ? S.lambda : O.easeWavelength(D.lambda, S.lambda, dt, lambdaEase);
   if (offXg !== null) { const k = 1 - Math.exp(-dt * 5); offX += (offXg - offX) * k; offY += (offYg - offY) * k; }
   for (const c of cams) { const k = 1 - Math.exp(-dt * 9); c.yaw += (c.gy - c.yaw) * k; c.pitch += (c.gp - c.pitch) * k; c.dist += (c.gd - c.dist) * k; }
 

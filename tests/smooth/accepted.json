@@ -1,4 +1,6 @@
 [
   { "scenario": "^reduced motion", "kind": "jump", "match": "on the very frame a flight between scales began",
-    "reason": "With reduced motion nothing flies. Zooming in to Molecules from the back wall or the way out first changes the Surface scene to the entering crossing, and that change is a cut, exactly as pressing a Which crossing button is under reduced motion. The scales then cross-fade." }
+    "reason": "With reduced motion nothing flies. Zooming in to Molecules from the back wall or the way out first changes the Surface scene to the entering crossing, and that change is a cut, exactly as pressing a Which crossing button is under reduced motion. The scales then cross-fade." },
+  { "scenario": "^sweep Rain sun", "kind": "lines", "match": "amount of line drawn",
+    "reason": "Rain is slow in the software renderer, so this drag has 12 steps (7 when paused) and the Sun moves 4 to 7 degrees a frame. Two things drawn change within less than one step, as they do in nature. A marked drop's ray to the eye follows the computed bow, whose outer edge goes from bright to dark within half a degree (the width of the Sun's disc). The ring on the shadow of your head goes when the Sun is lower than about 2.3 degrees, where that shadow is more than 40 m away. Both are continuous in the Sun's height, but a step of several degrees crosses either in one frame." }
 ]

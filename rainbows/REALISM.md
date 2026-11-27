@@ -41,7 +41,7 @@ Water's index is higher for shorter wavelengths.
 
 - The ray we see as violet leaves at 40.6° and the one we see as red at 42.4°. Red is on the outside of the first bow, and the bow is about 2° wide.
 - A ray keeps its wavelength through air and water, so the color drawn for it does not change along the path. That holds however bright it is drawn: light too bright for the screen is dimmed with no change of hue, or bright red over blue water would turn pink-white and bright violet white.
-- The color drawn is the color of the wavelength set. While the wavelength moves, the color drawn catches up within about a quarter of a second, at a steady rate through the colors, with no burst where hue changes fastest (near 490 and 590 nm).
+- The color drawn is the color of the wavelength set. While the wavelength moves, the color drawn catches up within about a quarter of a second, at a steady rate through the colors, with no burst where hue changes fastest (near 490 and 590 nm). When the slider turns back past it, the color rests one frame and then turns. It does not step one way and straight back.
 - With the colors drawn spread out 5×, the angles and wavelengths given are still the real ones.
 - Sunlight is a mix of wavelengths. They come apart only because each leaves the drop at its own angle.
 - A drop also sends each wavelength inside that wavelength's own bow angle. So a drop in the bow sends a mix, seen paler and redder than the wavelength whose bow is there: a drop at the 455 nm angle is seen pale blue, not indigo. A drop is named by the color it is drawn in, and the color comes from that mix.

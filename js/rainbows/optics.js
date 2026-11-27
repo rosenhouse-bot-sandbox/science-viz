@@ -64,12 +64,21 @@ function arcWavelength(s) {
 // One frame of the ease, dt seconds long: from the wavelength drawn toward the slider's. It closes 9 e-folds a
 // second of the gap plus a steady quarter of the whole path a second, so it arrives (from anywhere, in about a
 // quarter of a second); and it never moves more than three whole paths a second, which bounds how much the
-// colour can change in one frame.
+// color can change in one frame. When the slider turns back past the color drawn, the color rests one frame
+// before it turns (`state` keeps its last step), so that no frame is undone by the next.
 export const EASE = { rate: 9, steady: 0.25, most: 3 };
-export function easeWavelength(drawn, goal, dt) {
+export function easeWavelength(drawn, goal, dt, state = {}) {
   const a = colourArc(drawn), gap = colourArc(goal) - a;
+  if (state.at === undefined || Math.abs(state.at - a) > 1e-6) { state.last = 0; state.on = state.was = false; }      // the color drawn was set from outside
+  // Turning back: rest this frame. (Not when it has been on the slider for two frames and the slider turns: then
+  // it moves with the slider. A color that has only just caught up with a slider coming the other way rests.)
+  if (gap * (state.last || 0) < 0 && !(state.on && state.was)) { state.last = 0; state.was = state.on; state.on = false; state.at = a; return drawn; }
   const go = Math.min(EASE.most * dt, Math.abs(gap) * (1 - Math.exp(-dt * EASE.rate)) + EASE.steady * dt);
-  return Math.abs(gap) <= go ? goal : go > 0 ? arcWavelength(a + Math.sign(gap) * go) : drawn;
+  state.was = state.on;
+  if (Math.abs(gap) <= go) { state.last = gap; state.on = true; state.at = colourArc(goal); return goal; }
+  const step = go > 0 ? Math.sign(gap) * go : 0;
+  state.last = step; state.on = false; state.at = a + step;
+  return step ? arcWavelength(a + step) : drawn;
 }
 
 // A set of wavelengths whose display colours add up to white: sunlight, for drawing.

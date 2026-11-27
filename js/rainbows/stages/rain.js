@@ -91,7 +91,8 @@ export default {
   },
   readout(S) {
     const top = (B1 / DEG - S.sun), top2 = (B2 / DEG - S.sun);
-    const rows = lastHeroes.map((h, i) => `<dt>Marked drop ${i + 1} · ${(h.th / DEG).toFixed(1)}°</dt><dd>${seenName(h)}</dd>`).join('');
+    // (a row for each marked drop even before the first frame has placed them, so that the panel keeps its size)
+    const rows = HEROES.map((_, i) => { const h = lastHeroes[i]; return h ? `<dt>Marked drop ${i + 1} · ${(h.th / DEG).toFixed(1)}°</dt><dd>${seenName(h)}</dd>` : `<dt>Marked drop ${i + 1}</dt><dd>&nbsp;</dd>`; }).join('');
     return `<dl><dt>Top of the main bow</dt><dd>${top > 0 ? top.toFixed(1) + '° up' : 'below the horizon'}</dd>
 <dt>Top of the outer bow</dt><dd>${top2 > 0 ? top2.toFixed(1) + '° up' : 'below the horizon'}</dd>
 ${rows}<dt>Rain shown falling</dt><dd>about ${RAIN_SLOW}× slower than real</dd>

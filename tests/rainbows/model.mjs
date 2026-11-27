@@ -12,7 +12,8 @@
 //  - Molecules: the light keeps the polarization set at Surface, and the electrons swing as far as the
 //    field in the water drives them;
 //  - the colour drawn while a wavelength slider moves: it arrives within the smooth test's 24 held frames
-//    after its paused drag, and changes steadily, without the bursts an ease in nanometres gave.
+//    after its paused drag, changes steadily, without the bursts an ease in nanometres gave, and no frame of it
+//    is undone by the next where it turns back.
 //
 //   node tests/rainbows/model.mjs
 import * as O from '../../js/rainbows/optics.js';
@@ -173,7 +174,7 @@ if (need(atoms.setup, 'atoms setup') && need(atoms.swingPerField, 'atoms swingPe
 if (need(O.easeWavelength, 'optics easeWavelength')) {
   const gam = l => O.wlRGB(l).map(x => 255 * Math.pow(Math.min(1, Math.max(0, x)), 1 / 2.2));
   const step = (a, b) => { const p = gam(a), q = gam(b); return Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]); };
-  const run = targets => { let d = targets[0]; const ch = []; for (const s of targets) { const e = O.easeWavelength(d, Math.round(s), 1 / 60); ch.push(step(d, e)); d = e; } return { d, ch }; };
+  const run = targets => { let d = targets[0]; const ch = [], st = {}; for (const s of targets) { const e = O.easeWavelength(d, Math.round(s), 1 / 60, st); ch.push(step(d, e)); d = e; } return { d, ch }; };
   const lin = (out, a, b, k) => { for (let i = 1; i <= k; i++) out.push(a + (b - a) * i / k); return out; };
   // the smooth test's paused round trip on the Molecules scale (250 to 700 nm and back), then 24 held frames
   for (const m of [6, 7, 9, 12, 16, 24, 48]) {
@@ -188,6 +189,21 @@ if (need(O.easeWavelength, 'optics easeWavelength')) {
     const seq = hold([lo], 11); lin(seq, lo, 700, n); hold(seq, 4); lin(seq, 700, lo, n); hold(seq, 4); lin(seq, lo, 700, 6); hold(seq, 8); lin(seq, 700, lo, 6); hold(seq, 16);
     const { ch } = run(seq), most = Math.max(...ch);
     if (most > 110) fail(`colour ease: a ${n}-frame sweep from ${lo} to 700 nm changes the colour drawn by ${most.toFixed(0)} of 255 in one frame`);
+  }
+  // the smooth test's sweep gesture whole (the slider jumps to its start, then slow, fast and paused drags there
+  // and back): no frame of the colour drawn is undone by the next, as when the colour turns straight back where
+  // the slider passes it or where it catches up with a slider coming the other way (the smooth test's one-frame
+  // flash). Measured along the colour's path: a step of more than 0.3% of it, then a frame back within 45% of it.
+  for (const lo of [250, 380, 400]) for (const n of [12, 24, 32, 48, 80]) {
+    const m = Math.round(n * 0.6), seq = hold([550], 11);
+    seq.push(lo); lin(seq, lo, 700, n); hold(seq, 4); lin(seq, 700, lo, n); hold(seq, 4); lin(seq, lo, 700, 6); hold(seq, 8); lin(seq, 700, lo, 6); hold(seq, 40);
+    lin(seq, lo, 700, m); lin(seq, 700, lo, m); hold(seq, 24);
+    let d = seq[0]; const xs = [], st = {};
+    for (const g of seq) { d = O.easeWavelength(d, Math.round(g), 1 / 60, st); xs.push(O.colourArc(d)); }
+    for (let i = 1; i + 1 < xs.length; i++) {
+      const a = Math.abs(xs[i] - xs[i - 1]), c = Math.abs(xs[i + 1] - xs[i - 1]);
+      if (a > 0.003 && c < 0.45 * a) { fail(`colour ease: in a ${n}-step sweep from ${lo} nm, frame ${i} of the colour drawn is undone by the next (${(a * 100).toFixed(1)}% of the path, then back within ${(c * 100).toFixed(1)}%)`); break; }
+    }
   }
 }
 
