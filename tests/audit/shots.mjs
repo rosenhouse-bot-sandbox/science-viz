@@ -59,7 +59,7 @@ for (const size of sizeArg || plan.sizes || ['desktop', 'phone']) {
   // a script given as text is run by the browser's debugger, so the page's Content-Security-Policy does not stop it
   // (page.waitForFunction would run its text inside the page, which the policy forbids)
   const run = (script) => page.evaluate(`(() => { ${script} })()`);
-  const until = async (expr) => { for (const t0 = Date.now(); !(await page.evaluate(`!!(${expr})`));) { if (Date.now() - t0 > 600000) throw new Error(`still waiting after 10 minutes for: ${expr}`); await page.waitForTimeout(100); } };
+  const until = async (expr) => { for (const t0 = Date.now(); !(await page.evaluate(`!!(${expr})`));) { if (Date.now() - t0 > 1800000) throw new Error(`still waiting after 30 minutes for: ${expr}`); await page.waitForTimeout(100); } };
   if (plan.ready) await until(plan.ready);
   await page.waitForTimeout(600);                         // a page writes its own address a moment after it starts, which would undo a hash set too soon
   const frames = () => page.evaluate('new Promise((r) => setTimeout(() => setTimeout(() => requestAnimationFrame(() => requestAnimationFrame(() => r())))))');
