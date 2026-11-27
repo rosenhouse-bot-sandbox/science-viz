@@ -636,21 +636,23 @@ day it falls, at every scale from the whole tree down to its pigment molecules. 
   on the picture: spreading them zooms in, about one scale for a full spread, and the Zoom slider
   moves with them. An arrow key moves
   the Zoom slider a twentieth of a scale and the Season slider five thousandths of the year.
-- **Season** runs from 25 March to 20 December, with a Play button. The date and the zoom never
+- **Season** runs from 25 March to 31 December, with a Play button. The date and the zoom never
   move together: while the zoom is moving the year waits, then goes on. Summer, when little changes,
   takes less of the slider than autumn. The date is shown, and the day length for it at 35° N
-  (sunrise to sunset by geometry, without the bending of light by the air).
+  (sunrise to sunset as an almanac gives them: the top of the Sun's disc at the horizon, with the
+  bending of light by the air).
 - At Cells and Molecules, **Zoom into** chooses between a chloroplast and the vacuole of the same
   cell, because the pigments live in different places: chlorophyll and carotenoids in the
   chloroplast's membranes, anthocyanin dissolved in the vacuole's water.
 
 What the page shows, and where each part comes from (`js/maple/model.js` unless noted):
 
-- **Each leaf has its own timetable.** It stops renewing chlorophyll on a day between late October
-  and mid November, earlier the more sun it gets; it makes anthocyanin in proportion to the sun it
-  gets (a leaf needs light and sugar to make it); it falls 22 to 38 days later. So the crown turns
+- **Each leaf has its own timetable.** It stops renewing chlorophyll on a day between 18 November
+  and 1 December, earlier the more sun it gets; it makes anthocyanin in proportion to the sun it
+  gets (a leaf needs light and sugar to make it); it falls 17 to 25 days later. So the crown turns
   from the outside in, red outside and yellow or orange within. The followed leaf is in full sun and
-  is the last to fall.
+  is the last to fall. The dates follow the Japan Meteorological Agency's normals for *Acer palmatum*
+  at Kyoto (1991 to 2020): the crown is about 90% turned on 5 to 6 December and 80% bare on 18 December.
 - **Four curves per leaf**: chlorophyll (built up over about six weeks in spring, gone within 23
   days in autumn), carotenoids (55% remain at leaf fall), anthocyanin, and how far the separation
   layer has cut through the foot of the stalk. The panel's bars show them for the followed leaf.
@@ -670,25 +672,35 @@ What the page shows, and where each part comes from (`js/maple/model.js` unless 
   cells within 75 µm of the vein run up to 7.5 days behind the rest, so green lasts longest there.
   Both numbers are illustrative.
 - **Sunlight in the leaf** (Tissue and Cells, with **Light arriving** switched on): dots of light
-  of single wavelengths fall down through the cut leaf. Whether a dot is taken in, how deep, and
-  by which pigment is drawn by lot when it sets out, with the chances the model gives that
-  wavelength in a leaf holding the day's pigments (`thickness` in `model.js`, the same numbers
-  the leaf's colour is computed from): chlorophyll and carotenoids take it at a chloroplast,
-  anthocyanin in a vacuole, each with a flash. So in summer the dots we see as blue and red stop
+    of single wavelengths fall down through the cut leaf (`light.js`). Each dot sets out with a lot
+  drawn for how far it gets. As it reaches the tall cells and then the loose cells, the pigments of
+  the date shown decide whether it is taken in there and by which pigment, with the chances the
+  model gives that wavelength (`thickness` in `model.js`, the same numbers the leaf's colour is
+  computed from): chlorophyll and carotenoids take it at a chloroplast, anthocyanin in a vacuole,
+  each with a flash. So when the date changes, a dot keeps an old fate for at most the time it
+  takes to cross one layer. How many dots fall goes with the light on the leaf (`lightAt`): in
+  December about a seventh as many as in June. So in summer the dots we see as blue and red stop
   in the tall cells and many of those we see as green go on and out underneath; in a red leaf the
   dots we see as green stop in the vacuoles and those we see as red pass. The panel prints the model's shares at 450, 550 and 675 nm.
-- **The Sun** stands where it does at five in the afternoon, solar time, at 35° N on each date
-  (`sunAt` in `model.js`): 25° up at midsummer, within a degree of the horizon in mid November, just set by
-  late December. The sky, the brightness of the lawn, hills and leaves, and the tree's shadow
-  follow its height, so summer is the bright part of the year. The panel prints its height. The sky
-  stays day-blue until the Sun is near the horizon (yellowed near a low Sun) and darkens through twilight, which
-  ends 8° below it; the Sun on this page never gets lower than about 2° below, so the sky is never night-dark.
-  The sunlight on the tree weakens much sooner, as its path through the air lengthens: with the Sun 4°
-  up the tree is lit about half as brightly as in summer. Low sunlight is also yellower; that is not
-  drawn on the tree, so that each leaf's color stays the one its pigments give. The shadow is as dark
-  as the crown is full of leaf (bare twigs stop about an eighth as much light), and the trunk casts a line.
-- **Cells**: tall cells seen from the side, chloroplasts along their walls and the vacuole down
-  the middle of each. In autumn the stacks of membrane inside each chloroplast go and drops of fat
+- **The Sun** stands where it does at 4 PM Japan Standard Time at Kyoto (35° N, 135.75° E) on each
+  date (`sunAt` in `model.js`, the NOAA solar position formulas, with the equation of time): about
+  37° up at midsummer and about 7.5° up on 18 December. 4 PM is the latest whole hour at which the
+  Sun is still up through the leaf fall, so it never sets on this page. The light on a level leaf
+  (`lightAt`) is the direct beam, 1.353 kW/m² × 0.7^(AM^0.678) (Meinel and Meinel 1976, as given by
+  PVEducation) with the air mass AM of Kasten and Young (1989), plus the sky's light: about a tenth
+  of the beam, and never less than twilight gives (about 400 lux at sunset, 3.4 lux at the end of
+  civil twilight). After sunset only the sky's light would be left: no lit side, no glint, no shadow.
+  The brightness of the lawn, hills and leaves (on a scale of that light against the year's most)
+  and the number of dots of light follow it, so summer is the bright part of the year. The panel
+  prints the Sun's height. The sky stays day-blue until the Sun is near the horizon, yellowed near a
+  low Sun. Low sunlight is also yellower; that is not drawn on the tree, so that each leaf's color
+  stays the one its pigments give. A shadow takes away only the direct light, so the low December
+  Sun gives pale shadows. The crown's is as dark as the crown is full of leaf (bare twigs stop about
+  an eighth as much light), and the trunk and the thicker limbs cast their own. The air is clear
+  (20 km visibility), so the lawn keeps its color out to the hills.
+- **Cells**: tall cells seen from the side. The vacuole fills about three quarters of each (in
+  grown leaf cells it is about four fifths: Winter, Robinson and Heldt 1994) and presses the
+  chloroplasts into a thin layer along the wall. In autumn the stacks of membrane inside each chloroplast go and drops of fat
   take their place (in the followed cell they are drawn one by one), the chloroplasts shrink and
   turn yellow, and the vacuole turns crimson.
 - **Molecules** are built atom by atom to scale (a carbon to carbon bond is 0.14 nm): chlorophyll
@@ -715,7 +727,7 @@ What the page shows, and where each part comes from (`js/maple/model.js` unless 
 
 Simplified or exaggerated, and said so on the page:
 
-- Dates are typical for Kyoto; pigment amounts are smooth curves with the right order and rough
+- Dates follow the normals for Kyoto; pigment amounts are smooth curves with the right order and rough
   durations, shown as shares of the leaf's own summer amount (anthocyanin: of its peak), not
   measurements. Absorption bands are illustrative fits.
 - The tree has about 7,600 leaves; a real one this size carries several times more. Leaves near
@@ -723,8 +735,8 @@ Simplified or exaggerated, and said so on the page:
 - From Cells to Molecules the falling light is drawn at three more sizes of dot, each a tenth of the
   one before, so that some are in view at every zoom; these fall straight through without being
   taken in.
-- The dots of sunlight in the leaf fall straight down, far slower than light, and as many are
-  drawn on every date and at every wavelength from 400 to 700 nm (not the mix in real sunlight). A real leaf also scatters light about inside itself, which lets it take in
+- The dots of sunlight in the leaf fall straight down, far slower than light, as many at every
+  wavelength from 400 to 700 nm (not the mix in real sunlight). A real leaf also scatters light about inside itself, which lets it take in
   more of the light we see as green than is drawn (about three quarters of it in summer) and sends some back out
   of its upper side; neither is drawn. The split of each pigment between the tall and the loose
   cells (70% of the chloroplast pigments and 83% of the anthocyanin in the tall cells) is illustrative.
@@ -735,8 +747,9 @@ Simplified or exaggerated, and said so on the page:
 - A young leaf's cells are drawn smaller: the cut face and its cells are sized by the square root of
   the leaf's size, and the Tissue and Cells views close in by as much (the scale bar stays true).
   Chloroplasts and molecules inside are not resized.
-- Inside the vacuole the water's colour hides the cell round it within a few micrometres, and
-  molecules beyond a hundred or so nanometres. Real cell sap is far clearer; without this the view
+- Inside the vacuole the sap is drawn hazy, grey while it is clear and red once it holds
+  anthocyanin. The haze hides the cell round it within a few micrometres, and molecules beyond a
+  hundred or so nanometres. Real cell sap is far clearer; without this the view
   would not change as the zoom goes from micrometres to nanometres.
 - Fallen leaves rest on the tips of their lobes, level; real ones lie anyhow.
 - A leaf comes out of its bud folded like a fan (the middle lobe flat, every other lobe creased along its middle vein with its
@@ -763,7 +776,7 @@ Simplified or exaggerated, and said so on the page:
   proteins are plain mounds 10 to 15 nm across (real ones are of several kinds and far more
   crowded), and the pigments are lifted onto the membrane's face and spread evenly over it so that
   they can be seen. The mounds go as the chlorophyll goes. The membrane's fat molecules have no colour of their own;
-  they are tinted with a little of the colour the pigments give the whole membrane. Water is left out. The membrane stays to the end of the year at this scale, though in a
+    they are tinted with a little of the colour the pigments give the whole membrane. Water, and the sugars and salts dissolved in the vacuole's water, are left out. The membrane stays to the end of the year at this scale, though in a
   real cell it is taken apart and the remaining carotenoids end up in drops of fat. In the chain
   slider's drawing, double bonds outside the row are not drawn. Only the 63 molecules nearest the middle are built
   atom by atom; those further off are flat outlines. One molecule has no colour: each is drawn in

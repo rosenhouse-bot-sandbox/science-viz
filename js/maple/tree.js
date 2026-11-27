@@ -2,8 +2,8 @@
 // leaf's own timetable, and the outline of a leaf. Built once from a fixed seed, so every visit
 // shows the same tree. Lengths are in metres; x is to the right, y is up, z is toward the viewer,
 // and the foot of the trunk is at (0, 0, 0). No DOM.
-import { add, sub, mul, dot, cross, unit, len, quatOf, qmul, qaxis, slerp } from './gl.js?v=5ce163c7';
-import { timetable, FOCUS, pigments, mix, smooth, clamp } from './model.js?v=5ce163c7';
+import { add, sub, mul, dot, cross, unit, len, quatOf, qmul, qaxis, slerp } from './gl.js?v=4d18d95f';
+import { timetable, FOCUS, pigments, mix, smooth, clamp } from './model.js?v=4d18d95f';
 
 const UP = [0, 1, 0];
 function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
@@ -88,8 +88,8 @@ export function buildTree(seed = 20261113) {
     segs.push({ a: p, b: mid, w0: w, w1: wm }, { a: mid, b: end, w0: wm, w1 });
     if (depth <= 2) twig(mid, d2, length * 0.5, w1);
     else if (depth <= 5 && R() < 0.75) {                    // a short leafy shoot from the side of an older branch
-      const sa = unit(add(d2, mul(unit(add(mul(perp(d2), R() < 0.5 ? 1 : -1), mul(rv(), 0.8))), 0.9))), sl = 0.16 + 0.2 * R(), e = add(mid, mul(sa, sl));
-      segs.push({ a: mid, b: e, w0: girth(0.6), w1: girth(0) });
+      const sa = unit(add(d2, mul(unit(add(mul(perp(d2), R() < 0.5 ? 1 : -1), mul(rv(), 0.8))), 0.9))), sl = 0.16 + 0.2 * R(), e = add(mid, mul(sa, sl + 0.08));
+      segs.push({ a: mid, b: e, w0: girth(0.6), w1: girth(0) });                            // the wood runs out to the shoot's last pair of leaves
       twig(add(mid, mul(sa, sl * 0.5)), sa, sl * 0.5 + 0.08, girth(0));
     }
     if (depth === 0) return;

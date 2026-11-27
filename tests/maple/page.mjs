@@ -27,6 +27,7 @@ const fail = (what) => { fails++; console.log('FAIL ' + what); };
 const browser = await findChromium().launch({ args: SOFT_GL });
 
 // In the page: a small copy of the picture, as numbers.
+const SUNNY = 245;   // the Season slider's 21 June: the most light, so that the most dots of light fall
 const SNAP = () => { const c = document.getElementById('view'), s = window.__snap || (window.__snap = document.createElement('canvas')); s.width = 64; s.height = 40; const x = s.getContext('2d', { willReadFrequently: true }); window.__maple.redraw(); x.drawImage(c, 0, 0, 64, 40); return Array.from(x.getImageData(0, 0, 64, 40).data); };
 const diff = (a, b) => { let s = 0; for (let i = 0; i < a.length; i += 4) s += Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]); return s / (a.length / 4) / 3; };
 const spread = (a) => { let lo = 255, hi = 0; for (let i = 0; i < a.length; i += 4) { const v = a[i] + a[i + 1] + a[i + 2]; lo = Math.min(lo, v); hi = Math.max(hi, v); } return hi - lo; };
@@ -42,6 +43,8 @@ for (const [name, width, height, motion] of [['desktop', 1280, 800, 'no-preferen
   // Drawn in software a frame takes a second or two and a flight minutes, so most flights are ended at once; one real flight is watched below.
   const idle = async () => { await page.evaluate(() => window.__maple.settle()); await page.waitForFunction(() => !window.__maple.busy, null, { timeout: 240000 }); };
   const frame = () => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+  // A frame moves the page's clock on by at most 0.05 s. Drawn in software, a frame can take over a second, so wait for frames, not for time: 20 are a second of the page's time.
+  const frames = async (n) => { const n0 = await page.evaluate(() => window.__maple.drawn.n); await page.waitForFunction((m) => window.__maple.drawn.n >= m, n0 + n, { timeout: 300000 }); };
   const put = async (id, v) => { await page.$eval('#' + id, (el, v) => { el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); }, v); await frame(); };
   const boxes = () => page.evaluate(() => ['zoom', 'season', 'play'].map((id) => { const r = document.getElementById(id).getBoundingClientRect(); return [r.x, r.y, r.width, r.height].map((v) => Math.round(v * 10) / 10).join(','); }).join(' | '));
   const fits = async (when) => { const w = await page.evaluate(() => [document.documentElement.scrollWidth, document.getElementById('panel').scrollWidth, document.getElementById('panel').clientWidth]); if (w[0] > width || w[1] > w[2]) fail(`${name}: wider than the screen ${when}`); };
@@ -70,9 +73,11 @@ for (const [name, width, height, motion] of [['desktop', 1280, 800, 'no-preferen
     const shownLight = await page.$eval('#lightCtl', (e) => !e.hidden);
     if (shownLight !== (i >= 2)) fail(`${name}: "Light arriving" is ${shownLight ? 'shown' : 'hidden'} at scale ${i}`);
     if (i === 2 || i === 3) {                                // sunlight falls through the cells by itself, unless the visitor asked for reduced motion
-      const a = await page.evaluate(SNAP); await page.waitForTimeout(motion === 'reduce' ? 700 : 5000); const moved = diff(a, await page.evaluate(SNAP));
+      await put('season', SUNNY);                             // on a clear June day: at 4 PM in late November a seventh as many dots fall, and in a few slow software frames none may be in view
+      const a = await page.evaluate(SNAP); await (motion === 'reduce' ? page.waitForTimeout(700) : frames(20)); const moved = diff(a, await page.evaluate(SNAP));
       if (motion !== 'reduce' && moved === 0) fail(`${name}: no sunlight is moving at scale ${i}`);
       if (motion === 'reduce' && moved !== 0) fail(`${name}: the picture moves by itself with reduced motion at scale ${i}`);
+      await put('season', 520);
     }
     const shownWhere = await page.$eval('#whereCtl', (e) => !e.hidden);
     if (shownWhere !== (i >= 3)) fail(`${name}: "Zoom into" is ${shownWhere ? 'shown' : 'hidden'} at scale ${i}`);
@@ -82,9 +87,11 @@ for (const [name, width, height, motion] of [['desktop', 1280, 800, 'no-preferen
   if (await page.$eval('#lightCtl', (e) => e.hidden) || await page.$eval('#figChain', (e) => e.hidden)) fail(`${name}: the light switch or the chain slider is hidden at Molecules`);
   { const on = await page.$eval('#light', (e) => e.checked);
     if (on !== (motion !== 'reduce')) fail(`${name}: "Light arriving" starts ${on ? 'on' : 'off'}`);
-    const a = await page.evaluate(SNAP); await page.waitForTimeout(motion === 'reduce' ? 700 : 6000); const moved = diff(a, await page.evaluate(SNAP));
+    await put('season', SUNNY);
+    const a = await page.evaluate(SNAP); await (motion === 'reduce' ? page.waitForTimeout(700) : frames(20)); const moved = diff(a, await page.evaluate(SNAP));
     if (motion !== 'reduce' && moved === 0) fail(`${name}: no light is moving at Molecules`);
     if (motion === 'reduce' && moved !== 0) fail(`${name}: the picture moves by itself with reduced motion`);
+    await put('season', 520);
     if (!on) { await page.click('#light'); await frame(); await page.waitForTimeout(400); if (!(await page.$eval('#oops', (e) => e.hidden))) fail(`${name}: switching "Light arriving" on broke the picture`); }
     await page.click('#light');
     const b = await page.evaluate(SNAP); await page.waitForTimeout(500);

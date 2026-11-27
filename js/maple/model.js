@@ -2,8 +2,10 @@
 // prints comes from here. No DOM, so Node can test it (tests/maple/model.mjs).
 //
 // What is real and what is illustrative:
-//  - Day length is the standard formula for the latitude below.
-//  - The dates are typical for a Japanese maple in Kyoto. One tree in one year differs by weeks.
+//  - The Sun's place and the day length are the NOAA solar position formulas for Kyoto, by the clock (Japan
+//    Standard Time), with the bending of light by the air counted in sunrise and sunset.
+//  - The dates follow the Japan Meteorological Agency's normals for Acer palmatum at Kyoto (1991 to 2020): the tree
+//    mostly red on 5 December, 80% of its leaves down on 18 December. One tree in one year differs by weeks.
 //  - Pigment amounts are smooth curves with the right order of events and roughly the right
 //    durations, as fractions of the leaf's own summer (or peak) amount. They are not measurements.
 //  - Absorption bands are a few Gaussians each, placed on the bands measured in leaves.
@@ -11,12 +13,13 @@
 //    matching functions (the CIE 1931 observer, in the fit of Wyman, Sloan and Shirley, 2013).
 
 export const LAT = 35;                    // degrees north (Kyoto)
+export const LON = 135.75, ZONE = 9;      // degrees east, and the clock's hours ahead of Greenwich (Japan Standard Time)
 export const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
 export const smooth = (x) => { x = clamp(x); return x * x * (3 - 2 * x); };
 export const mix = (a, b, t) => a + (b - a) * t;
 
 // The Season slider runs 0..1. Summer, when little changes, is given less of it than autumn.
-const KNOTS = [[0, 84], [0.2, 125], [0.35, 293], [0.78, 334], [1, 354]];   // slider value, day of the year
+const KNOTS = [[0, 84], [0.2, 125], [0.35, 314], [0.78, 348], [1, 365]];   // slider value, day of the year
 export const DAY_START = KNOTS[0][1], DAY_END = KNOTS[KNOTS.length - 1][1];
 // The date is one smooth curve through those points (a monotone cubic), so the year's pace has no corner where summer meets autumn.
 const KM = (() => { const n = KNOTS.length, d = [], m = []; for (let i = 0; i < n - 1; i++) d[i] = (KNOTS[i + 1][1] - KNOTS[i][1]) / (KNOTS[i + 1][0] - KNOTS[i][0]); m[0] = d[0]; m[n - 1] = d[n - 2]; for (let i = 1; i < n - 1; i++) m[i] = 2 * d[i - 1] * d[i] / (d[i - 1] + d[i]); return m; })();
@@ -36,38 +39,72 @@ export function dateOf(day) {             // day 1 = 1 January, not a leap year
   for (const [name, n] of MONTHS) { if (d <= n) return { d, month: name, text: d + ' ' + name }; d -= n; }
   return { d: 31, month: 'December', text: '31 December' };
 }
-// Hours between sunrise and sunset, by geometry alone (no bending of light by the air).
+// The Sun at a given clock time (NOAA, "General Solar Position Calculations"): the year's angle, the equation of
+// time in minutes and the declination in radians.
+function solar(day, hour) {
+  const y = 2 * Math.PI / 365 * (day - 1 + (hour - 12) / 24);
+  const eqt = 229.18 * (0.000075 + 0.001868 * Math.cos(y) - 0.032077 * Math.sin(y) - 0.014615 * Math.cos(2 * y) - 0.040849 * Math.sin(2 * y));
+  const decl = 0.006918 - 0.399912 * Math.cos(y) + 0.070257 * Math.sin(y) - 0.006758 * Math.cos(2 * y) + 0.000907 * Math.sin(2 * y) - 0.002697 * Math.cos(3 * y) + 0.00148 * Math.sin(3 * y);
+  return { eqt, decl };
+}
+// Hours between sunrise and sunset: the top of the Sun's disc at the horizon, its light bent by the air (90.833 degrees from overhead).
 export function dayLength(day, lat = LAT) {
-  const decl = -23.44 * Math.cos(2 * Math.PI * (day + 10) / 365) * Math.PI / 180;
-  const c = clamp(-Math.tan(lat * Math.PI / 180) * Math.tan(decl), -1, 1);
+  const { decl } = solar(day, 12), la = lat * Math.PI / 180;
+  const c = clamp(Math.cos(90.833 * Math.PI / 180) / (Math.cos(la) * Math.cos(decl)) - Math.tan(la) * Math.tan(decl), -1, 1);
   return 2 * Math.acos(c) * 12 / Math.PI;
 }
 
-// Where the Sun stands at one hour of the day by the Sun (17 = five in the afternoon), by geometry alone:
-// its height above the horizon, and its bearing from north round toward west, both in radians.
-export const HOUR = 17;
+// Where the Sun stands at one hour by the clock in Kyoto (16 = 4 PM Japan Standard Time): its height above the horizon by
+// geometry, and its bearing from north round toward west, both in radians. 4 PM is the latest whole hour at which the Sun
+// is still well up on the day of the leaf fall (about 7.5 degrees on 18 December).
+export const HOUR = 16;
 export function sunAt(day, hour = HOUR, lat = LAT) {
-  const decl = -23.44 * Math.cos(2 * Math.PI * (day + 10) / 365) * Math.PI / 180, la = lat * Math.PI / 180, h = (hour - 12) * 15 * Math.PI / 180;
+  const { eqt, decl } = solar(day, hour), la = lat * Math.PI / 180;
+  const h = ((hour * 60 + eqt + 4 * LON - 60 * ZONE) / 4 - 180) * Math.PI / 180;          // the hour angle: true solar time, as an angle from noon
   const sinEl = Math.sin(la) * Math.sin(decl) + Math.cos(la) * Math.cos(decl) * Math.cos(h), el = Math.asin(sinEl);
-  return { el, az: Math.acos(clamp((Math.sin(decl) - sinEl * Math.sin(la)) / (Math.cos(el) * Math.cos(la)), -1, 1)) };
+  const az = Math.acos(clamp((Math.sin(decl) - sinEl * Math.sin(la)) / (Math.cos(el) * Math.cos(la)), -1, 1));
+  return { el, az: h < 0 ? -az : az };
+}
+
+// The light that reaches a level leaf in the open under a clear sky, in lux.
+//  - The direct beam: 1.353 kW/m2 x 0.7^(AM^0.678) across the beam (Meinel and Meinel 1976, as given by PVEducation,
+//    "Air Mass"), with the air mass AM of Kasten and Young (1989). On a level leaf it is that times the sine of the Sun's height.
+//  - The sky: about a tenth of the direct beam while the Sun is up (PVEducation), and never less than twilight gives:
+//    about 400 lux as the Sun sets, falling to about 3.4 lux at the end of civil twilight (Sun 6 degrees down).
+//  - After sunset only the sky's light is left.
+// `rel` is that light as a share of the most the leaf gets at this hour in the year.
+const LUX = 110;                          // lux for each watt per square metre of daylight (luminous efficacy, roughly 95 to 125)
+const SET = -0.833;                       // the Sun's height, in degrees, as its top goes below the horizon
+export function airMass(deg) { const z = 90 - deg; return 1 / (Math.cos(z * Math.PI / 180) + 0.50572 * Math.pow(96.07995 - z, -1.6364)); }
+function lux(day, hour) {
+  const deg = sunAt(day, hour).el * 180 / Math.PI;
+  const beam = deg > SET ? 1353 * Math.pow(0.7, Math.pow(airMass(deg), 0.678)) * LUX : 0;
+  const twilight = deg > SET ? 400 : 400 * Math.pow(3.4 / 400, (SET - deg) / (SET + 6));
+  const direct = beam * Math.max(Math.sin(deg * Math.PI / 180), 0), sky = Math.max(0.1 * beam, twilight);
+  return { deg, beam, direct, sky, total: direct + sky };
+}
+const MOST = {};
+export function lightAt(day, hour = HOUR) {
+  if (!(hour in MOST)) { let m = 0; for (let d = 1; d <= 365; d++) m = Math.max(m, lux(d, hour).total); MOST[hour] = m; }
+  const o = lux(day, hour); o.rel = o.total / MOST[hour]; return o;
 }
 
 // The tree's year in five parts, by slider value. Used for the ticks and the captions.
 export const PHASES = [
   { id: 'spring', name: 'Spring', at: 0 },
-  { id: 'summer', name: 'Summer', at: 0.2 },
-  { id: 'turning', name: 'Turning', at: seasonOf(301) },
-  { id: 'red', name: 'Red', at: seasonOf(321) },
+  { id: 'summer', name: 'Green', at: 0.2 },
+  { id: 'turning', name: 'Turning', at: seasonOf(323.5) },
+  { id: 'red', name: 'Red', at: seasonOf(343.5) },
   { id: 'fall', name: 'Leaf fall', at: 0.78 },
 ];
 export const phaseAt = (s) => { let k = 0; for (let i = 0; i < PHASES.length; i++) if (s >= PHASES[i].at - 1e-9) k = i; return k; };
 
 // One leaf's timetable. `sun` is 0 for a leaf deep in the crown, 1 for one in full sun.
 // `r1`, `r2` are that leaf's own random numbers in 0..1.
-export const FOCUS = { bud: 86, d0: 303, sun: 1, drop: 351.5, land: 354 };
+export const FOCUS = { bud: 86, d0: 325.5, sun: 1, drop: 362.5, land: 365 };
 export function timetable(sun, r1, r2) {
-  const d0 = 313 - 13 * sun + (r1 - 0.5) * 6;                 // the day it stops renewing chlorophyll
-  const drop = Math.min(350.4, d0 + 22 + r2 * 16);            // the day it falls
+  const d0 = 332.5 - 7 * sun + (r1 - 0.5) * 6;                // the day it stops renewing chlorophyll
+  const drop = Math.min(360.5, d0 + 17 + r2 * 8);             // the day it falls
   return { bud: 85 + r1 * 11, d0, sun: 0.12 + 0.88 * sun, drop, land: drop + FALL_DAYS };
 }
 export const FALL_DAYS = 2.5;             // a fall is spread over this much of the slider so that it can be seen
@@ -79,7 +116,7 @@ export function pigments(day, L) {
   const chl = (0.3 + 0.7 * green) * (1 - smooth(sen / 23));
   const car = (0.42 + 0.58 * green) * (1 - 0.45 * smooth((sen - 5) / 34));   // carotenoids go too, but later and not all
   const anth = L.sun * smooth((sen - 1) / 20);
-  const absc = smooth((day - (L.drop - 22)) / 22);            // how far the separation layer has cut across the stalk
+  const a0 = Math.max(L.drop - 22, L.d0), absc = smooth((day - a0) / (L.drop - a0));   // how far the separation layer has cut across the stalk: it forms once the leaf has begun to turn
   return { size: 0.07 + 0.93 * grow, chl, car, anth, absc, fall: clamp((day - L.drop) / (L.land - L.drop)) };
 }
 
@@ -115,9 +152,9 @@ const TISSUE = new Float64Array(NS); for (let i = 0; i < NS; i++) TISSUE[i] = 0.
 const TOP = 0.6;
 // Fraction of the light at each wavelength that comes back from a leaf (or a part of one) holding
 // these amounts. `skin` is light reflected at the surface before it meets any pigment.
-export function returned(p, out = new Float64Array(NS), depth = 1, skin = 0.035) {
+export function returned(p, out = new Float64Array(NS), depth = 1, skin = 0.035, walls = 1) {
   const a = TAB.chl, b = TAB.car, c = TAB.anth, k1 = p.chl * depth * THICK.chl, k2 = p.car * depth * THICK.car, k3 = p.anth * depth * THICK.anth;
-  for (let i = 0; i < NS; i++) out[i] = skin + (TOP - skin) * Math.exp(-(k1 * a[i] + k2 * b[i] + k3 * c[i] + TISSUE[i]));
+  for (let i = 0; i < NS; i++) out[i] = skin + (TOP - skin) * Math.exp(-(k1 * a[i] + k2 * b[i] + k3 * c[i] + walls * TISSUE[i]));
   return out;
 }
 // The pigments' part of that, for light of wavelength l going once down through the leaf: how thick each
@@ -143,6 +180,8 @@ export function rgbOf(spec, gain = 1) {
 const tmp = new Float64Array(NS);
 export const GAIN = 1.75;                  // the leaf is drawn lit from behind, brighter than its surroundings
 export function leafRGB(p, depth = 1, gain = GAIN) { return rgbOf(returned(p, tmp, depth), gain); }
+// The colour of a vacuole's sap holding this much anthocyanin (0..1 of the leaf's peak): water and what else is dissolved in it are clear.
+export function sapRGB(anth, depth = 1, gain = GAIN) { return rgbOf(returned({ chl: 0, car: 0, anth }, tmp, depth, 0.035, 0), gain); }
 export const css = (c, k = 1, a = 1) => `rgba(${Math.round(255 * clamp(c[0] * k))},${Math.round(255 * clamp(c[1] * k))},${Math.round(255 * clamp(c[2] * k))},${a})`;
 
 // The colour of light of a single wavelength, as nearly as a screen can show it.

@@ -7,6 +7,7 @@ precision highp float; precision highp int;
 `;
 const LIGHT = `
 uniform vec3 uSun;                 // direction to the Sun, in the camera's frame
+uniform float uDirect;             // how much of the light comes straight from the Sun: 1 while it is well up, 0 once it has set and only the sky lights the scene
 `;
 
 // ---- the sky ---------------------------------------------------------------------------------------
@@ -50,7 +51,7 @@ in vec3 vW; in vec3 vV; out vec4 o;
 uniform int uKind; uniform vec4 uShape; uniform vec3 uTint;
 uniform float uLum; uniform vec3 uHaze;        // how bright the daylight is, and the colour of the far air
 uniform vec4 uShade; uniform float uShadeL;    // the tree's shadow: the way to the Sun along the ground, how far off its middle lies, how dark it is; and its length
-uniform vec3 uTrunk;                           // the trunk's: its length, half-width and darkness
+uniform vec4 uLimb[48]; uniform vec3 uLimbW[48]; uniform int uLimbs;   // the shadows of the trunk and the thicker limbs: each piece's two ends on the lawn (x, z), its width, how far the Sun's disc blurs it, and how dark it is
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float noise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(hash(i), hash(i + vec2(1,0)), f.x), mix(hash(i + vec2(0,1)), hash(i + vec2(1,1)), f.x), f.y); }
 void main() {
@@ -60,9 +61,12 @@ void main() {
     c *= 1.0 - 0.32 * exp(-dot(vW.xz, vW.xz) / 7.0);                                            // under the tree little of the sky is seen
     vec2 sd = vW.xz + uShade.xy * uShade.z; float al = dot(sd, uShade.xy), pe = sd.x * uShade.y - sd.y * uShade.x;
     c *= 1.0 - uShade.w * exp(-(al * al / (uShadeL * uShadeL) + pe * pe / 7.0));                  // the tree's shadow, longer the lower the Sun
-    { float ta = -dot(vW.xz, uShade.xy), tp = vW.x * uShade.y - vW.z * uShade.x;                  // the trunk's
-      c *= 1.0 - uTrunk.z * step(0.0, ta) * smoothstep(uTrunk.x, uTrunk.x * 0.85, ta) * exp(-tp * tp / (uTrunk.y * uTrunk.y)); }
-    c = mix(c * uLum, uHaze, smoothstep(8.0, 60.0, r));                                         // haze with distance
+    { float sh = 0.0;                                                                              // the trunk's and the limbs'
+      for (int i = 0; i < 48; i++) { if (i >= uLimbs) break;
+        vec2 a = uLimb[i].xy, b = uLimb[i].zw, ab = b - a; float t = clamp(dot(vW.xz - a, ab) / max(dot(ab, ab), 1e-8), 0.0, 1.0), d = length(vW.xz - a - ab * t);
+        vec3 w = uLimbW[i]; sh = max(sh, w.z * min(1.0, w.x / max(w.y, 1e-4)) * (1.0 - smoothstep(0.5 * abs(w.x - w.y), 0.5 * (w.x + w.y), d))); }
+      c *= 1.0 - sh; }
+    c = mix(c * uLum, uHaze, 1.0 - exp(-r * 3.912 / 20000.0));                                  // haze: clear air, 20 km visibility (Koschmieder: extinction 3.912 / visibility)
     o = vec4(c, 1.0);
   } else {
     float a = atan(vW.z, vW.x), h = uShape.y * (0.42 + 0.2 * sin(a * 3.0 + uShape.z) + 0.13 * sin(a * 7.0 + uShape.z * 2.3) + 0.07 * abs(sin(a * 17.0 + uShape.z)) + 0.035 * abs(sin(a * 41.0)));
@@ -156,8 +160,8 @@ void main() {
   }
   c = mix(c, uDetail == 1 ? uVein : base * 1.22 + 0.02, 0.75 * main);
   // the sunlit side is matt and bright; seen from the other side, the light that comes through makes it glow
-  vec3 col = c * (0.62 + 0.85 * max(ndl, 0.0) + 0.72 * smoothstep(0.0, 0.6, -ndl)) * (1.0 + clamp(relief, -0.4, 0.45));
-  col += vec3(1.0, 0.9, 0.8) * 0.12 * pow(max(dot(n, normalize(uSun + v)), 0.0), 30.0);
+  vec3 col = c * (0.62 + mix(0.6, 0.85 * max(ndl, 0.0) + 0.72 * smoothstep(0.0, 0.6, -ndl), uDirect)) * (1.0 + uDirect * clamp(relief, -0.4, 0.45));   // under the sky alone the light is even: no lit or shaded side
+  col += uDirect * vec3(1.0, 0.9, 0.8) * 0.12 * pow(max(dot(n, normalize(uSun + v)), 0.0), 30.0);
   if (uDetail == 1) { float w = fwidth(hy); col = mix(col, vec3(1.0), 0.85 * (1.0 - smoothstep(1.0, 2.2, abs(hy) / max(w, 1e-9))) * (1.0 - smoothstep(0.004, 0.012, w))); }   // the line the leaf is cut along, marked in white from the Leaf scale on
 
   col *= uLum; { float m = max(col.r, max(col.g, col.b)); if (m > 0.6) col *= (0.6 + 0.4 * (1.0 - exp(-(m - 0.6) / 0.4))) / m; }     // nearly brighter than the screen can show: eased down as a whole, so that the colour the model gave is kept and the brightest leaf still shows its veins
@@ -179,6 +183,7 @@ uniform vec4 uCamQ;
 uniform vec3 uPig;                               // chlorophyll, carotenoids, anthocyanin in the followed cell
 uniform float uSize[8];
 uniform float uBend;                             // the leaf's surface curves down away from the middle of the window by this much per unit of distance squared, and the cells under it follow
+uniform float uDent;                             // how deep, in the shape's own units, a chloroplast presses into the vacuole beside it
 out vec3 vN; out vec3 vV; out vec4 vCol; out vec3 vMat; out vec3 vL;
 vec3 rot(vec4 q, vec3 v) { vec3 t = 2.0 * cross(q.xyz, v); return v + q.w * t + cross(q.xyz, t); }
 void main() {
@@ -195,45 +200,54 @@ void main() {
   else { l = aPos * sc; n = aNor / sc; }
   if (kind == 0 && iCol.a < 0.999 && uShape == 0) l.xy *= mix(1.0, iCol.a, aPos.z * 0.5 + 0.5);   // a branch narrows toward its end
   vec4 q = uShape == 2 ? uCamQ : iQuat;
-  vec4 v = uMV * vec4(iPos - vec3(0.0, 0.0, uBend * dot(iPos.xy, iPos.xy)) + rot(q, l * grow), 1.0);
+  vec3 g = vec3(grow);
+  if (kind == 4 || kind == 6) { if (sc.x <= sc.y && sc.x <= sc.z) g.x = 1.0; else if (sc.z <= sc.y) g.z = 1.0; else g.y = 1.0; }   // a chloroplast shrinks in length and width but keeps its thickness, so it stays pressed against the wall
+  vec4 v = uMV * vec4(iPos - vec3(0.0, 0.0, uBend * dot(iPos.xy, iPos.xy)) + rot(q, l * g), 1.0);
   vN = mat3(uMV) * rot(q, n); vV = v.xyz; vCol = iCol; vMat = iMat; vL = aPos;
   gl_Position = uP * v;
+  // The vacuole is drawn as a smooth shape, but its skin folds round each chloroplast pressed into it, so no water lies between
+  // a chloroplast and the wall. Its depth is set that much further along the line of sight: it then hides nothing that lies within
+  // a chloroplast's depth of its surface, and still covers what lies across the cell. On screen it stays where it is.
+  if (kind == 2 && uDent > 0.0) { float d = length(v.xyz), k = uDent * length(uMV[0].xyz); vec4 b = uP * vec4(v.xyz * (1.0 + k / max(d, 1e-30)), 1.0); if (abs(b.w) > 0.0) gl_Position.z = b.z / b.w * gl_Position.w; }
 }`;
 export const SOLID_FS = HEAD + LIGHT + `
 in vec3 vN; in vec3 vV; in vec4 vCol; in vec3 vMat; in vec3 vL; out vec4 o;
-uniform vec4 uBody[8], uDot[8], uVac[8];
+uniform vec4 uBody[8], uDot[8], uVac[8];     // a cell's parts by tone: chloroplast body, its stacks (a: its share of chlorophyll), vacuole
+uniform vec3 uBack;                 // the rest of the leaf, behind the cells that are drawn
 uniform float uFlash[64];
 uniform vec4 uFog;                  // colour and thickness of what the view is inside (the vacuole's water)
 uniform float uFogMax;              // above 0: the view is inside coloured water this deep (in metres), which tints what is seen through it
 uniform float uLum;                 // how bright the daylight is, for the tree's wood
+uniform float uSkin;                // above 0: the vacuole's skin is drawn fainter within about this distance (in metres) of the eye, as the eye crosses it
 uniform float uNear;                // above 0: nothing nearer than this (metres) is drawn, the water included: molecules beyond it come into sight gradually, and the water's colour hides them only from there on
 uniform float uFade;                // how much of a molecule built atom by atom shows: they are smaller than a pixel from far off
 float hash3(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
 void main() {
   int kind = int(vMat.x + 0.5), idx = int(vMat.z + 0.5);
   vec3 n = normalize(vN) * (gl_FrontFacing ? 1.0 : -1.0), v = normalize(-vV);
-  float ndl = max(dot(n, uSun), 0.0), ndv = max(dot(n, v), 0.0), rim = pow(1.0 - ndv, 3.0);
-  float spec = pow(max(dot(n, normalize(uSun + v)), 0.0), 40.0);
+  float ndl = mix(0.5, max(dot(n, uSun), 0.0), uDirect), ndv = max(dot(n, v), 0.0), rim = pow(1.0 - ndv, 3.0);
+  float spec = uDirect * pow(max(dot(n, normalize(uSun + v)), 0.0), 40.0);
   vec3 c = vCol.rgb; float a = 1.0;
   if (kind == 0) c = (c * (0.32 + 0.68 * ndl) + vec3(0.9, 0.6, 0.45) * 0.12 * rim) * uLum;
   else if (kind == 1) { a = vCol.a + (1.0 - vCol.a) * 0.3 * rim * rim; c = c * (0.55 + 0.45 * ndl) + 0.3 * spec; }
-  else if (kind == 2) { vec4 t = uVac[idx]; c = t.rgb * (0.55 + 0.45 * ndv + 0.25 * ndl); a = t.a; }
+  else if (kind == 2) { vec4 t = uVac[idx]; c = t.rgb * (0.55 + 0.45 * ndv + 0.25 * ndl); a = t.a; if (uSkin > 0.0) a *= 1.0 - exp(-length(vV) / uSkin); }   // the sap a skin stands for lies behind it; next to the eye the water seen from inside takes over, so crossing the skin is not a step
   else if (kind == 3 || kind == 7 || kind == 8 || kind == 9) {
-    if (vCol.a > 0.5) { float f = uFlash[idx]; c = c * (0.85 + 0.35 * ndv) + c * 1.6 * f + vec3(1.0) * 0.9 * f * f; }      // the bonds whose electrons take in light
+    if (vCol.a > 0.5) { float f = uFlash[idx]; c = c * (0.85 + 0.35 * ndv) * (1.0 + 2.2 * f); c /= max(1.0, max(c.r, max(c.g, c.b))); }      // the bonds whose electrons take in light; on taking in a dot they flash brighter in their own colour
     else c = c * (0.35 + 0.65 * ndl) + 0.25 * spec;
   }
-  else if (kind == 4) {
+  else if (kind == 4 || kind == 6) {                  // a chloroplast: its body, with spots where its stacks of membrane (or, as the chlorophyll goes, its drops of fat) lie under the envelope
     vec3 p = vL * 3.2, id = floor(p); float d = 9.0;
     for (int k = -1; k <= 1; k++) for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) { vec3 cell = id + vec3(i, j, k); d = min(d, length(cell + vec3(hash3(cell), hash3(cell + 3.1), hash3(cell + 5.7)) - p)); }
-    c = mix(uDot[idx].rgb, uBody[idx].rgb, smoothstep(0.28, 0.42, d)) * (0.62 + 0.5 * ndl) + 0.3 * spec + uBody[idx].rgb * 0.35 * rim;
+    vec3 spot = mix(uBody[idx].rgb * 1.25 + 0.06, uDot[idx].rgb, smoothstep(0.15, 0.6, uDot[idx].a));
+    c = mix(spot, uBody[idx].rgb, smoothstep(0.28, 0.42, d)) * (0.62 + 0.5 * ndl) + 0.3 * spec + uBody[idx].rgb * 0.35 * rim;
+    if (kind == 6) a = 0.72 + 0.25 * rim;            // the followed cell's are built in full inside: the envelope lets its stacks show through a little
   }
   else if (kind == 5) { vec3 m = uDot[0].rgb * 1.2; c = m * (0.45 + 0.55 * ndl) + 0.3 * spec + m * 0.4 * rim; }
-  else if (kind == 6) { c = uBody[idx].rgb * (0.7 + 0.3 * ndl) + 0.6 * spec; a = 0.3 + 0.6 * rim; }
   else if (kind == 14) c = uBody[idx].rgb * (0.75 + 0.5 * ndl) + 0.4 * spec;
-  else if (kind == 15) c = uBody[idx].rgb * 0.3;                                  // the rest of the leaf behind the cells that are drawn, in shade
+  else if (kind == 15) c = uBack;                                                // the rest of the leaf behind the cells that are drawn, in shade
   else if (kind == 10) { float r = length(vL.xy); float w = fwidth(r); a = smoothstep(0.78 - w, 0.78, r) * (1.0 - smoothstep(0.92, 0.92 + w, r)); if (a < 0.01) discard; }
   else if (kind == 11) { float w = fwidth(vL.y); a = 1.0 - smoothstep(0.5, 0.5 + w, abs(vL.y)); if (a < 0.01) discard; }
-  else if (kind == 12) { float r = length(vL.xy); a = exp(-r * r * 7.0); c = c * 1.3 + vec3(0.35) * exp(-r * r * 40.0); if (a < 0.01) discard; }
+  else if (kind == 12) { float r = length(vL.xy); a = exp(-r * r * 7.0) * vCol.a; c = min(c * 1.3, vec3(1.0)); if (a < 0.01) discard; }     // a dot of light, drawn over what is behind it in its own colour
   else if (kind == 13) { float r = length(vL.xy), w = max(1.6 * vMat.y * vCol.a, fwidth(r) * 0.5); a = smoothstep(1.0 - 2.0 * w, 1.0 - w, r) * (1.0 - smoothstep(1.0 - w, 1.0, r)); c = vec3(1.0); if (a < 0.01) discard; }
   else if (kind == 16) {                                                          // an anthocyanin molecule too far off to build atom by atom: the outline of its three rings
     vec2 p = vL.xy * vec2(0.62, 0.24); float w = max(fwidth(p.x), fwidth(p.y)), lw = max(0.035, w * 0.55);
@@ -283,6 +297,6 @@ void main() {
   nl = normalize(mix(nl, mix(np, vec3(0.0, 0.0, 1.0), small), in_)); shade = mix(shade, 1.0, in_);
   vec3 tint = mix(mix(vec3(0.62, 0.64, 0.56), uTint, 0.35), uTint * 1.1 + 0.03, in_);
   vec3 n = normalize(uN * nl), v = normalize(-vV);
-  vec3 c = tint * shade * (0.7 + 0.4 * max(dot(n, uSun), 0.0)) + 0.25 * pow(max(dot(n, normalize(uSun + v)), 0.0), 30.0) * (1.0 - max(flat_, in_ * 0.6));
+  vec3 c = tint * shade * (0.7 + 0.4 * mix(0.5, max(dot(n, uSun), 0.0), uDirect)) + uDirect * 0.25 * pow(max(dot(n, normalize(uSun + v)), 0.0), 30.0) * (1.0 - max(flat_, in_ * 0.6));
   o = vec4(c, 1.0);
 }`;
