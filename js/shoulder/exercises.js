@@ -10,14 +10,18 @@ export const EX_POSE = {
     const fwd = part === 1 ? 0 : r * Math.sin(th), side = part === 0 ? 0 : part === 1 ? r * Math.sin(th) : r * Math.cos(th) - r;
     return { elev: 90 + fwd, plane: 90 + side, rot: 0, elbow: 0 };
   },
-  sleeper: (p) => ({ elev: 90, plane: 90, rot: -60 * wave(p), elbow: 90 }),
+  // lying on the side, upper arm forward on the bed, elbow bent: the forearm starts pointing up from the bed, which is
+  // across the body (the wiper's start, below), and is pressed down toward the bed, which turns the arm further in
+  sleeper: (p) => ({ elev: 90, plane: 90, rot: -90 - 40 * wave(p), elbow: 90 }),
   external: (p) => ({ elev: 0, plane: 30, rot: 60 * wave(p), elbow: 90 }),
   internal: (p) => ({ elev: 0, plane: 30, rot: -60 * wave(p), elbow: 90 }),
   external90: (p) => ({ elev: 90, plane: 0, rot: 90 * wave(p), elbow: 90 }),
   // upper arm forward at shoulder height, elbow bent: the forearm turns from across the chest to straight up
   wiper: (p) => ({ elev: 90, plane: 90, rot: -80 + 80 * wave(p), elbow: 90 }),
-  // from the hand by the other hip, arm turned in, to up and out past the head, arm turned out
-  pnf: (p) => { const u = wave(p); return { elev: 40 + 110 * u, plane: 140 - 110 * u, rot: -60 + 120 * u, elbow: 0 }; },
+  // from the hand in front of the other hip, arm turned in, to up and out past the head, arm turned out. The start
+  // keeps the arm bone as far from the ribs as it is with the arm hanging (the arm's own flesh and the chest's lie
+  // between them), so the upper arm goes forward of the chest before it goes across, and the elbow is bent.
+  pnf: (p) => { const u = wave(p); return { elev: 35 + 115 * u, plane: 105 - 75 * u, rot: -90 + 150 * u, elbow: 45 * (1 - u) }; },
   // the arm hangs toward the floor (forward from the body) and is lifted out to the side, level with the shoulder
   bentRaise: (p) => ({ elev: 90, plane: 90 - 90 * wave(p), rot: 0, elbow: 0 }),
   // straight arm from a little in front of the body to a little behind it

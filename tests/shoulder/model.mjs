@@ -1,4 +1,5 @@
 // Shoulder: checks of the model at many arm positions, with no browser. node tests/shoulder/model.mjs [count]
+// (SHOW=1000 lists that many failures, not the first 40.)
 // It samples arm positions at random (seeded, so a failure can be replayed with the same seed) and fails if:
 //  - a muscle at rest is not exactly the muscle fitted to the scans;
 //  - the shoulder blade or the arm enters the ribs, or the arm bone comes nearer the acromion than the model allows;
@@ -15,12 +16,35 @@
 //  - a muscle's leverage points more than 20° away from the measured leverage, on average over the measured poses, or
 //    is under 0.8 or over 1.35 times its size (Axford 2024, tests/shoulder/axford.mjs);
 //  - a muscle's length changes by more than 1.5 mm for one degree of the arm (no real muscle has that much leverage);
-//  - the subscapularis's middle line passes more than 3 mm inside the shoulder blade.
+//  - the subscapularis's middle line passes more than 3 mm inside the shoulder blade;
+//  - slices of a muscle lean over (a face turned more than LEAN.deg further from square to the muscle's middle line
+//    than it is at rest) in more than LEAN.share of the muscles and poses tried, or a muscle's drawn volume leaves
+//    VOL.hard of its volume at rest anywhere, or VOL.soft in more than VOL.share of them (the deltoid only up to a lift
+//    of TIE_FADE[0]: above that its parts are drawn as their lines have them, and the test prints how they lean; and a
+//    part drawn much narrower loses volume, since it is never drawn more than THICK times as thick);
+//  - too many corners of one muscle are inside another (PARTS), at the poses where the parts of the deltoid once crossed
+//    (for two parts of the deltoid, only up to a lift of TIE_FADE[0]: above that the model lets them overlap, and the
+//    test prints how much);
+//  - a gap opens between two parts of the deltoid: a slice of one stands more than PARTS.gap mm further from the
+//    surface of the part beside it than at rest (the deltoid is one sheet);
+//  - a slice of the deltoid is drawn more than PARTS.thick times as thick as at rest (it would stand up as a lobe);
+//  - the healthy supraspinatus tendon is drawn thinner than THIN of its thickness under the acromion, with the arm
+//    in the plane of the shoulder blade and turned 0° or 30° out;
+//  - the bursa has a fold (a bend over BURSA.bend along it) or a corner deeper than BURSA.deep in bone, at those turns,
+//    and turned 60° in or out up to a lift of 90°;
+//    (These limits are what the model reaches, not what a shoulder does. Slices still lean and parts still overlap
+//    in some poses, and with the arm high and turned in the tendon is still pressed and the bursa still folds.)
+//  - the gap goes under what the model allows while the front or the middle of the deltoid pulls alone and the ball
+//    rides up (as main.js poses it);
+//  - a muscle that an exercise's words say does the work is not shorter half way through it than at its start;
+//  - the arm bone's middle line comes nearer the ribs than RIB_FAR in an exercise (the bone is inside the arm);
+//  - the sleeper stretch does not start with the forearm across the chest.
 import { model, bones } from './load.mjs';
 import { solid } from '../../js/shoulder/solid.js';
-import { CLEAR, ROTS, closest } from '../../js/shoulder/model.js';
+import { CLEAR, ROTS, closest, TIE_FADE, THICK } from '../../js/shoulder/model.js';
 import { V } from '../../js/shoulder/geom.js';
 import { EX_POSE } from '../../js/shoulder/exercises.js';
+import { EXERCISES } from '../../js/shoulder/facts.js';
 import { measured, inRange, DIAM } from './axford.mjs';
 import { leverage, asVector } from './isb.mjs';
 
@@ -29,6 +53,16 @@ let seed = SEED; const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0)
 const fails = []; const fail = (what, P) => { fails.push(`${what}  at ${JSON.stringify(P)}`); };
 const pts = (f) => Array.from({ length: f.length / 3 }, (_, i) => [f[3 * i], f[3 * i + 1], f[3 * i + 2]]);
 const HC = model.marks.HC;
+// the limits of the shape checks (9 to 14 below)
+const LEAN = { deg: 25, share: 0.06 }, VOL = { hard: [0.65, 1.18], soft: [0.88, 1.14], share: 0.02 }, PARTS = { share: 0.12, deep: 2, gap: 4, thick: 1.35 }, THIN = 0.5, BURSA = { bend: 110, deep: 1.5 }, RIB_FAR = 38;
+const deg = (c) => Math.acos(Math.max(-1, Math.min(1, c))) * 180 / Math.PI;
+const ringOf = (p, i) => p.slice(i * 32, i * 32 + 32);
+// the way a slice faces: the normal of its outline
+const facing = (r) => { const m = V.mean(r); let A = [0, 0, 0]; for (let j = 0; j < r.length; j++) A = V.add(A, V.cross(V.sub(r[j], m), V.sub(r[(j + 1) % r.length], m))); return V.norm(A); };
+// how far each slice's face is turned from square to the middle line, in degrees
+const leans = (b, p) => { const c = b.sl.map((_, i) => V.mean(ringOf(p, i))); return c.map((_, i) => (i < 1 || i > c.length - 2 ? 0 : deg(Math.abs(V.dot(facing(ringOf(p, i)), V.norm(V.sub(c[i + 1], c[i - 1]))))))); };
+const volumeOf = (p, idx) => { let v = 0; for (let i = 0; i < idx.length; i += 3) v += V.dot(p[idx[i]], V.cross(p[idx[i + 1]], p[idx[i + 2]])) / 6; return Math.abs(v); };
+const AT_REST = {};
 
 // 1. at rest, every muscle is its fitted shape
 {
@@ -37,12 +71,13 @@ const HC = model.marks.HC;
     const p = pts(model.muscle(b, T).pos); let worst = 0;
     p.forEach((q, i) => { worst = Math.max(worst, V.len(V.sub(q, b.rest[i]))); });
     if (worst > 1e-3) fail(`${b.id} at rest is ${worst.toFixed(3)} mm from its fitted shape`, { elev: 0 });
+    AT_REST[b.id] = { lean: leans(b, p), vol: volumeOf(p, b.mesh.idx), p };
   }
 }
 
 // 2. random arm positions
 const centers = (b, pos) => b.sl.map((_, i) => { let m = [0, 0, 0]; for (let j = 0; j < 32; j++) m = V.add(m, [pos[3 * (i * 32 + j)], pos[3 * (i * 32 + j) + 1], pos[3 * (i * 32 + j) + 2]]); return V.mul(m, 1 / 32); });
-let worstNew = {}, lens = {};
+let worstNew = {}, lens = {}; const worstLean = {}, vols = {}, tally = { n: 0, lean: 0, vol: 0 }, high = { n: 0, lean: 0, vol: 9 };
 const poses = [];
 for (let n = 0; n < N; n++) {
   // the planes worked out (0, 30, 90), and every fourth position a plane between them or a little past 90 (the pendulum)
@@ -81,6 +116,15 @@ for (const P of poses) {
     for (const k of Object.keys(model.SOL)) { const f = model.SOL[k], inv = model.invT(T[k]); p.forEach((q, i) => { if (!b.restIn[k][i] && f.depth(applyT(inv, q)) > 1) deep++; }); }
     worstNew[b.id] = Math.max(worstNew[b.id] || 0, deep / p.length);
     if (deep / p.length > 0.02) fail(`${b.id}: ${(100 * deep / p.length).toFixed(1)}% of its corners are more than 1 mm inside a bone they were not in at rest`, P);
+    // 9. slices stay square to the muscle's line, and the muscle keeps its volume
+    // (the deltoid above a lift of TIE_FADE[0] is drawn as its lines have it, without the ties: counted apart and printed)
+    const ln = leans(b, p), over = Math.max(...ln.map((x, i) => x - AT_REST[b.id].lean[i])), vr = volumeOf(p, b.mesh.idx) / AT_REST[b.id].vol;
+    if (b.cuff === false && P.elev > TIE_FADE[0]) { high.n++; if (over > LEAN.deg) high.lean++; high.vol = Math.min(high.vol, vr); continue; }
+    worstLean[b.id] = Math.max(worstLean[b.id] || 0, over);
+    tally.n++; if (over > LEAN.deg) tally.lean++;
+    (vols[b.id] ||= []).push(vr);
+    if (vr < VOL.soft[0] || vr > VOL.soft[1]) tally.vol++;
+    if (vr < VOL.hard[0] || vr > VOL.hard[1]) fail(`${b.id}: its drawn volume is ${vr.toFixed(2)} of its volume at rest`, P);
   }
   // the bursa lies on the tendon as posed, whatever the condition: no corner of its underside more than 2 mm from the
   // tendon's top face (it once lifted off at a high lift, and a worn tendon came up through it)
@@ -94,6 +138,8 @@ for (const P of poses) {
     if (off > 2) fail(`the bursa (${cond}) is ${off.toFixed(1)} mm off the tendon`, P);
   }
 }
+if (tally.lean / tally.n > LEAN.share) fail(`in ${(100 * tally.lean / tally.n).toFixed(0)}% of the muscles and poses tried a slice leans more than ${LEAN.deg}° further than at rest (the limit is ${100 * LEAN.share}%)`, {});
+if (tally.vol / tally.n > VOL.share) fail(`in ${(100 * tally.vol / tally.n).toFixed(1)}% of the muscles and poses tried the drawn volume is outside ${VOL.soft.join(' to ')} of rest (the limit is ${100 * VOL.share}%)`, {});
 function applyT(T, p) { return V.add([V.dot(T.R[0], p), V.dot(T.R[1], p), V.dot(T.R[2], p)], T.t); }
 
 // 3. the bursa lies on the tendon's outer side, and nothing is pressed at rest
@@ -200,10 +246,126 @@ const jump = {};
   jump.subscapInBlade = worst;
 }
 
+// 10. parts that lie side by side do not share space: at the poses where the parts of the deltoid, and the
+// infraspinatus and teres minor, once ran through each other, no more than PARTS.share of one part's corners are more
+// than PARTS.deep mm inside another part
+const shape = { parts: 0, partsAt: '', high: 0, highAt: '', gap: 0, gapAt: '', thick: 0, thickAt: '', thin: 9, bend: 0, deep: 0, pullGap: 9, rib: 1e9, ribAt: '' };
+const DELT = ['deltA', 'deltM', 'deltP'];
+for (const [elev, plane, rot, elbow = 90] of [[60, 30, 0], [90, 30, 0], [90, 30, 60], [150, 30, 0], [25, -90, 0], [0, 30, 60], [90, 90, 0], [90, 0, 90], [35, 105, -90, 45], [90, 90, -90], [30, -90, 0, 0]]) {
+  const P = { elev, plane, rot, elbow }, T = model.pose(P), at = model.built.map((b) => { const m = model.muscle(b, T); return { b, p: pts(m.pos), sol: solid({ pos: m.pos, idx: b.mesh.idx }, 1.5) }; });
+  for (const x of at) for (const y of at) if (x !== y) {
+    const n = x.p.filter((q) => y.sol.depth(q) > PARTS.deep).length / x.p.length;
+    if (DELT.includes(x.b.id) && DELT.includes(y.b.id) && elev > TIE_FADE[0]) { if (n > shape.high) { shape.high = n; shape.highAt = `${x.b.id} in ${y.b.id} at lift ${elev}`; } continue; }
+    if (n > shape.parts) { shape.parts = n; shape.partsAt = `${x.b.id} in ${y.b.id} at lift ${elev}, plane ${plane}, turn ${rot}`; }
+    if (n > PARTS.share) fail(`${(100 * n).toFixed(0)}% of the corners of ${x.b.id} are more than ${PARTS.deep} mm inside ${y.b.id}`, P);
+  }
+}
+// 10b. the deltoid is one sheet: no gap opens between its parts, and no part of it stands up as a lobe. A slice's gap
+// is 0 if a corner of it is inside the other part, and otherwise how far its nearest corner is from the other part's
+// surface (its triangles); its thickness is the furthest its top face stands from its bottom face. Both against rest,
+// over the middle of the part (20% to 90% of its length: at the ends the parts are fixed to bone, apart).
+{
+  const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2], len = (a) => Math.hypot(a[0], a[1], a[2]);
+  const triD = (p, a, b, c) => {                                    // from a point to a triangle (Ericson, Real-Time Collision Detection 5.1.5)
+    const ab = sub(b, a), ac = sub(c, a), ap = sub(p, a), d1 = dot(ab, ap), d2 = dot(ac, ap); if (d1 <= 0 && d2 <= 0) return len(ap);
+    const bp = sub(p, b), d3 = dot(ab, bp), d4 = dot(ac, bp); if (d3 >= 0 && d4 <= d3) return len(bp);
+    const vc = d1 * d4 - d3 * d2; if (vc <= 0 && d1 >= 0 && d3 <= 0) return len(sub(ap, V.mul(ab, d1 / (d1 - d3))));
+    const cp = sub(p, c), d5 = dot(ab, cp), d6 = dot(ac, cp); if (d6 >= 0 && d5 <= d6) return len(cp);
+    const vb = d5 * d2 - d1 * d6; if (vb <= 0 && d2 >= 0 && d6 <= 0) return len(sub(ap, V.mul(ac, d2 / (d2 - d6))));
+    const va = d3 * d6 - d5 * d4; if (va <= 0 && d4 - d3 >= 0 && d5 - d6 >= 0) return len(sub(bp, V.mul(sub(c, b), (d4 - d3) / ((d4 - d3) + (d5 - d6)))));
+    const den = 1 / (va + vb + vc); return len(sub(ap, V.add(V.mul(ab, vb * den), V.mul(ac, vc * den))));
+  };
+  const B = Object.fromEntries(model.built.map((b) => [b.id, b]));
+  const inc = Object.fromEntries(DELT.map((id) => { const idx = B[id].mesh.idx, m = Array.from({ length: B[id].rest.length }, () => []); for (let t = 0; t < idx.length; t += 3) for (let k = 0; k < 3; k++) m[idx[t + k]].push(t); return [id, m]; }));
+  const gaps = (x, px, y, py) => { const idx = B[y].mesh.idx, so = solid({ pos: new Float32Array(py.flat()), idx }, 1.5);
+    return Array.from({ length: B[x].S }, (_, i) => { const near = [];
+      for (let j = 0; j < 32; j++) { const q = px[i * 32 + j]; if (so.depth(q) > 0.3) return 0; let d = 1e9; for (const r of py) d = Math.min(d, len(sub(q, r))); near.push([d, q]); }
+      near.sort((a, b) => a[0] - b[0]); let best = 1e9;
+      for (const [d, q] of near.slice(0, 4)) { const tris = new Set(); py.forEach((r, v) => { if (len(sub(q, r)) < d + 10) for (const t of inc[y][v]) tris.add(t); }); for (const t of tris) best = Math.min(best, triD(q, py[idx[t]], py[idx[t + 1]], py[idx[t + 2]])); }
+      return best; }); };
+  const segD = (q, a, b) => { const e = sub(b, a), l2 = dot(e, e), f = l2 > 1e-9 ? Math.max(0, Math.min(1, dot(sub(q, a), e) / l2)) : 0; return len(sub(q, V.add(a, V.mul(e, f)))); };
+  const thick = (p, i) => { let m = 0; for (let j = 1; j < 15; j++) { let d = 1e9; for (let k = 16; k < 31; k++) d = Math.min(d, segD(p[i * 32 + j], p[i * 32 + k], p[i * 32 + k + 1])); m = Math.max(m, d); } return m; };
+  const PAIRS = [['deltA', 'deltM'], ['deltM', 'deltA'], ['deltP', 'deltM'], ['deltM', 'deltP']];
+  const G0 = PAIRS.map(([x, y]) => gaps(x, AT_REST[x].p, y, AT_REST[y].p)), H0 = Object.fromEntries(DELT.map((id) => [id, B[id].sl.map((_, i) => thick(AT_REST[id].p, i))]));
+  const mid = (b, i) => i >= 0.2 * b.S && i <= 0.9 * b.S;
+  const list = [[60, 30, 0], [90, 30, 0], [90, 30, 60], [90, 30, -60], [90, 30, -30], [90, 30, 30], [105, 30, 0], [120, 30, 0], [135, 30, 0], [150, 30, 0], [150, 30, -30], [149, 30, 20], [145, 30, -51],
+    [25, -90, 0], [0, 30, 60], [90, 90, 0], [90, 0, 90], [35, 105, -90, 45], [90, 90, -90], [90, 90, -130], [30, -90, 0, 0]].map(([elev, plane, rot, elbow = 90]) => ({ elev, plane, rot, elbow }));
+  for (const f of Object.values(EX_POSE)) for (const ph of [0, 0.25, 0.5]) list.push(f(ph));
+  const seen = new Set();
+  for (const P of list) {
+    const key = JSON.stringify(P); if (seen.has(key)) continue; seen.add(key);
+    const T = model.pose(P), M = Object.fromEntries(DELT.map((id) => [id, pts(model.muscle(B[id], T).pos)])), where = `at lift ${P.elev.toFixed(0)}, plane ${P.plane.toFixed(0)}, turn ${P.rot.toFixed(0)}`;
+    PAIRS.forEach(([x, y], k) => { let worst = 0; gaps(x, M[x], y, M[y]).forEach((g, i) => { if (mid(B[x], i)) worst = Math.max(worst, g - G0[k][i]); });
+      if (worst > shape.gap) { shape.gap = worst; shape.gapAt = `${x} from ${y} ${where}`; }
+      if (worst > PARTS.gap) fail(`a gap opens between ${x} and ${y}: ${worst.toFixed(1)} mm more than at rest`, P); });
+    for (const id of DELT) { let worst = 0; B[id].sl.forEach((_, i) => { if (mid(B[id], i) && H0[id][i] > 2) worst = Math.max(worst, thick(M[id], i) / H0[id][i]); });
+      if (worst > shape.thick) { shape.thick = worst; shape.thickAt = `${id} ${where}`; }
+      if (worst > PARTS.thick) fail(`${id} is drawn ${worst.toFixed(2)} times as thick as at rest (a lobe)`, P); }
+  }
+}
+// 11. the healthy tendon keeps its thickness under the acromion, and the bursa on it has no fold and is not in bone
+{
+  const su = model.built[0], th = (p, i, j) => V.len(V.sub(p[i * 32 + j], p[i * 32 + 31 - j])), p0 = AT_REST.supra.p;
+  for (const rot of [-60, 0, 30, 60]) for (let elev = 0; elev <= (Math.abs(rot) > 30 ? 90 : 150); elev += 15) {
+    const P = { elev, plane: 30, rot, elbow: 90 }, T = model.pose(P), m = model.muscle(su, T), p = pts(m.pos);
+    if (rot === 0 || rot === 30) {
+      let thin = 9; for (let i = Math.round(0.72 * (su.S - 1)); i < su.S - 2; i++) for (let j = 3; j <= 12; j++) thin = Math.min(thin, th(p, i, j) / th(p0, i, j));
+      shape.thin = Math.min(shape.thin, thin);
+      if (thin < THIN) fail(`the healthy supraspinatus tendon is drawn ${thin.toFixed(2)} of its thickness`, P);
+    }
+    for (const mm of [0.8, 3]) {
+      const bu = model.bursa(mm), bp = pts(model.bursaOn(bu, m.pos, T).pos); let bend = 0, deep = 0;
+      for (let j = 2; j < 14; j++) for (let i = 2; i < bu.S; i++) { const a = V.sub(bp[(i - 1) * 32 + j], bp[(i - 2) * 32 + j]), d = V.sub(bp[i * 32 + j], bp[(i - 1) * 32 + j]); if (V.len(a) > 0.2 && V.len(d) > 0.2) bend = Math.max(bend, deg(V.dot(V.norm(a), V.norm(d)))); }
+      for (const k of ['scapula', 'humerus']) { const inv = model.invT(T[k]); for (const q of bp) deep = Math.max(deep, model.SOL[k].depth(applyT(inv, q))); }
+      shape.bend = Math.max(shape.bend, bend); shape.deep = Math.max(shape.deep, deep);
+      if (bend > BURSA.bend) fail(`the bursa (${mm} mm) has a fold of ${bend.toFixed(0)}°`, P);
+      if (deep > BURSA.deep) fail(`the bursa (${mm} mm) is ${deep.toFixed(1)} mm inside bone`, P);
+    }
+  }
+}
+// 12. the gap holds while the front or the middle of the deltoid pulls alone and the ball rides up 3 mm with the
+// pull, as main.js poses it (poseNow)
+for (const { b, S, path } of pulls) {
+  if (!['deltA', 'deltM'].includes(b.id) || S.ex) continue;
+  path.forEach((q, i) => {
+    if (i % 2 && i !== path.length - 1) return;
+    const g = model.gap(model.pose({ elev: q.elev, plane: q.plane, rot: q.rot, elbow: 90, up: 3 * i / Math.max(1, path.length - 1) })).mm; shape.pullGap = Math.min(shape.pullGap, g);
+    if (g < CLEAR - 0.05) fail(`gap ${g.toFixed(2)} mm at step ${i} of the pull of ${b.id}, with the ball riding up`, S);
+  });
+}
+// 13. in an exercise whose words say which muscles do the work, each of them is shorter half way through than at the start
+for (const ex of EXERCISES) {
+  if (ex.role !== 'works' || !EX_POSE[ex.id]) continue;
+  const at = (ph) => { const T = model.pose(EX_POSE[ex.id](ph)); return Object.fromEntries(ex.works.map((id) => [id, model.length(model.built.find((b) => b.id === id), T)])); };
+  const a = at(0), h = at(0.5);
+  for (const id of ex.works) if (!(h[id] < a[id])) fail(`${ex.name}: ${id} is marked as working and is not shorter half way (${a[id].toFixed(3)} to ${h[id].toFixed(3)})`, {});
+}
+// 14. the arm bone is inside the arm, so in an exercise its middle line (below the ball) stays RIB_FAR mm from the
+// ribs; and the sleeper stretch starts with the forearm across the chest (pointing toward the body's middle line)
+{
+  const RIBP = []; for (const r of ['rib1', 'rib2', 'rib3', 'rib4', 'rib5', 'rib6', 'rib7', 'sternum', 'manubrium']) { const p = bones[r].pos; for (let i = 0; i < p.length; i += 9) RIBP.push([p[i], p[i + 1], p[i + 2]]); }
+  const EL = model.marks.EL, axis = [0.3, 0.45, 0.6, 0.75, 0.9, 1].map((f) => V.add(HC, V.mul(V.sub(EL, HC), f)));
+  for (const [ex, f] of Object.entries(EX_POSE)) for (let k = 0; k < 12; k++) {
+    const P = f(k / 12), T = model.pose(P); let near = 1e9;
+    for (const a of axis) { const q = applyT(T.humerus, a); for (const r of RIBP) near = Math.min(near, V.len(V.sub(q, r))); }
+    if (near < shape.rib) { shape.rib = near; shape.ribAt = `${ex} at ${(k / 12).toFixed(2)}`; }
+    if (near < RIB_FAR) fail(`${ex}: the arm bone's middle line is ${near.toFixed(0)} mm from the ribs`, P);
+  }
+  // the forearm's direction: from the elbow to the far end of the radius
+  const rp = pts(bones.radius.pos), wrist = rp.reduce((a, q) => (V.len(V.sub(q, EL)) > V.len(V.sub(a, EL)) ? q : a));
+  const T = model.pose(EX_POSE.sleeper(0)), dir = V.norm(V.sub(applyT(T.forearm, wrist), applyT(T.forearm, EL)));
+  const mid = V.norm([-HC[0], 0, 0]);                              // from the shoulder toward the body's middle line
+  if (V.dot(dir, mid) < 0.8) fail(`the sleeper stretch starts with the forearm ${deg(V.dot(dir, mid)).toFixed(0)}° from across the chest`, EX_POSE.sleeper(0));
+}
+
 console.log(`${N} random arm positions, seed ${SEED}, and ${poses.length - N} from the exercises`);
 for (const b of model.built) { const l = lens[b.id]; console.log(`  ${b.id.padEnd(8)} length ${Math.min(...l).toFixed(2)} to ${Math.max(...l).toFixed(2)} of rest; worst new points in bone ${(100 * worstNew[b.id]).toFixed(1)}%`); }
 console.log('  leverage against measured (Axford 2024): ' + Object.entries(against).map(([id, a]) => `${id} ${a.ang.toFixed(0)}° off, ${a.size.toFixed(2)} times`).join('; '));
 console.log('  largest change of length for one degree: ' + model.built.filter((b) => b.id !== 'bursa').map((b) => `${b.id} ${jump[b.id].toFixed(2)} mm`).join(', ') + `; the subscapularis's line at most ${jump.subscapInBlade.toFixed(1)} mm inside the blade`);
+console.log(`  a slice leans over ${LEAN.deg}° more than at rest in ${(100 * tally.lean / tally.n).toFixed(1)}% of muscles and poses, and the volume is outside ${VOL.soft.join(' to ')} in ${(100 * tally.vol / tally.n).toFixed(1)}%`);
+console.log('  slices lean at most (more than at rest): ' + model.built.map((b) => `${b.id} ${worstLean[b.id].toFixed(0)}°`).join(', ') + '; volume of rest: ' + model.built.map((b) => `${b.id} ${Math.min(...vols[b.id]).toFixed(2)} to ${Math.max(...vols[b.id]).toFixed(2)}`).join(', '));
+console.log(`  the deltoid above a lift of ${TIE_FADE[0]}°: a slice leans over ${LEAN.deg}° more than at rest in ${(100 * high.lean / Math.max(1, high.n)).toFixed(0)}% of parts and poses; smallest volume ${high.vol.toFixed(2)} of rest`);
+console.log(`  most of one part inside another: ${(100 * shape.parts).toFixed(0)}% (${shape.partsAt}); two parts of the deltoid above a lift of ${TIE_FADE[0]}°: ${(100 * shape.high).toFixed(0)}% (${shape.highAt}); widest gap between parts of the deltoid, more than at rest: ${shape.gap.toFixed(1)} mm (${shape.gapAt}); thickest slice of the deltoid: ${shape.thick.toFixed(2)} of rest (${shape.thickAt}; the model's limit is ${THICK}); healthy tendon thinnest ${shape.thin.toFixed(2)} of rest; bursa's sharpest bend ${shape.bend.toFixed(0)}°, deepest in bone ${shape.deep.toFixed(1)} mm; smallest gap in a pull with the ball riding up ${shape.pullGap.toFixed(2)} mm; arm bone nearest the ribs in an exercise ${shape.rib.toFixed(0)} mm (${shape.ribAt})`);
 console.log(`  at rest, out 60°, in 60°, out to the side 90°: ` + ['infra', 'tminor', 'subscap', 'supra', 'deltM'].map((k) => `${k} ${rest[k].toFixed(2)}/${out[k].toFixed(2)}/${inn[k].toFixed(2)}/${abd[k].toFixed(2)}`).join(', '));
-if (fails.length) { console.log(`\n${fails.length} failed:`); for (const f of fails.slice(0, 40)) console.log('  ' + f); process.exit(1); }
+if (fails.length) { console.log(`\n${fails.length} failed:`); for (const f of fails.slice(0, +(process.env.SHOW || 40))) console.log('  ' + f); process.exit(1); }
 console.log('all passed');

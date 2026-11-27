@@ -1,6 +1,6 @@
 // Shoulder: drawing. One WebGL2 program lights every surface; a cut plane can remove the near side of the
 // model (it fades where it is), and the cut faces of each solid are filled in with the stencil buffer.
-import { program, meshBuffers, normals, perspective, lookAt, mul4, rigid, project } from '../gl/gl.js?v=c69aaabe';
+import { program, meshBuffers, normals, perspective, lookAt, mul4, rigid, project } from '../gl/gl.js?v=b2a1f60e';
 
 const VS = `#version 300 es
 layout(location=0) in vec3 aPos; layout(location=1) in vec3 aNor; layout(location=2) in vec3 aTT;

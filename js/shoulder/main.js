@@ -1,16 +1,16 @@
 // Shoulder: the controller. The state is the zoom (0 Shoulder, 1 Joint, 2 Tendon), a condition or an exercise,
 // and the arm's lift and turn. Everything drawn and every number shown comes from model.js.
-import { unpack, makeModel, MUSCLES, clamp, smooth, apply, turn as turnDir } from './model.js?v=c69aaabe';
-import { V } from './geom.js?v=c69aaabe';
-import { makeView, COL } from './view.js?v=c69aaabe';
-import { SRC, DOES, ALONE, CONDITIONS, EXERCISES, MODEL_NOTE, MODEL_SRC } from './facts.js?v=c69aaabe';
-import { EX_POSE, EX_STILL, EX_SECONDS } from './exercises.js?v=c69aaabe';
-import { gamepad } from '../gamepad/gamepad.js?v=c69aaabe';
-import { touchSliders } from '../touch/slider.js?v=c69aaabe';
+import { unpack, makeModel, MUSCLES, clamp, smooth, apply, turn as turnDir } from './model.js?v=b2a1f60e';
+import { V } from './geom.js?v=b2a1f60e';
+import { makeView, COL } from './view.js?v=b2a1f60e';
+import { SRC, DOES, ALONE, CONDITIONS, EXERCISES, MODEL_NOTE, MODEL_SRC } from './facts.js?v=b2a1f60e';
+import { EX_POSE, EX_STILL, EX_SECONDS } from './exercises.js?v=b2a1f60e';
+import { gamepad } from '../gamepad/gamepad.js?v=b2a1f60e';
+import { touchSliders } from '../touch/slider.js?v=b2a1f60e';
 
 const PINCH = 0.9;   // scales of zoom for each e-fold of finger spread: one full spread is about one scale, as on Maple and Engine
 
-const STAMP = 'c69aaabe';                                        // written by tests/stamp.mjs: the data files' version
+const STAMP = 'b2a1f60e';                                        // written by tests/stamp.mjs: the data files' version
 const $ = (id) => document.getElementById(id);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const cv = $('view'), gl = cv.getContext('webgl2', { antialias: true, alpha: false, stencil: true, powerPreference: 'high-performance' });
@@ -32,7 +32,9 @@ const look = { wide: 0, see: 0, front: 0, deltA: 0, deltM: 0, deltP: 0 };
 const FRONT = { subscap: 1.8, deltA: 1.1 };
 function looks() {
   const id = st.flex?.id, cuff = id ? MUSCLES.find((m) => m.id === id).cuff : false;
-  return { wide: id ? 1 : 0, see: cuff ? 1 : 0, front: FRONT[id] || 0, deltA: +(id === 'deltA'), deltM: +(id === 'deltM'), deltP: +(id === 'deltP') };
+  // an exercise whose working muscles are all ones that cannot be seen from behind is looked at from the front too
+  const ws = !id && st.mode === 'exercise' ? EXERCISES.find((x) => x.id === st.ex).works : [], hid = ws.length > 0 && ws.every((w) => FRONT[w]);
+  return { wide: id ? 1 : 0, see: cuff || hid ? 1 : 0, front: FRONT[id] || (hid ? Math.max(...ws.map((w) => FRONT[w])) : 0), deltA: +(id === 'deltA'), deltM: +(id === 'deltM'), deltP: +(id === 'deltP') };
 }
 let dirty = true, raf = 0, last = 0, fly = null, pull = null;   // pull: the flex easing from one c to another
 const drawn = { n: 0 };
@@ -48,6 +50,12 @@ const SHAPE = {
 };
 const BURSA_MM = { healthy: 0.8, bursitis: 3 };
 const RIDE_UP = 3;                                       // mm the ball rides up with a large full-thickness tear (drawn)
+// Impingement's cause here is a cuff that is whole but too weak to hold the ball down against the deltoid (facts.js
+// says so): as the deltoid lifts the arm the ball rides up, by as much, into the room the tendon and bursa had, and
+// the acromion presses on them where it does not in a healthy shoulder. The ride up comes on with the lift and is
+// whole by RIDE_BY degrees, where the painful arc begins; a hanging arm is not lifted by the deltoid, so nothing rides up.
+const RIDE_BY = 60;
+const rideUp = () => (st.cond === 'full' ? RIDE_UP : st.cond === 'impingement' ? RIDE_UP * smooth(st.lift / RIDE_BY) : 0);
 // The front and the middle of the deltoid pulling alone also pull the ball up, by as much (drawn; facts.js ALONE)
 const RIDES = new Set(['deltA', 'deltM']);
 
@@ -57,7 +65,7 @@ function basePose() {
   if (st.mode === 'exercise') {
     const e = EX_POSE[st.ex](st.phase); return { elev: e.elev, plane: e.plane, rot: e.rot, elbow: e.elbow };
   }
-  return { elev: st.lift, plane: 30, rot: st.turn, elbow: 90, up: st.cond === 'full' ? RIDE_UP : 0 };
+  return { elev: st.lift, plane: 30, rot: st.turn, elbow: 90, up: rideUp() };
 }
 // One muscle pulling alone moves the arm from where the sliders or the exercise put it (model.contract). The path
 // is worked out again only when that starting pose changes.
@@ -67,6 +75,13 @@ function pathFor(id, P0) {
   const key = id + JSON.stringify(P0);
   if (pathMemo.key !== key) pathMemo = { key, path: model.contract(model.built.find((b) => b.id === id), P0, PULL_DEG) };
   return pathMemo.path;
+}
+// the muscle's length (share of rest) as drawn at the pose a pull starts from
+let startMemo = { key: '', len: 1 };
+function startLen(id, P0) {
+  const key = id + JSON.stringify(P0);
+  if (startMemo.key !== key) { const b = model.built.find((x) => x.id === id), m = model.muscle(b, model.pose(P0)); startMemo = { key, len: m.length / m.rest }; }
+  return startMemo.len;
 }
 function along(path, c) {
   const x = clamp(c) * (path.length - 1), i = Math.min(path.length - 2, Math.floor(x)), f = x - i, a = path[Math.max(0, i)], b = path[Math.min(path.length - 1, i + 1)];
@@ -94,7 +109,8 @@ function compute() {
     if (hidden.has(b.id)) continue;
     const shape = b.id === 'supra' ? SHAPE[cond] : null, m = model.muscle(b, T, shape ? { shape } : {});
     len[b.id] = m.length / m.rest;
-    const delt = !b.cuff, works = st.mode === 'exercise' && EXERCISES.find((x) => x.id === st.ex).works.includes(b.id);
+    // lit: the muscles the exercise's words say to watch (working, holding or being stretched), not ones it says are relaxed
+    const delt = !b.cuff, exNow = st.mode === 'exercise' ? EXERCISES.find((x) => x.id === st.ex) : null, works = !!exNow && exNow.role !== 'relaxed' && exNow.works.includes(b.id);
     const pulls = st.flex && st.flex.id === b.id ? 0.08 + 0.14 * clamp(st.flex.c) : 0;   // lit, but still its own color
     const glow = Math.max(st.pick === b.id ? 0.35 : works ? 0.16 : 0, pulls);
     const alpha = delt ? Math.max(deltFade, stays(b.id)) : 1;
@@ -124,12 +140,12 @@ function compute() {
     su.capWarm = new Float32Array(pts);
   }
   // the bursa lies on the tendon as it is drawn at this pose (without the tendon, in a test, it moves by itself)
-  const bu = model.bursa(BURSA_MM[cond] ?? BURSA_MM.healthy), bm = su ? model.bursaOn(bu, su.pos) : model.muscle(bu, T);
+  // where the hole is: the middle of the tendon there as it would be untorn
+  const whole = cond === 'full' && su ? model.muscle(su.b, T).pos : null;
+  const bu = model.bursa(BURSA_MM[cond] ?? BURSA_MM.healthy), bm = su ? model.bursaOn(bu, whole || su.pos, T) : model.muscle(bu, T);   // over a tear: on the tendon as it would be untorn
   soft.push({ key: 'bursa' + (BURSA_MM[cond] ?? 0.8), b: bu, pos: bm.pos, col: COL.bursa, capCol: COL.bursaCut, glow: st.pick === 'bursa' ? 0.35 : 0,
     alpha: 0.55 + 0.45 * smooth((st.z - 1.2) / 0.5) });   // see-through until the cut, so that the tendon under it shows
   const g = model.gap(T);
-  // where the hole is: the middle of the tendon there as it would be untorn
-  const whole = cond === 'full' && su ? model.muscle(su.b, T).pos : null;
   frame = { P, T, soft, len, gap: g.mm, gapAt: g, slide: T.glide, cond, cut0, view0, whole };
 }
 // impingement: the corners of the tendon that the acromion presses on at this pose, that is, the corners the model
@@ -275,7 +291,9 @@ function sync() {
   const moves = ex && !EX_STILL.has(st.ex);              // a held pose has nothing to play
   if (shown.moves !== moves) { shown.moves = moves; $('exPlay').hidden = !moves; }
   const P = frame.P;
-  for (const [id, v, txt] of [['lift', st.lift, `${Math.round(st.lift)}°`], ['turn', st.turn, st.turn === 0 ? '0°' : `${Math.abs(Math.round(st.turn))}° ${st.turn > 0 ? 'out' : 'in'}`]]) {
+  // the two numbers say where the arm is drawn: where the sliders put it, or where a muscle pulling alone has taken it
+  const lf = Math.round(st.flex ? P.elev : st.lift), tn = Math.round(st.flex ? P.rot : st.turn);
+  for (const [id, v, txt] of [['lift', st.lift, `${lf}°`], ['turn', st.turn, tn === 0 ? '0°' : `${Math.abs(tn)}° ${tn > 0 ? 'out' : 'in'}`]]) {
     const el = $(id); if (+el.value !== v) el.value = v;
     el.style.setProperty('--v', ((v - el.min) / (el.max - el.min) * 100) + '%'); el.setAttribute('aria-valuetext', txt); set(id + 'V', txt);
   }
@@ -312,7 +330,8 @@ function flexSync() {
   const path = pathFor(f.id, basePose()), q = along(path, f.c), el = $('flex');
   if (Math.abs(el.value - f.c * 100) > 0.5) el.value = Math.round(f.c * 100);
   el.style.setProperty('--v', (f.c * 100) + '%');
-  const short = Math.round((1 - q.len / path[0].len) * 100);
+  // how much shorter than at the start of the pull, from the muscle as it is drawn (the list's number comes from the same)
+  const now = frame.len[f.id], short = now ? Math.round((1 - now / startLen(f.id, basePose())) * 100) : Math.round((1 - q.len / path[0].len) * 100);
   const txt = path.length < 2 ? 'at the limit' : `${short}% shorter`;
   el.setAttribute('aria-valuetext', txt); set('flexV', txt);
   const note = $('flexNote'), says = ALONE[f.id]?.text || '';
@@ -464,7 +483,7 @@ async function start() {
   const sc = near.reduce((a, [, i]) => a + sup.at[i].s, 0) / Math.max(1, near.length);
   TEAR.s0 = clamp(sc - TEAR.half, 0.02, 0.98); TEAR.s1 = clamp(sc + TEAR.half, 0.02, 0.98);
   const maxSlide = Math.max(...Object.values(pj.planes).flat().flatMap((r) => r.glide));
-  modelNote = MODEL_NOTE.replace('between the bones.', `between the bones (up to ${maxSlide.toFixed(1)} mm).`);
+  modelNote = MODEL_NOTE.replace('slide down in its socket.', `slide down in its socket (up to ${maxSlide.toFixed(1)} mm).`);
   $('loading').hidden = true;
 }
 controls(); makeLabels(); readHash(); measure();

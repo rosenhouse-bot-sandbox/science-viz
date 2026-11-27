@@ -105,6 +105,12 @@ for (const [name, width, height, motion] of quick ? SIZES.slice(0, 1) : SIZES) {
       const rides = id === 'deltA' || id === 'deltM', note = await page.$eval('#flexNote', (e) => e.textContent);
       if (rides ? g1 > g0 - 1 : g1 < g0 - 1) fail(`${name}: with ${id} pulling the gap goes from ${g0.toFixed(1)} to ${g1.toFixed(1)} mm`);
       if (rides !== !!note) fail(`${name}: the note under the Contract slider is ${note ? 'shown' : 'missing'} for ${id}`);
+      // the Lift and Turn numbers say where the arm is drawn at the end of the pull, not where the sliders left it; and
+      // the Contract slider's number is the list's (the pull starts from the arm at rest, so both are measured from rest)
+      const rd = await page.evaluate((id) => { const P = window.__shoulder.frame.P, t = Math.round(P.rot); return { lift: document.getElementById('liftV').textContent, turn: document.getElementById('turnV').textContent,
+        wantLift: `${Math.round(P.elev)}°`, wantTurn: t === 0 ? '0°' : `${Math.abs(t)}° ${t > 0 ? 'out' : 'in'}`, flex: document.getElementById('flexV').textContent, list: document.querySelector(`#muscleList li[data-id="${id}"] b`).textContent }; }, id);
+      if (rd.lift !== rd.wantLift || rd.turn !== rd.wantTurn) fail(`${name}: with ${id} pulled the readouts say ${rd.lift} and ${rd.turn}, and the arm is drawn at ${rd.wantLift} and ${rd.wantTurn}`);
+      if (parseInt(rd.flex, 10) !== Math.abs(parseInt(rd.list.replace('−', '-'), 10))) fail(`${name}: with ${id} pulled the Contract slider says "${rd.flex}" and the list says "${rd.list}"`);
       await page.click('#conds button[data-id="full"]'); await settle(); }
     if (id === 'deltM' || id === 'infra') { await sweep('lift', 0, 150, n, `with ${id} pulling`); await sweep('turn', -60, 60, n, `with ${id} pulling`); await put('lift', 0); await put('turn', 0); }
     await page.click(`#muscleList li[data-id="${id}"] button`); await settle();
@@ -118,6 +124,12 @@ for (const [name, width, height, motion] of quick ? SIZES.slice(0, 1) : SIZES) {
   for (const id of await page.$$eval('#exs button', (b) => b.map((x) => x.dataset.id))) {
     await page.click(`#exs button[data-id="${id}"]`); await frame();
     const playing = await page.evaluate(() => window.__shoulder.st.play);
+    // the view turns to the front when the only muscles that work cannot be seen from behind (the subscapularis), and
+    // muscles the words call relaxed are not lit
+    { await settle(); const v = await page.evaluate(() => ({ z: window.__shoulder.frame.cam.dir[2], lit: window.__shoulder.frame.soft.filter((x) => x.glow > 0).map((x) => x.key) }));
+      if (id === 'internal' && !(v.z > 0)) fail(`${name}: in ${id} the view stays behind the shoulder, where the subscapularis cannot be seen`);
+      if (id === 'pendulum' && v.lit.length) fail(`${name}: the pendulum lights ${v.lit.join(', ')}, which its words call relaxed`);
+      await page.evaluate((p) => { window.__shoulder.st.play = p; }, playing); }                // (settling stops the exercise: put it back as it was)
     // a held pose (a plank) has no Play and no slider, and must not play
     if (EX_STILL.has(id)) {
       if (playing) fail(`${name}: the held ${id} pose plays`);

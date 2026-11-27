@@ -937,14 +937,13 @@ wrong with it, and what the common physical therapy exercises do to it.
   muscle has its own color, which is only the picture's; tendon is drawn white.
 - **Conditions**: healthy, tendinopathy (the tendon drawn half as thick again near its end), partial tear
   (half the thickness gone from the underside), full tear (a hole through, and the ball up to 3 mm higher, never nearer the acromion than 2 mm),
-  bursitis (the bursa 3 mm thick instead of 0.8 mm) and impingement (the tendon is lit in red where the
+  bursitis (the bursa 3 mm thick instead of 0.8 mm, drawn thinner where the acromion leaves less room) and impingement (a weak cuff lets the ball ride up 3 mm as the arm lifts to 60°; the tendon is lit in red where the
   acromion presses on it: where the model has to push it out of the bone's way). The sizes are drawn,
   not measured, and the page says so under each.
 - **Lift the arm** (0 to 150°, in the plane of the shoulder blade) and **Turn the arm** (60° in or out).
   The shoulder blade turns a third of the lift (Inman's 2 to 1 rhythm), and a little about the vertical
   where that is needed to keep it off the ribs (worked out ahead, `shoulder/data/pose.json`). In this
-  scan the acromion sits low, so the ball slides down in its socket just enough to keep 2 mm between the
-  bones (up to about 5 mm); real shoulders slide less, and the page says so.
+  scan the acromion sits low, so the ball slides down in its socket just enough to keep 2 mm between the bones and 0.8 mm over the supraspinatus tendon's end with a healthy bursa on it (up to about 7 mm); real shoulders slide less, and the page says so.
 - **Exercises**: five from the AAOS conditioning program (pendulum, sleeper stretch, turning out and in with
   a band, and turning out with the arm up), and nine more from a physical therapy program (windshield wiper,
   the PNF D2 diagonal lift, bent-over raise, arm back with a band, high row, arms out on a ball, foam roll
