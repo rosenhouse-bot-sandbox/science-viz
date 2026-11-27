@@ -160,14 +160,15 @@ export function inside(sh, i, t, d, ang = angles(sh, t)) {
 // The real sizes. The gears are measured by their module (the pitch diameter at the teeth's outer end, divided by
 // the tooth count): 1 mm on the cube, 0.9 mm on the octahedron, both standard sizes. That sets how many
 // millimeters one unit of the picture is, a little under 10 for the cube and a little over 10 for the octahedron.
-// Each gear turns on a 681X ball bearing (1.5 mm bore, 4 mm across, 2 mm wide), bought, not made.
+// Each gear turns on a 681XZZ ball bearing (shielded; 1.5 mm bore, 4 mm across, 2 mm wide, seven 0.6 mm balls: the
+// maker's catalog, nsk.com, 681XZZMC3P6), bought, not made.
 export const MODULE = { cube: 1, octa: 0.9 };
 export const unitMM = (sh) => MODULE[sh.solid] * sh.teeth / (2 * Math.sin(sh.alpha));
 export const MM = {
-  bearing: { d: 1.5, D: 4, B: 2, innerOD: 2.3, outerID: 3.25, balls: 7, ball: 0.8, pitch: 2.75 },
+  bearing: { d: 1.5, D: 4, B: 2, innerOD: 2.3, outerID: 3.25, balls: 7, ball: 0.6, pitch: 2.75 },
   spacer: { od: 2.2, id: 1.6 },
   // a shoulder screw: slotted flange, a boss that bears on the bearing's inner ring (so the flange clears the gear),
-  // a shoulder the bearing turns on, and an M1.4 thread into the core
+  // a shoulder the bearing's inner ring sits on, and an M1.4 thread into the core
   screw: { flange: 6, thick: 0.8, boss: 2.2, bossH: 0.3, shoulder: 1.5, thread: 1.4, pitch: 0.3, threadL: 2.5, slot: 0.4, slotD: 0.35, clamp: 0.05 },
   tap: { drill: 1.1, depth: 3, drillDepth: 3.6 },
   // the core: center to a gear's face; each edge cut back by a 45° chamfer (cube, its leg) or to a flat this wide
@@ -188,7 +189,7 @@ export function blank(sh) {
 // distance from the center along a tooth's line at polar angle th, at the back (R_OUT) or front (R_IN) cone
 export const endAt = (pr, th, R) => R / Math.cos(th - pr.alpha);
 
-// Each gear is a thin brass disc with its teeth on the rim, turning on a ball bearing pressed into its middle
+// Each gear is a thin brass disc with its teeth on the rim, turning on a ball bearing fitted into its middle
 // (flush with the outer face). A shoulder screw through the bearing holds it to the brass core, with a spacer
 // between the bearing's inner ring and the core. The core is the solid itself, its edges cut back so that they
 // clear the teeth. Sizes here are in units of the teeth's outer end; MM above has them in millimeters.

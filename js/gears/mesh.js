@@ -1,7 +1,7 @@
 // Gears on a cube and an octahedron: building the parts as triangle meshes, for the assembled toy (scene.js) and
 // for the workshop (shop.js). Every size comes from model.js. A mesh is plain arrays: positions, normals, and three
 // numbers per corner for the shader (the first says which material).
-import { R_IN, R_OUT, endAt } from './model.js?v=57c9eaea';
+import { R_IN, R_OUT, endAt } from './model.js?v=42230d28';
 
 export function grow() {
   const P = [], N = [], T = [], I = [];
@@ -57,46 +57,55 @@ export function box(g, lo, hi, t) {
 // and its teeth on a cone round the rim, every tooth surface aimed at the solid's center. The teeth's outer ends
 // lie on the back cone and their inner ends on the front cone. cut (for the workshop): for each gap between teeth,
 // how much of its length has been cut, from the outer end (0: not yet, 1: all); left out, every gap is cut.
-export function gearMesh(pr, P, cut = null, kind = 0) {
-  const half = pr.half, rows = pr.th.length, N = pr.N, a = pr.alpha;
-  const pts = [];          // round the rim: polar angle, azimuth, a crease?, and which gap the point belongs to (-1: a tooth top)
+export function gearMesh(pr, P, cut = null, kind = 0, gapKind = kind) {
+  const half = pr.half, rows = pr.th.length, N = pr.N, a = pr.alpha, rise = pr.tip - pr.root;
+  // round the rim: polar angle, azimuth, a crease?, which gap the point belongs to (-1: a tooth top), and for a gap's
+  // point: which side of the gap it is on, how far round from the gap's middle (ga), how far up the gap (fr, 0 to 1)
+  const pts = [];
   for (let k = 0; k < N; k++) {
     const c = k * 2 * half, rootW = pr.hw[0], L = k, R = (k + 1) % N;
-    pts.push({ th: pr.root, ps: c - half, sharp: false, gap: L });
-    for (let s = 1; s <= 3; s++) pts.push({ th: pr.root, ps: c - half + (half - rootW) * s / 3 * 0.999, sharp: s === 3, gap: L });
-    for (let r = 1; r < rows; r++) pts.push({ th: pr.th[r], ps: c - pr.hw[r], sharp: r === rows - 1, gap: L });
+    pts.push({ th: pr.root, ps: c - half, sharp: false, gap: L, side: 1, ga: 0, fr: 0 });
+    for (let s = 1; s <= 3; s++) pts.push({ th: pr.root, ps: c - half + (half - rootW) * s / 3 * 0.999, sharp: s === 3, gap: L, side: 1, ga: (half - rootW) * s / 3 * 0.999, fr: 0 });
+    for (let r = 1; r < rows; r++) pts.push({ th: pr.th[r], ps: c - pr.hw[r], sharp: r === rows - 1, gap: L, side: 1, ga: half - pr.hw[r], fr: (pr.th[r] - pr.root) / rise });
     for (let s = 1; s < 4; s++) pts.push({ th: pr.tip, ps: c - pr.hw[rows - 1] + 2 * pr.hw[rows - 1] * s / 4, sharp: false, gap: -1 });
-    for (let r = rows - 1; r >= 1; r--) pts.push({ th: pr.th[r], ps: c + pr.hw[r], sharp: r === rows - 1, gap: R });
-    for (let s = 3; s >= 1; s--) pts.push({ th: pr.root, ps: c + half - (half - rootW) * s / 3 * 0.999, sharp: s === 3, gap: R });
+    for (let r = rows - 1; r >= 1; r--) pts.push({ th: pr.th[r], ps: c + pr.hw[r], sharp: r === rows - 1, gap: R, side: -1, ga: half - pr.hw[r], fr: (pr.th[r] - pr.root) / rise });
+    for (let s = 3; s >= 1; s--) pts.push({ th: pr.root, ps: c + half - (half - rootW) * s / 3 * 0.999, sharp: s === 3, gap: R, side: -1, ga: (half - rootW) * s / 3 * 0.999, fr: 0 });
   }
-  const n = pts.length, g = grow(), K = [kind, 0, 0];
-  // the polar angle of a point at cone distance s. cut[k] is [f, d, d0]: the pass cutting gap k has gone f of the way
-  // along it, from the outer end, to depth d (1: full depth); behind it the gap is d0 deep (0: still the blank's top).
-  // A form cutter short of full depth leaves the gap's shape raised toward the tips by what is still to come off.
-  const partial = cut && cut.some((c) => c[0] > 0 && c[0] < 1 && c[1] !== c[2]);
-  const bands = partial ? 28 : 1, rise = pr.tip - pr.root;
-  const thAt = (j, s) => {
-    const p = pts[j]; if (!cut || p.gap < 0) return p.th;
-    const [f, d, d0] = cut[p.gap], dep = f > 0 && s >= R_OUT - f * (R_OUT - R_IN) - 1e-9 ? d : d0;
-    if (dep <= 0) return pr.tip;
-    const th = p.th + (1 - dep) * rise;
-    return (th - pr.tip) * Math.sign(rise) > 0 ? pr.tip : th;
-  };
-  const at = (j, s) => { const th = thAt(j, s); return sc(dir(th, pts[j].ps), endAt(pr, th, s)); };
+  const n = pts.length, g = grow();
+  // cut (the workshop): for each gap, false (not cut yet), true (finished), or what the cutter has done so far:
+  //   lev(s): the height of the gap's bottom above the finished bottom at cone distance s (under the cutter's arc
+  //           it rises; where the cutter has not been it is the blank's top),
+  //   wc(y): half the cutter's width at height y above its lowest point,
+  //   trimmed(side, s, y): 0 to 1, whether a side pass has taken that flank to its finished shape there.
+  // Until a flank is trimmed the gap is the cutter's own shape, the same width all along.
+  const partial = !!cut && cut.some((G) => G && G !== true);
+  const bands = partial ? 28 : 1, dl = a - pr.root;
   const S = []; for (let b = 0; b <= bands; b++) S.push(R_IN + (R_OUT - R_IN) * b / bands);
+  const place = (j, s) => {
+    const p = pts[j], G = cut && p.gap >= 0 ? cut[p.gap] : true;
+    if (G === true) return [p.th, p.ps];
+    if (!G) return [pr.tip, p.ps];
+    const top = endAt(pr, pr.tip, s) * Math.sin(rise), lev = Math.min(top, G.lev(s)), y = lev + (top - lev) * p.fr;
+    const th = Math.min(pr.tip, pr.root + Math.atan2(y * Math.cos(dl), s - y * Math.sin(dl))), rad = endAt(pr, th, s) * Math.sin(th);
+    const wCut = G.wc(y - lev) / rad, w = lev > 1e-9 ? wCut : Math.min(wCut, p.ga) + (p.ga - Math.min(wCut, p.ga)) * G.trimmed(p.side, s, y);
+    return [th, p.ps - p.side * (p.ga - w)];
+  };
+  const PL = S.map((s) => pts.map((_, j) => place(j, s)));
+  const plain = (j) => !cut || pts[j].gap < 0 || cut[pts[j].gap] === true;
+  const at = (j, b) => sc(dir(PL[b][j][0], PL[b][j][1]), endAt(pr, PL[b][j][0], S[b]));
   // smooth normals across a tooth's flank, sharp at the tooth's top corners and the root fillet's ends
-  const normalsAt = (s) => {
+  const normalsAt = (b) => {
     const seg = [];
-    for (let j = 0; j < n; j++) { const A = dir(thAt(j, s), pts[j].ps), B = dir(thAt((j + 1) % n, s), pts[(j + 1) % n].ps); seg.push(unit(sc(crs(sc([A[0] + B[0], A[1] + B[1], A[2] + B[2]], 0.5), sub(B, A)), -1))); }
+    for (let j = 0; j < n; j++) { const j1 = (j + 1) % n, A = dir(PL[b][j][0], PL[b][j][1]), B = dir(PL[b][j1][0], PL[b][j1][1]); seg.push(unit(sc(crs(sc([A[0] + B[0], A[1] + B[1], A[2] + B[2]], 0.5), sub(B, A)), -1))); }
     return seg;
   };
   for (let b = 0; b < bands; b++) {
-    const s0 = S[b], s1 = S[b + 1], seg0 = normalsAt(s0), seg1 = normalsAt(s1);
+    const seg0 = normalsAt(b), seg1 = normalsAt(b + 1);
     for (let j = 0; j < n; j++) {
-      const j1 = (j + 1) % n, p0 = at(j, s0), p1 = at(j, s1), p2 = at(j1, s1), p3 = at(j1, s0);
-      const same = thAt(j, s0) === thAt(j, s1) && thAt(j1, s0) === thAt(j1, s1);
+      const j1 = (j + 1) % n, p0 = at(j, b), p1 = at(j, b + 1), p2 = at(j1, b + 1), p3 = at(j1, b);
+      const K = [pts[j].gap >= 0 && pts[j1].gap >= 0 ? gapKind : kind, 0, 0];
       let na, nb, nc, nd;
-      if (same) {
+      if (plain(j) && plain(j1)) {
         const sm = (seg, q) => { if (pts[q].sharp) return null; const A = seg[(q - 1 + n) % n], B = seg[q]; return unit([A[0] + B[0], A[1] + B[1], A[2] + B[2]]); };
         na = sm(seg0, j) || seg0[j]; nb = sm(seg1, j) || seg1[j]; nc = sm(seg1, j1) || seg1[j]; nd = sm(seg0, j1) || seg0[j];
       } else { const f = unit(crs(sub(p1, p0), sub(p3, p0))); const fo = (f[0] * p0[0] + f[1] * p0[1] + f[2] * p0[2]) < 0 ? sc(f, -1) : f; na = nb = nc = nd = fo; }
@@ -104,11 +113,12 @@ export function gearMesh(pr, P, cut = null, kind = 0) {
       g.I.push(i0, i1, i2, i0, i2, i3);
     }
   }
+  const K = [kind, 0, 0];
   // the two ends: the teeth's ends on the back and front cones, then the flat disc in to the bore
   const bore = P.bearing.outer;
   for (const [s, z, sg] of [[R_OUT, P.front, 1], [R_IN, P.back, -1]]) {
     for (let j = 0; j < n; j++) {
-      const j1 = (j + 1) % n, A = [at(j, s), at(j1, s)], B = [j, j1].map((q) => sc(dir(pr.root, pts[q].ps), endAt(pr, pr.root, s)));
+      const b = sg > 0 ? bands : 0, j1 = (j + 1) % n, A = [at(j, b), at(j1, b)], B = [j, j1].map((q) => sc(dir(pr.root, pts[q].ps), endAt(pr, pr.root, s)));
       const C = [j, j1].map((q) => [bore * Math.cos(pts[q].ps), bore * Math.sin(pts[q].ps), z]);
       const cn = (q) => sc([Math.sin(a) * Math.cos(pts[q].ps), Math.sin(a) * Math.sin(pts[q].ps), Math.cos(a)], sg);
       const a0 = g.v(A[0], cn(j), K), a1 = g.v(A[1], cn(j1), K), b0 = g.v(B[0], cn(j), K), b1 = g.v(B[1], cn(j1), K);
@@ -144,6 +154,8 @@ function slottedFlange(g, R, z0, z1, w, depth, kind) {
 export function smallParts(P) {
   const B = P.bearing, mid = B.mid, w = B.width / 2, ch = 0.15 * (B.outer - B.outerID);
   const outer = grow(); lathe(outer, [[B.outerID, mid - w], [B.outer - ch, mid - w], [B.outer, mid - w + ch], [B.outer, mid + w - ch], [B.outer - ch, mid + w], [B.outerID, mid + w], [B.outerID, mid - w]], 3);
+  // its two shields: thin steel rings fixed in the outer ring, just clear of the inner one, a little inside each face
+  for (const e of [1, -1]) { const z1 = mid + e * (w - 0.06 / P.u), z0 = z1 - e * 0.1 / P.u; lathe(outer, [[B.innerOD + 0.06 / P.u, z0], [B.outerID, z0], [B.outerID, z1], [B.innerOD + 0.06 / P.u, z1], [B.innerOD + 0.06 / P.u, z0]], 3); }
   const inner = grow(); lathe(inner, [[B.inner, mid - w], [B.innerOD, mid - w], [B.innerOD, mid + w], [B.inner, mid + w], [B.inner, mid - w]], 3);
   const ball = grow(); sphere(ball, [0, 0, 0], B.ball, 3);
   const W = P.washer, washer = grow(); lathe(washer, [[W.inner, P.core], [W.inner, W.top], [W.outer, W.top], [W.outer, P.core], [W.inner, P.core]], 4);

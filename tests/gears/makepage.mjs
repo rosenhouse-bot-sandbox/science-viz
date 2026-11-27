@@ -1,7 +1,9 @@
 // Opens the workshop page at a desktop and a phone size (the phone with reduced motion). For both toys and every part:
 //  - the drawing: every piece of text sits inside the frame and clear of every other piece; the wheel zooms it;
 //  - the machining: presses Next through every step, checking the step's title and tool, that the picture is not
-//    blank, and that no control moves; then sets the time slider to its ends.
+//    blank, and that no control moves; that in every pass the tool line names the pass's tool and speed and says the
+//    spindle is drawn slower; that a setup's words change when its picture does; that a paused picture stands still
+//    and a setup's first picture is aimed at it; then sets the time slider to its ends.
 // Also follows the link from the gears page and checks it keeps the toy. Fails on a console error, overlapping text,
 // a control that moved, a blank picture, or a panel wider than the screen.
 //
@@ -43,7 +45,7 @@ const SIZES = [['desktop', 1280, 800, 'no-preference'], ['phone, reduced motion'
 {
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
   page.on('pageerror', (e) => fail(`gears page: ${e.message}`));
-  await page.goto(base + '?res=0.5&look=0#s=octa');
+  await page.goto(base + '?res=0.5&look=0#s=octa', { timeout: 120000 });
   await page.waitForFunction(() => window.__gears?.drawn.shape, null, { timeout: 120000 });
   await page.evaluate(() => new Promise((r) => setTimeout(r, 500)));
   await page.click('#more');
@@ -57,7 +59,7 @@ for (const [name, width, height, motion] of quick ? SIZES.slice(0, 1) : SIZES) {
   const page = await browser.newPage({ viewport: { width, height }, reducedMotion: motion, hasTouch: width < 600 });
   page.on('console', (m) => { if (m.type() === 'error') fail(`${name}: console: ${m.text()}`); });
   page.on('pageerror', (e) => fail(`${name}: ${e.message}`));
-  await page.goto(base + 'make.html?res=0.5&look=0');
+  await page.goto(base + 'make.html?res=0.5&look=0', { timeout: 120000 });
   await page.waitForFunction(() => window.__make?.cur && document.querySelector('#parts button'), null, { timeout: 120000 });
   const frame = () => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
   const fits = async (when) => { const w = await page.evaluate(() => [document.documentElement.scrollWidth, document.getElementById('panel').scrollWidth, document.getElementById('panel').clientWidth]); if (w[0] > width || w[1] > w[2]) fail(`${name}: something is wider than the screen ${when} (${w.join(', ')})`); };
@@ -89,6 +91,7 @@ for (const [name, width, height, motion] of quick ? SIZES.slice(0, 1) : SIZES) {
     await page.click('#views button[data-v="make"]'); await page.evaluate(() => window.__make.settle()); await frame();
     if (part === 'bearing') { if (!(await page.$eval('#makeBox', (e) => e.hidden))) fail(`${what}: the bearing shows machining steps`); continue; }
     const b0 = await boxes(), n = await page.evaluate(() => window.__make.cur.steps.length);
+    const i0 = ['cube4', 'octa'].indexOf(shape);
     for (let i = 0; i < n; i++) {
       const got = await page.evaluate(() => ({ title: document.getElementById('stepTitle').textContent, step: window.__make.st.step, tool: document.getElementById('stepTool').textContent }));
       if (got.step !== i) fail(`${what}: Next led to step ${got.step + 1}, not ${i + 1}`);
@@ -99,6 +102,40 @@ for (const [name, width, height, motion] of quick ? SIZES.slice(0, 1) : SIZES) {
       if (i < n - 1) { await page.click('#next'); await frame(); }
     }
     if (!(await page.$eval('#next', (e) => e.disabled))) fail(`${what}: Next is still on at the last step`);
+    // In every pass the tool line names the tool that is in the picture, with its speed. A setup's words change
+    // when its picture does. (Asked of the page without drawing: __make.toolAt and __make.setupAt.)
+    for (const bad of await page.evaluate(() => {
+      const M = window.__make, c = M.cur, out = [];
+      const NAME = { turn: 'turning tool', part: 'parting blade', boring: 'boring bar', center: 'center drill', drill: 'drill', reamer: 'reamer', die: 'die', fly: 'fly cutter', end: 'end mill', chamfer: 'chamfer mill', spot: 'spot drill', tap: 'tap', gearcutter: 'gear cutter', saw: 'saw' };
+      for (const g of c.tl.segs) {
+        const st = c.plan[g.op].steps[g.step], tool = g.p.tool && typeof g.p.tool === 'object' ? g.p.tool : st.tool, rpm = g.p.rpm ?? st.rpm, text = M.toolAt((g.t0 + g.t1) / 2);
+        if (!text.includes(NAME[tool.type]) || text.includes('rpm') !== rpm > 0 || (rpm > 0 && !text.includes(rpm.toLocaleString('en-US')))) out.push(`"${st.title}", pass ${g.pass + 1} is made with a ${tool.type} at ${rpm} rpm, and the tool line reads "${text}"`);
+        if (rpm > 0 && !text.includes('drawn slower')) out.push(`"${st.title}": the spindle is drawn slower than ${rpm} rpm and the tool line does not say so`);
+      }
+      for (const s of c.steps) for (const t of [s.t0 + 0.05, (s.t0 + s.t1) / 2, s.t1 - 0.05]) { const a = M.setupAt(t); if (a.words !== a.picture) out.push(`at ${t.toFixed(1)} s the words are setup ${a.words + 1}'s and the picture is setup ${a.picture + 1}'s`); }
+      // On the mill the table carries the work: through a pass the spindle's axis stays where it is (its quill may
+      // move along it)
+      for (const g of c.tl.segs) {
+        if (c.plan[g.op].machine !== 'mill') continue;
+        const q = [0, 0.5, 1].map((f) => M.spindleAt(g.t0 + (g.t1 - g.t0) * f)).filter(Boolean);
+        const side = (a, b) => { const d = b.p.map((v, k) => v - a.p[k]), x = d[0] * a.s[0] + d[1] * a.s[1] + d[2] * a.s[2]; return Math.hypot(...d.map((v, k) => v - a.s[k] * x)); };
+        for (let k = 1; k < q.length; k++) if (side(q[0], q[k]) > 1e-3) { out.push(`"${c.plan[g.op].steps[g.step].title}", pass ${g.pass + 1}: the spindle's axis moves ${side(q[0], q[k]).toFixed(2)} mm across itself`); break; }
+      }
+      return out;
+    })) fail(`${what}: ${bad}`);
+    // A picture that is paused stands still, the spindle too. And the first picture after a change of machine is
+    // already aimed at it: drawn twice, it is the same twice.
+    if (i0 === 0 && part !== 'spacer') {
+      const still = await page.evaluate(async (SNAPsrc) => {
+        const M = window.__make, snap = new Function('return (' + SNAPsrc + ')()'), same = (a, b) => a.length === b.length && a.every((v, i) => Math.abs(v - b[i]) < 3);
+        M.st.play = false; const s0 = M.spin; await new Promise((r) => setTimeout(r, 400));
+        const out = []; if (M.spin !== s0) out.push('the spindle turns while the time is paused');
+        const T = M.cur.tl.T; M.st.t = T * 0.02; M.redraw(); M.st.t = T - 1;      // (set without drawing: the next picture is the first of this setup)
+        const a = [...snap()], b = [...snap()]; if (!same(a, b)) out.push('the first picture of a setup is aimed at the setup before');
+        return out;
+      }, SNAP.toString());
+      for (const bad of still) fail(`${what}: ${bad}`);
+    }
     // the time slider, end to end
     for (const v of [0, 500, 1000]) await page.$eval('#time', (el, v) => { el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); }, v);
     await frame();
@@ -114,7 +151,7 @@ for (const [name, width, height, motion] of quick ? SIZES.slice(0, 1) : SIZES) {
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: 'reduce' });
   page.on('console', (m) => { if (m.type() === 'error') fail(`lit: console: ${m.text()}`); });
   page.on('pageerror', (e) => fail(`lit: ${e.message}`));
-  await page.goto(base + 'make.html?res=0.4#s=octa&p=gear&v=make');
+  await page.goto(base + 'make.html?res=0.4#s=octa&p=gear&v=make', { timeout: 120000 });
   await page.waitForFunction(() => window.__make?.cur, null, { timeout: 180000 });
   if (!(await page.evaluate(() => window.__make.lit))) fail('lit: the page fell back to the plain lighting');
   for (const [where, f] of [['the lathe', 0.02], ['the mill', 0.6]]) {

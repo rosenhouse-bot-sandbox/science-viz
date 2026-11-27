@@ -3,7 +3,7 @@
 // time, so dragging the time slider shows the same chips as playing does. Free-cutting brass breaks into small
 // curled pieces, so each chip is a short curled strip. Where a chip comes from, which way it flies and where it
 // lands are the picture's choice, not worked out from the cut.
-import { grow } from './mesh.js?v=57c9eaea';
+import { grow } from './mesh.js?v=42230d28';
 
 const G = 9810;                 // mm/s², down
 const PER_S = 60;               // chips a second of playing time
@@ -11,33 +11,38 @@ const FLY = 0.6;                // the longest a chip is drawn in the air, in se
 const PILE = 700;               // at most this many chips lie in the pile
 const rnd = (i, k) => { const x = Math.sin(i * 12.9898 + k * 78.233) * 43758.5453; return x - Math.floor(x); };
 
-// the times while cutting, for one setup: [t0, t1] of every pass whose step turns the spindle
+// the times while an edge is in metal, for one setup: for every pass under power, the part of it the replay found
+// metal coming off (cut.js), and how wide its chips are: as wide as the cut is deep
 export function cutting(plan, tl, op) {
   const out = [];
-  for (const q of tl.segs) if (q.op === op && plan[op].steps[q.step].rpm > 0) out.push([q.t0, q.t1]);
+  for (const q of tl.segs) if (q.op === op && q.p.eng && (q.p.rpm ?? plan[op].steps[q.step].rpm) > 0) { const d = q.t1 - q.t0; out.push([q.t0 + q.p.eng[0] * d, q.t0 + q.p.eng[1] * d, sizeOf(q.p.chip)]); }
   return out;
 }
+// a chip's drawn size for a cut `w` mm deep: its strip is that wide (see chip below), within what can be seen and what stays a chip
+const sizeOf = (w) => Math.min(2.2, Math.max(0.35, (w || 0.25) / 0.35));
 
 // spans: from cutting(); t: machine time; rate: machine seconds per second of playing time;
-// src: { at, vel(i) -> [vx, vy, vz] mm/s, size } where chips come off now; up: the world's up axis (1: y, 2: z);
-// floor(p): the height a chip stops at, at point p; pile(i) -> { p, size } where the i-th landed chip lies
+// src: { at, vel(i) -> [vx, vy, vz] mm/s } where chips come off now; up: the world's up axis (1: y, 2: z);
+// floor(p): the height a chip stops at, at point p; pile(i) -> where the i-th landed chip lies
 // pileRate: a fixed rate for the part, so that the pile grows with the machine time alone
 export function chipMesh({ spans, t, rate, pileRate = rate, src, up, floor, pile }) {
   const g = grow(), dt = rate / PER_S, life = FLY * rate;
-  let made = 0;
   // the chips in the air: made in the last moment, at the tool, flying out and falling
-  if (src) for (const [a, b] of spans) {
+  if (src) for (const [a, b, size] of spans) {
     if (b < t - life || a > t) continue;
     for (let i = Math.ceil(Math.max(a, t - life) / dt); i * dt <= Math.min(b, t); i++) {
       const s = (t - i * dt) / rate, v = src.vel(i), p = src.at.map((x, k) => x + v[k] * s - (k === up ? G * s * s / 2 : 0));
       if (p[up] < floor(p)) continue;
-      chip(g, p, src.size * (0.6 + 0.6 * rnd(i, 3)), i, s * 40);
+      chip(g, p, size * (0.6 + 0.6 * rnd(i, 3)), i, s * 40);
     }
   }
-  // the pile: one chip for every so many made so far
-  for (const [a, b] of spans) { if (a > t) break; made += (Math.min(b, t) - a) / (pileRate / PER_S); }
-  const n = Math.min(PILE, Math.floor(made / 2));
-  for (let i = 0; i < n; i++) { const q = pile(i); chip(g, q.p, q.size * (0.6 + 0.6 * rnd(i, 3)), i + 7919, 0); }
+  // the pile: one chip for every so many made so far, each the size its cut made it
+  let made = 0, n = 0;
+  for (const [a, b, size] of spans) {
+    if (a > t) break;
+    made += (Math.min(b, t) - a) / (pileRate / PER_S);
+    for (const to = Math.min(PILE, Math.floor(made / 2)); n < to; n++) chip(g, pile(n), size * (0.6 + 0.6 * rnd(n, 3)), n + 7919, 0);
+  }
   return g;
 }
 
