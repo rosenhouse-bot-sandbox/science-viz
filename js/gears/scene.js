@@ -1,10 +1,10 @@
 // Gears on a cube and an octahedron: the 3D picture. The parts are the ones the brass toy is made of: a core block,
-// and on each face a washer, a toothed gear with a ball bearing pressed into it, and a flanged screw. Sizes come
+// and on each face a washer, a toothed gear with a ball bearing fitted into it, and a flanged screw. Sizes come
 // from model.js; nothing here decides how the gears move.
-import { program, meshBuffers } from '../gl/gl.js?v=42230d28';
-import { bodyPlanes, bodyFaces, parts, MM } from './model.js?v=42230d28';
-import { grow, gearMesh, smallParts, faceWithHole, holeWalls } from './mesh.js?v=42230d28';
-import { GLSL, withLit } from './look.js?v=42230d28';
+import { program, meshBuffers } from '../gl/gl.js?v=cbfbfc46';
+import { bodyPlanes, bodyFaces, parts, MM, screwTurn } from './model.js?v=cbfbfc46';
+import { grow, gearMesh, smallParts, faceWithHole, holeWalls } from './mesh.js?v=cbfbfc46';
+import { GLSL, withLit } from './look.js?v=cbfbfc46';
 
 const VS = `#version 300 es
 layout(location=0) in vec3 aPos; layout(location=1) in vec3 aNor; layout(location=2) in vec3 aT;
@@ -15,8 +15,11 @@ precision highp float;
 in vec3 vW, vN, vT, vL; out vec4 o;
 uniform vec3 uCam, uTint; uniform mat3 uV; uniform int uKind; uniform float uHi;
 ${GLSL}
+// a thread is a right-hand helix with the screw's pitch: vT.y is the height along the axis in millimeters, vT.z how far
+// round in turns. The screw's and the hole's are counted from the same place, so the two are in step.
+float thread(){ return sin((vT.y / ${MM.screw.pitch.toFixed(3)} - vT.z) * 6.2832); }
 // a photographer's studio: a big soft box above and to the right, a dimmer one to the left, a dark floor.
-// It is fixed to the camera, so the metal reads the same from every side.
+// It stays in the room (uV: the room as the camera sees it from the opening view), so reflections move as the view turns.
 vec3 env(vec3 r){
   vec3 c = mix(vec3(0.16, 0.14, 0.12), vec3(0.45, 0.45, 0.47), smoothstep(-0.4, 0.8, r.y));
   c += vec3(3.0) * smoothstep(0.7, 0.93, dot(r, normalize(vec3(0.55, 0.65, 0.5))));
@@ -39,15 +42,16 @@ void main(){
   if (dot(n, v) < 0.) n = -n;
   vec3 base; float rough = 0.;               // rough: how much the reflection is blurred toward the plain diffuse light
   if (kind == 0) { base = uTint; rough = 0.25; }                                  // a gear: turned brass
+  else if (kind == 16) { base = uTint; rough = 0.3; }                             // a gear's flanks and gap floors: milled
   else if (kind == 1) { base = vec3(0.96, 0.84, 0.6); rough = 0.12;              // the screw's flange, polished, with lathe rings
     base *= 0.93 + 0.07 * sin(vT.y * 900.); }
   else if (kind == 2) { base = vec3(0.86, 0.67, 0.39); rough = 0.5;              // the core: brushed brass
     base *= 0.92 + 0.08 * hash(floor(vL * vec3(400., 6., 400.))); }
   else if (kind == 3) { base = vec3(0.8, 0.82, 0.85); rough = 0.1; }            // the bearing: polished steel
   else if (kind == 4) { base = vec3(0.9, 0.72, 0.44); rough = 0.3; }            // a washer
-  else if (kind == 6) { base = vec3(0.86, 0.67, 0.39) * (0.3 + 0.25 * smoothstep(-0.6, 0.6, sin(vT.y * 20.944))); rough = 0.5; }  // a tapped hole: 0.3 mm pitch
+  else if (kind == 6) { base = vec3(0.86, 0.67, 0.39) * (0.3 + 0.25 * smoothstep(-0.6, 0.6, thread())); rough = 0.5; }  // a tapped hole
   else if (kind == 8) { base = vec3(0.86, 0.67, 0.39) * 0.3; rough = 0.6; }      // inside a drilled hole
-  else { base = vec3(0.9, 0.74, 0.48) * (0.75 + 0.25 * sin(vT.y * 260.)); rough = 0.4; }   // the screw's thread
+  else { base = vec3(0.9, 0.74, 0.48) * (0.75 + 0.25 * thread()); rough = 0.4; }   // the screw's thread
 #ifdef LIT
   {
     if (kind == 9) {            // the desk: walnut, oiled; the light falls off away from the toy
@@ -60,12 +64,13 @@ void main(){
     const vec3 BR = vec3(0.98, 0.80, 0.52);
     vec3 F0 = BR; float rr = 0.2; int fin = 1;
     if (kind == 0) { F0 = BR * uTint / vec3(0.9, 0.7, 0.4); rr = 0.16; }       // a gear: turned faces
+    else if (kind == 16) { F0 = BR * uTint / vec3(0.9, 0.7, 0.4); rr = 0.2; fin = 0; }   // its flanks and gap floors: cut by a form cutter's sides and rim, no lathe rings
     else if (kind == 1) { F0 = vec3(0.99, 0.84, 0.58); rr = 0.07; }           // the screw's flange, polished
     else if (kind == 2) { F0 = vec3(0.96, 0.78, 0.50); rr = 0.22; fin = 2; }  // the core: fly cut
     else if (kind == 3) { F0 = vec3(0.78); rr = 0.06; fin = 0; }              // the bearing: polished steel
-    else if (kind == 6) { F0 = vec3(0.96, 0.78, 0.50) * (0.5 + 0.3 * smoothstep(-0.6, 0.6, sin(vT.y * 20.944))); rr = 0.3; fin = 0; }   // a tapped hole
+    else if (kind == 6) { F0 = vec3(0.96, 0.78, 0.50) * (0.5 + 0.3 * smoothstep(-0.6, 0.6, thread())); rr = 0.3; fin = 0; }   // a tapped hole
     else if (kind == 8) { F0 = vec3(0.96, 0.78, 0.50) * 0.6; rr = 0.35; fin = 0; }   // inside a drilled hole
-    else if (kind != 4) { F0 = BR * (0.8 + 0.2 * sin(vT.y * 260.)); rr = 0.25; fin = 0; }   // the screw's thread
+    else if (kind != 4) { F0 = BR * (0.8 + 0.2 * thread()); rr = 0.25; fin = 0; }   // the screw's thread
     if (uHi > 0.5) F0 *= 1.1;
     o = vec4(shade(F0, rr, true, fin, n, v, vW, vL), 1.); return;
   }
@@ -86,16 +91,17 @@ function upload(gl, g) {
   return m;
 }
 // the core, with a tapped hole in the middle of every gear's face: spotted, drilled Ø1.1 with the drill's point at
-// the bottom, tapped M1.4 (sizes from MM)
+// the bottom, tapped M1.4 (sizes from MM). The hole's thread is counted round from the gear's own x, as the screw's is.
 function bodyGeometry(sh) {
   const g = grow(), u = parts(sh).u, T = MM.tap, r = MM.screw.thread / 2, rd = T.drill / 2, spot = 0.75;
-  const holed = (n) => sh.normals.some((m) => m[0] * n[0] + m[1] * n[1] + m[2] * n[2] > 0.999);
+  const gearOn = (n) => sh.normals.findIndex((m) => m[0] * n[0] + m[1] * n[1] + m[2] * n[2] > 0.999);
   for (const f of bodyFaces(bodyPlanes(sh))) {
-    if (f.kind === 'face' && holed(f.n)) {
+    const i = f.kind === 'face' ? gearOn(f.n) : -1;
+    if (i >= 0) {
       const c = f.n.map((x) => x * MM.core[sh.solid] / u);
       faceWithHole(g, f.poly, f.n, c, spot / u, [2, 0, 0]);
       const pts = [[spot, 0], [r, spot - r], [r, T.depth], [rd, T.depth + (r - rd)], [rd, T.drillDepth], [0, T.drillDepth + rd / Math.tan(59 * Math.PI / 180)]];
-      holeWalls(g, f.n, c, pts.map(([a, b]) => [a / u, b / u]), [8, 6, 8, 8, 8], u);
+      holeWalls(g, f.n, c, pts.map(([a, b]) => [a / u, b / u]), [8, 6, 8, 8, 8], u, MM.core[sh.solid], [sh.frames[i].x, sh.frames[i].y]);
       continue;
     }
     const ids = f.poly.map((p) => g.v(p, f.n, [2, 0, 0]));
@@ -112,7 +118,7 @@ export function makeScene(gl, SHAPES, lit) {
   const outline = (g) => { const m = new Map(); for (let i = 0; i < g.P.length; i += 3) { const z = Math.round(g.P[i + 2] * 200) / 200, r = Math.hypot(g.P[i], g.P[i + 1]); if (!(m.get(z) >= r)) m.set(z, r); } return [...m]; };
   const reach = {};
   for (const sh of SHAPES) {
-    const P = parts(sh), sp = smallParts(P), bodyG = bodyGeometry(sh), gearG = gearMesh(sh.profile, P);
+    const P = parts(sh), sp = smallParts(P), bodyG = bodyGeometry(sh), gearG = gearMesh(sh.profile, P, null, 0, 16);
     let y0 = Infinity; for (let i = 1; i < bodyG.P.length; i += 3) y0 = Math.min(y0, bodyG.P[i]);
     reach[sh.id] = { y0, parts: [[outline(gearG), SPREAD.gear], [outline(sp.washer), SPREAD.washer], [outline(sp.screw), SPREAD.screw], [outline(sp.outer), SPREAD.bearing]] };
     kit[sh.id] = { P, gear: upload(gl, gearG), body: upload(gl, bodyG), mid: sp.mid,
@@ -153,7 +159,8 @@ export function makeScene(gl, SHAPES, lit) {
         const F = sh.frames[i], a = f.ang[i];
         gl.uniform1f(u.uHi, 0);
         gl.uniformMatrix4fv(u.uM, false, place(F, 0, SPREAD.washer * e)); K.washer.draw();
-        gl.uniformMatrix4fv(u.uM, false, place(F, 0, SPREAD.screw * e)); K.screw.draw();
+        // a screw comes out only by turning, one turn for each thread pitch, until its thread has left the hole
+        gl.uniformMatrix4fv(u.uM, false, place(F, screwTurn(SPREAD.screw * e * K.P.u), SPREAD.screw * e)); K.screw.draw();
         gl.uniformMatrix4fv(u.uM, false, place(F, 0, SPREAD.bearing * e)); K.inner.draw();
         gl.uniformMatrix4fv(u.uM, false, place(F, a, SPREAD.bearing * e)); K.outer.draw();
         const B = K.P.bearing;

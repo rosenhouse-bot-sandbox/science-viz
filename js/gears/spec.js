@@ -1,6 +1,6 @@
 // Gears on a cube and an octahedron: every part's real size in millimeters, for the workshop's drawings and for
 // the machining plans. Everything here is worked out from model.js; nothing is typed in twice.
-import { SHAPES, MM, MODULE, PRESSURE, R_IN, R_OUT, unitMM, blank, parts, bodyPlanes, bodyFaces } from './model.js?v=42230d28';
+import { SHAPES, MM, MODULE, PRESSURE, R_IN, R_OUT, unitMM, blank, parts, bodyPlanes, bodyFaces } from './model.js?v=cbfbfc46';
 
 const D = Math.PI / 180;
 export const by = Object.fromEntries(SHAPES.map((s) => [s.id, s]));
@@ -18,8 +18,8 @@ export function gearSpec(sh) {
     od: 2 * k.tipOut.r, addendum: m, dedendum: 1.25 * m, pressure: PRESSURE,
     formative: N / Math.cos(pr.alpha),        // the tooth count a spur gear would need to have teeth of this shape
     cutter: cutterNo(N / Math.cos(pr.alpha)),
-    thinning: 0.05 * Math.PI * m,             // the model thins each tooth by 5% of the tooth spacing at the pitch circle
-    backlash: 0.1 * Math.PI * m,              // so two gears in mesh have twice that between their teeth
+    thinning: sh.thin * Math.PI * m,          // how much thinner each tooth is than half the spacing, at the outer pitch circle (model.js)
+    backlash: 2 * sh.thin * Math.PI * m,      // so two gears in mesh have twice that between their teeth
     depthOut: R_OUT / Math.cos(pr.tip - pr.alpha) * Math.sin(pr.tip - pr.root) * u,   // a gap's depth at the outer end, square to its bottom
   };
 }

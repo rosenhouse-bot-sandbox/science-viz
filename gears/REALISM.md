@@ -12,6 +12,16 @@ Where two gears touch, their teeth move at the same speed. So two meshing gears 
 - A tooth of one gear sits in a gap of the other. This holds at every contact at once, all the way round every ring.
 - A tooth never enters another tooth. The gap left between them is small: a gear held still lets its neighbor rock only slightly.
 
+## A gear is driven only by a flank that touches it
+
+A tooth pushes only where it touches. A maker's standard sets the gap between meshing teeth, the backlash, for each module and size.
+
+- The backlash is within JIS B 1705 grade 0. Each tooth is thinned by the middle of that range: 0.054 mm on the cube, 0.050 mm on the octahedron. A pair has twice that.
+- The gear that is turned drives. Each driven tooth rests on the flank that pushes it, and all its backlash is on the other side.
+- Each mesh further from the turned gear lags by one more backlash.
+- When the turn changes way, the driven gears stand still while the driver crosses the backlash. Then they follow, the nearest first.
+- Turning another gear makes that gear the driver. The others stay where they are until a tooth pushes them.
+
 ## Bevel gears share one point
 
 The axes of all the gears meet at the center of the solid. Each gear's teeth lie on a cone with its point there.
@@ -26,9 +36,34 @@ The axes of all the gears meet at the center of the solid. Each gear's teeth lie
 - A gear turns on its bearing. The bearing's inner ring is held by the screw, and the outer ring turns with the gear.
 - A bearing's balls go round at about half the gear's speed, a little more here.
 - A screw goes into a threaded hole. Every screw has its hole, and every hole is where its screw is.
+- A bevel gear's teeth push it outward along its axis. The gear holds the bearing's outer ring and the screw clamps the inner ring, so the bearing takes that push.
 - The screw's boss presses the bearing's inner ring onto the spacer and the spacer onto the core. The screw's shoulder is a little shorter than the two, so its end touches nothing.
 - Taken apart, each part moves out along its own axis, in the order it was put on.
 - Gears that are apart do not mesh, so one does not turn another.
+
+## A screw moves along its axis only by turning
+
+A thread is a helix. A screw goes one pitch for each turn.
+
+- The screw's thread and the hole's are right-hand helices of the same pitch, 0.3 mm for M1.4, and they are in step.
+- Taken apart, a screw turns counterclockwise seen from its head, one turn for each 0.3 mm it comes out. Its 2.5 mm of thread take 8.3 turns. Once the thread has left the hole, the screw stops turning.
+
+## A spin is seen from a side
+
+Which way a wheel turns depends on the side it is seen from.
+
+- Gold and blue are the way each gear turns seen from outside the solid, each from its own side. Neighbors are always one of each.
+- Two gold gears on opposite faces of the cube turn opposite ways in space, as the two side gears of a differential do.
+- Gears that are apart do not turn, so the key is not shown then.
+
+## A thing at rest is held by what it touches
+
+- What a toy rests on does not turn, or the toy rolls along it.
+- Parts drawn apart in the air are an exploded view.
+
+## A solid is there from every side
+
+- The desk is there whichever way the view turns. The view stays above the desk, so the toy is never seen through it.
 
 ## A bought part has its maker's sizes
 
@@ -125,7 +160,14 @@ How sharp a reflection is depends on how smooth the surface is.
 
 - Freshly cut brass is bright. Bar stock is duller.
 - A turned surface has fine rings round its axis. A face cut by a fly cutter, or by the bottom of an end mill, has arcs. A face cut by a cutter's side has neither.
+- On a gear the faces, the bore, the back cone and the tooth tops are turned and carry the rings. The flanks and the gap floors are cut by the form cutter and do not.
 - A machine is painted cast iron and steel that has been used. Its reflections are broad and dull. Nothing on it is a mirror.
+
+## Lights stay in the room
+
+A light stays where it is when the viewer moves, so reflections slide over the metal as the view turns.
+
+- The lit look's room is fixed to the world. The plain look's studio lights are too: they are where the camera sees them from the opening view.
 
 ## Looks wrong, is right
 
@@ -135,4 +177,13 @@ How sharp a reflection is depends on how smooth the surface is.
 - The octahedron's core is held for its last cuts by two small screws. The V block takes the load: those cuts push the part into the V.
 - While the tailstock drills, the tool post stands back from the work, out toward the operator.
 - The four wide flats on the octahedron's block get narrow later. The faces cut most of each away.
+- A driven gear stands still for a moment when the turn changes way. That is the backlash.
+- Each tooth touches its neighbor on one side only, with a thin gap on the other.
+- A screw spins fast while the set comes apart: over eight turns in its first 2.5 mm.
+- A gear's wide flat face points outward and its teeth slope back toward the core. The cones' point is at the center of the solid, so the large end of each bevel gear is outside.
+- The teeth's inner ends hang below the gear's flat back and over the core's edges. The core's edges are cut back, and the test finds no contact.
+- The picture repeats after one tooth spacing. All teeth of a gear are the same.
+- The screw's slot and the bearing's inner ring stay still while the gear turns. The screw clamps the inner ring and the spacer to the core.
+- At full take-apart the screw is still through the bearing. The parts stay in order along the axis.
+- In the opening view the assembled toy seems to cast no shadow. The light is over the viewer's shoulder, so the shadow falls behind the toy.
 - The octahedron's core takes about three times as long as the cube's. About eight times as much metal comes off it.

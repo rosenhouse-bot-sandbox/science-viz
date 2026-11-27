@@ -1,7 +1,7 @@
 // Gears on a cube and an octahedron, the workshop: what holds the part in each setup, and how much of the part it
 // touches. The picture (make.js) places the vise, the collets and the V block from these; the tests check that every
 // holding surface is big enough at every cutting step. Lengths in mm, areas in mm².
-import { dot, bodyFaces } from './model.js?v=42230d28';
+import { dot, bodyFaces } from './model.js?v=cbfbfc46';
 
 export const VISE = { floor: 30, jawTop: 56 };            // heights above the table (the vise is drawn to these in shop.js)
 export const SQUARE = 7;                                   // half the square collet's bore, across its flats

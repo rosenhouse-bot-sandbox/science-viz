@@ -1,7 +1,7 @@
 // Gears on a cube and an octahedron: building the parts as triangle meshes, for the assembled toy (scene.js) and
 // for the workshop (shop.js). Every size comes from model.js. A mesh is plain arrays: positions, normals, and three
 // numbers per corner for the shader (the first says which material).
-import { R_IN, R_OUT, endAt } from './model.js?v=42230d28';
+import { R_IN, R_OUT, endAt } from './model.js?v=cbfbfc46';
 
 export function grow() {
   const P = [], N = [], T = [], I = [];
@@ -16,15 +16,17 @@ const unit = (a) => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] 
 export const SEG = 72;
 
 // a solid of revolution about z from a list of [radius, height] points; each segment is its own band, so edges
-// stay sharp. t2: the shader's second number (lathe rings go by radius; a thread's by height).
-export function lathe(g, pts, kind, seg = SEG, a0 = 0, a1 = 2 * Math.PI) {
+// stay sharp. t2: the shader's second number (lathe rings go by radius; a thread's by height). round: the third number
+// is how far round the axis the corner is, in turns from 0 to 1 (for a thread's helix).
+export function lathe(g, pts, kind, seg = SEG, a0 = 0, a1 = 2 * Math.PI, round = false) {
   for (let k = 0; k + 1 < pts.length; k++) {
     const [r0, z0] = pts[k], [r1, z1] = pts[k + 1], dr = r1 - r0, dz = z1 - z0, l = Math.hypot(dr, dz) || 1, nr = dz / l, nz = -dr / l;
     if (l < 1e-9) continue;
     const a = [], b = [];
     for (let s = 0; s <= seg; s++) {
       const t = a0 + s / seg * (a1 - a0), c = Math.cos(t), si = Math.sin(t), n = [nr * c, nr * si, nz];
-      a.push(g.v([r0 * c, r0 * si, z0], n, [kind, kind === 5 ? z0 : r0, 0])); b.push(g.v([r1 * c, r1 * si, z1], n, [kind, kind === 5 ? z1 : r1, 0]));
+      const w = round ? t / (2 * Math.PI) : 0;
+      a.push(g.v([r0 * c, r0 * si, z0], n, [kind, kind === 5 ? z0 : r0, w])); b.push(g.v([r1 * c, r1 * si, z1], n, [kind, kind === 5 ? z1 : r1, w]));
     }
     for (let s = 0; s < seg; s++) g.I.push(a[s], b[s], b[s + 1], a[s], b[s + 1], a[s + 1]);
   }
@@ -165,7 +167,10 @@ export function smallParts(P) {
   slottedFlange(screw, S.flange, z0, z1, S.slot, S.slotD, 1);
   lathe(screw, [[S.post, S.shoulderEnd], [S.post, P.front], [S.boss, P.front]], 1);
   lathe(screw, [[S.thread, S.shoulderEnd], [S.post, S.shoulderEnd]], 1);
-  lathe(screw, [[S.thread, tEnd + c], [S.thread, S.shoulderEnd]], 5);
+  // the thread: its height from the solid's center in millimeters and how far round, for the shader's helix
+  const th0 = screw.P.length / 3;
+  lathe(screw, [[S.thread, tEnd + c], [S.thread, S.shoulderEnd]], 5, SEG, 0, 2 * Math.PI, true);
+  for (let i = th0; i < screw.P.length / 3; i++) screw.T[3 * i + 1] *= P.u;
   lathe(screw, [[0, tEnd], [S.thread - c, tEnd], [S.thread, tEnd + c]], 1);
   return { outer, inner, ball, washer, screw, mid };
 }
@@ -203,13 +208,14 @@ export function faceWithHole(g, poly, n, c, r, t) {
   }
 }
 // the hole's walls, going in from c along -n: pts are [radius, depth] pairs, kinds the material of each stretch.
-// A thread's stretch carries its depth in millimeters (u: millimeters a unit) as the shader's second number.
-export function holeWalls(g, n, c, pts, kinds, u = 1) {
-  const [a, b] = across(n), from = g.P.length / 3;
-  for (let k = 0; k + 1 < pts.length; k++) { lathe(g, [[pts[k][0], -pts[k][1]], [pts[k + 1][0], -pts[k + 1][1]]], kinds[k], 48); }
+// Every corner carries its height along n in millimeters (u: millimeters a unit; z0: the face's height) as the shader's
+// second number, and how far round the hole it is, in turns from the direction a (ab: a and b, with a × b = n), as the third.
+export function holeWalls(g, n, c, pts, kinds, u = 1, z0 = 0, ab = across(n)) {
+  const [a, b] = ab, from = g.P.length / 3;
+  for (let k = 0; k + 1 < pts.length; k++) { lathe(g, [[pts[k][0], -pts[k][1]], [pts[k + 1][0], -pts[k + 1][1]]], kinds[k], 48, 0, 2 * Math.PI, true); }
   for (let i = from; i < g.P.length / 3; i++) {
     const x = g.P[3 * i], y = g.P[3 * i + 1], z = g.P[3 * i + 2], nx = g.N[3 * i], ny = g.N[3 * i + 1], nz = g.N[3 * i + 2];
     for (let k = 0; k < 3; k++) { g.P[3 * i + k] = c[k] + x * a[k] + y * b[k] + z * n[k]; g.N[3 * i + k] = nx * a[k] + ny * b[k] + nz * n[k]; }
-    g.T[3 * i + 1] = -z * u;
+    g.T[3 * i + 1] = z0 + z * u;
   }
 }

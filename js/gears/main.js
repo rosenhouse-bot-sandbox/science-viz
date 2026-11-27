@@ -1,12 +1,12 @@
 // Gears on a cube and an octahedron: the controller. The state is which solid, how far the gears have turned, and
 // the camera. Dragging a gear turns it about its own axis, and every gear it meshes with follows.
-import { SHAPES, angles, dot, cross, norm, R_IN, R_OUT, MM, unitMM } from './model.js?v=42230d28';
-import { makeScene } from './scene.js?v=42230d28';
-import { makeLook } from './look.js?v=42230d28';
-import { KEY } from './facts.js?v=42230d28';
-import { perspective, lookAt, mul4 } from '../gl/gl.js?v=42230d28';
-import { gamepad } from '../gamepad/gamepad.js?v=42230d28';
-import { touchSliders } from '../touch/slider.js?v=42230d28';
+import { SHAPES, angles, rest, drive, dot, cross, norm, R_IN, R_OUT, MM, unitMM } from './model.js?v=cbfbfc46';
+import { makeScene } from './scene.js?v=cbfbfc46';
+import { makeLook } from './look.js?v=cbfbfc46';
+import { KEY } from './facts.js?v=cbfbfc46';
+import { perspective, lookAt, mul4 } from '../gl/gl.js?v=cbfbfc46';
+import { gamepad } from '../gamepad/gamepad.js?v=cbfbfc46';
+import { touchSliders } from '../touch/slider.js?v=cbfbfc46';
 
 const $ = (id) => document.getElementById(id);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -18,27 +18,39 @@ const SHOWN = [by.cube4, by.octa];                     // (the cube with six gea
 const CAGE = (1 + MM.bearing.ball / MM.bearing.pitch) / 2;   // a bearing's balls go round at this share of the gear's speed (outer ring turning, inner held)
 const SPEED = 24 * D;                                  // how fast Play turns the gears, radians a second
 const VIEW = { yaw: 0.35, pitch: 0.85 };                // the camera at the start, and after a double click
-const st = { shape: 'octa', t: 0, e: 0, play: !reduced, color: false, yaw: VIEW.yaw, pitch: VIEW.pitch, hi: -1, held: -1 };
+// t: how far the driving gear (the one the visitor last turned; gear 0 at first) has turned
+const st = { shape: 'octa', t: 0, e: 0, play: !reduced, color: false, yaw: VIEW.yaw, pitch: VIEW.pitch, hi: -1, held: -1, driver: 0 };
 const free = { x: 0, y: 0, w: 1, h: 1 }, view = { W: 1, H: 1, dpr: 1 };
 const FOV = 26 * D, DIST = 6.2;
 const GOLD = [1.0, 0.72, 0.3], BLUE = [0.5, 0.64, 0.92], BRASS = [0.95, 0.74, 0.4];
 let scene = null, broken = false, dirty = true, raf = 0, last = 0, cam = null;
 const drawn = { t: 0, shape: '' };                     // what the last picture showed (for the tests)
+const lag = { id: '', p: [] };                         // each gear's own turn: the driven gears lag by the backlash (model.js)
 
 const shape = () => by[st.shape];
 // ---- the camera: it circles the solid's center ----
+// In the lit look the set stands on a desk, so the camera stays above the desk.
+let deskKey = '', deskY = 0;
+function desk() { const sh = shape(), k = sh.id + st.e; if (k !== deskKey) { deskKey = k; deskY = scene.lowest(sh, st.e) - 0.004; } return deskY; }
 function camera() {
-  const p = st.pitch, y = st.yaw, R = DIST * (1 + 0.85 * st.e), pos = [R * Math.cos(p) * Math.sin(y), R * Math.sin(p), R * Math.cos(p) * Math.cos(y)];
+  // taken apart, the camera backs away; further on a screen narrower than it is tall, so the parts stay on it
+  const R = DIST * (1 + 0.85 * st.e * Math.max(1, 1.12 * free.h / free.w));
+  if (look && scene) st.pitch = Math.max(st.pitch, Math.asin(clamp((desk() + 0.1) / R, -1, 1)));
+  const p = st.pitch, y = st.yaw, pos = [R * Math.cos(p) * Math.sin(y), R * Math.sin(p), R * Math.cos(p) * Math.cos(y)];
   const fov = 2 * Math.atan(Math.tan(FOV / 2) * view.H / free.h);
   const vp = mul4(perspective(fov, view.W / view.H, 0.5, 40), lookAt(pos, [0, 0, 0], [0, 1, 0]));
   // the picture is centered in the part of the screen the panel leaves free
   const ox = (free.x + free.w / 2) / view.W * 2 - 1, oy = 1 - (free.y + free.h / 2) / view.H * 2;
   for (let c = 0; c < 4; c++) { vp[c * 4] += ox * vp[c * 4 + 3]; vp[c * 4 + 1] += oy * vp[c * 4 + 3]; }
   const f = norm(pos.map((v) => -v)), r = norm(cross(f, [0, 1, 0])), u = cross(r, f);
-  // world to view, for the lights that stay with the camera (column-major)
-  const rot = new Float32Array([r[0], u[0], -f[0], r[1], u[1], -f[1], r[2], u[2], -f[2]]);
-  return { vp, pos, rot, f, r, u, tY: Math.tan(fov / 2) };
+  return { vp, pos, rot: LIGHTS, f, r, u, tY: Math.tan(fov / 2) };
 }
+// The plain look's studio lights stay in the room. They are placed as the camera sees them from the opening view
+// (world to that view, column-major).
+const LIGHTS = (() => {
+  const p = VIEW.pitch, y = VIEW.yaw, f = norm([-Math.cos(p) * Math.sin(y), -Math.sin(p), -Math.cos(p) * Math.cos(y)]), r = norm(cross(f, [0, 1, 0])), u = cross(r, f);
+  return new Float32Array([r[0], u[0], -f[0], r[1], u[1], -f[1], r[2], u[2], -f[2]]);
+})();
 // the ray from the camera through a point on the screen, in CSS pixels
 function ray(X, Y) {
   const c = cam, dx = (X - (free.x + free.w / 2)) / (view.H / 2) * c.tY, dy = -(Y - (free.y + free.h / 2)) / (view.H / 2) * c.tY;
@@ -76,19 +88,20 @@ function angleAbout(i, X, Y) {
 }
 
 function frameOf() {
-  const sh = shape(), ang = angles(sh, st.t);
+  const sh = shape();
+  if (lag.id !== sh.id) { lag.id = sh.id; st.driver = 0; lag.p = rest(sh, 0, st.t); } else drive(sh, lag.p, st.driver, st.t);
+  const ang = angles(sh, lag.p);
   const tint = sh.sign.map((s) => (!st.color ? BRASS : s > 0 ? GOLD : BLUE));
   const cage = ang.map((a, i) => (a - sh.phase[i]) * CAGE);
   return { sh, ang, tint, cage, e: st.e, hi: st.held >= 0 ? st.held : st.hi };
 }
-let look = null, deskKey = '', deskY = 0;
+let look = null;
 function draw() {
   cam = camera();
   const f = frameOf();
   if (!look) { scene.draw(f, cam, { x: 0, y: 0, w: cv.width, h: cv.height }); return; }
   // the set sits on a desk; taken apart, it is held up so that its lowest part just touches it
-  const k = f.sh.id + f.e; if (k !== deskKey) { deskKey = k; deskY = scene.lowest(f.sh, f.e) - 0.004; }
-  f.desk = deskY;
+  f.desk = desk();
   look.frame((c, vpx, hook) => scene.draw(f, c, vpx, hook), cam, cv.width, cv.height,
     { up: [0, 1, 0], lDir: [0.45, 1, 0.6], unit: 1 / unitMM(f.sh), exposure: 0.62, center: [0, deskY / 2, 0], size: 2.4 + 1.8 * f.e, near: 0.5, far: 40, aoR: 0.12 });
 }
@@ -113,7 +126,7 @@ function sync() {
   const pl = st.play && !apart ? 'Pause' : 'Play';
   if (shown.play !== pl) { shown.play = pl; $('play').setAttribute('aria-pressed', String(pl === 'Pause')); $('play').setAttribute('aria-label', pl); }
   $('color').checked = st.color;
-  set('key', st.color ? KEY : '');
+  set('key', st.color && !apart ? KEY : '');   // gears that are apart do not turn
   writeHash();
 }
 let hashTimer = 0;
@@ -158,7 +171,7 @@ function measure() {
 
 // ---- controls ----
 function turnBy(a) { if (st.e > 0) return; st.t += a; touch(); }   // (not wrapped: the slider shows it modulo a turn)
-function orbit(dx, dy) { st.yaw = (st.yaw + dx) % TAU; st.pitch = clamp(st.pitch + dy, -1.35, 1.35); touch(); }
+function orbit(dx, dy) { st.yaw = (st.yaw + dx) % TAU; st.pitch = clamp(st.pitch + dy, -1.35, 1.35); cam = camera(); touch(); }   // (camera() keeps it above the desk)
 function controls() {
   for (const s of SHOWN) { const b = document.createElement('button'); b.type = 'button'; b.textContent = s.name; b.dataset.id = s.id; b.addEventListener('click', () => choose(s.id)); $('shapes').append(b); }
   $('turn').addEventListener('input', (e) => { st.play = false; st.t = +e.target.value * D; touch(); });
@@ -171,7 +184,11 @@ function controls() {
     if (drag) return;
     cv.setPointerCapture?.(e.pointerId);
     const i = cam ? pick(e.clientX, e.clientY) : -1;
-    if (i >= 0 && st.e === 0) { st.held = i; drag = { id: e.pointerId, gear: i, a: angleAbout(i, e.clientX, e.clientY) }; cv.classList.add('turning'); }
+    if (i >= 0 && st.e === 0) {
+      // the gear under the finger drives from now on; the turn counts from where it is
+      if (i !== st.driver && lag.id === st.shape) { st.driver = i; st.t = lag.p[i]; }
+      st.held = i; drag = { id: e.pointerId, gear: i, a: angleAbout(i, e.clientX, e.clientY) }; cv.classList.add('turning');
+    }
     else drag = { id: e.pointerId, gear: -1, x: e.clientX, y: e.clientY };
     touch();
   });
@@ -220,7 +237,7 @@ function start() {
 }
 readHash(); controls(); measure();
 try { start(); } catch (e) { oops(e); }
-window.__gears = { st, drawn, SHAPES, get lit() { return !!look; }, get busy() { return st.play && st.e === 0; }, pick: (x, y) => pick(x, y),
+window.__gears = { st, drawn, SHAPES, lag, get lit() { return !!look; }, get aboveDesk() { return look && cam ? cam.pos[1] - desk() : null; }, get busy() { return st.play && st.e === 0; }, pick: (x, y) => pick(x, y),
   settle() { st.play = false; touch(); }, res(k) { res = k; measure(); }, redraw() { draw(); sync(); gl.finish(); },
   // where gear i's cap is on the screen, in CSS pixels, for the tests
   capAt(i) { const n = shape().normals[i], p = [n[0] * (R_OUT + 0.04), n[1] * (R_OUT + 0.04), n[2] * (R_OUT + 0.04), 1], m = cam.vp;

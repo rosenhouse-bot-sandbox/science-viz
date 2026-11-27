@@ -1081,8 +1081,11 @@ the rest turn with it. A Take apart slider spreads the parts out along each gear
   half-angle is half that: 45° and 35.26°. All gears are the same size, so all turn at the same speed.
 - **The teeth** are cut as bevel-gear machines cut them: the blank is rolled against a flat crown gear with straight
   20° tooth sides, computed when the page loads. Two gears cut by the same crown gear mesh at any angle between
-  their axes. Each tooth is thinned by 5% of the tooth spacing. The cube's gears have 14 teeth and the
-  octahedron's 13. Each gear is turned so that a tooth faces a gap at each of its contacts. Around every corner
+    their axes. Each tooth is thinned by the middle of the range JIS B 1705 (bevel gears, grade 0) gives for its
+  module and size: 0.054 mm on the cube and 0.050 mm on the octahedron, so a pair has 0.11 and 0.10 mm of
+  backlash. The gear the visitor turns drives. Each driven tooth rests on its driver's flank, and when the turn
+  changes way the driven gears stand still until the driver has crossed the backlash. The cube's gears have 14
+  teeth and the octahedron's 13. Each gear is turned so that a tooth faces a gap at each of its contacts. Around every corner
   these turns agree for any tooth count; the test tries counts from 9 to 23. With 14 teeth (any count of 2 more
   than a multiple of 4, with the ring set as here) all six gears on a cube would also sit together at rest.
 - **The parts** (`parts()` in model.js, drawn by `js/gears/scene.js`), as in the toy: a brass core, and on each face
@@ -1090,25 +1093,31 @@ the rest turn with it. A Take apart slider spreads the parts out along each gear
   teeth's inner ends reach below the gear's flat back, so the core's faces sit lower and the washer is thick; the
   core's edges are cut back. The test checks that the core touches no gear. The toy's own gears are flat; these are
   bevel gears so that they also mesh at 70.5°. The bearings' balls go round at 0.61 of the gear's speed, as balls
-  do with the outer ring turning and the inner ring held. Taking the parts apart is a slider the visitor moves; it
-  never plays by itself, and the gears cannot be turned while the parts are apart.
+    do with the outer ring turning and the inner ring held. Taking the parts apart is a slider the visitor moves; it
+  never plays by itself, and the gears cannot be turned while the parts are apart. Each screw turns as it comes
+  out, one turn for each 0.3 mm thread pitch, until its thread has left the hole.
 - **How it looks** (`js/gears/look.js`, shared with the workshop page): the metal reflects a lit room (pale walls
-  with shelves, tube lights overhead, a window), and each part carries the marks of how it is made: fine turning
-  grooves round a gear's axis, fly cutter arcs on the core. The tube lights cast a soft shadow from a shadow map,
+    with shelves, tube lights overhead, a window), and each part carries the marks of how it is made: fine turning
+  grooves round a gear's axis (not on the tooth flanks and gap floors, which the form cutter makes), fly cutter
+  arcs on the core. The tube lights cast a soft shadow from a shadow map,
   and gaps that little light reaches are darkened from the depth picture. The set sits on a walnut desk; taken
-  apart, it is held up so that its lowest part just touches the desk, and from below the desk is not drawn. The
+    apart, it is held up so that its lowest part just touches the desk, and the view cannot go below the desk. The
   room, the desk and the marks are the page's own choice, not measured. A browser that cannot draw into a
-  floating-point picture gets the plain lighting the page had before. In the workshop, steel is a satin mid gray,
+    floating-point picture gets the plain lighting the page had before; its lights stay in the room as the view
+  turns. In the workshop, steel is a satin mid gray,
   black oxide a dark gray and the machines' cast iron lumpy under its paint, as in photos of real shops.
 - **Controls**: the shape, Play (off with reduced motion), a Spin slider, Take apart, and a tick box that colors
-  the gears by the way they spin (gold and blue). Dragging off the gears, or the arrow keys on the picture, turns
+    the gears by the way they spin, seen from outside (gold and blue). Dragging off the gears, or the arrow keys on the picture, turns
   the view; a double click puts it back. A controller's right stick turns the view, the triggers turn the gears,
   and the bumpers change the shape.
 - **Tests**: `node tests/gears/model.mjs` (no browser) checks which sets can turn against an independent search for
   a loop with an odd count, turns every meshing pair through two tooth spacings and fails if a tooth enters
-  another, checks that a gear held still lets its neighbor turn no more than the backlash, and checks the core and
-  the gears that do not mesh. `node tests/gears/page.mjs` (`--quick` for the desktop only) presses every control at
-  a desktop and a phone size, drags a gear, and sweeps Spin and Take apart. After changing any file under
+    another, checks that a gear held still lets its neighbor turn by the backlash and no more, that the backlash is
+  within JIS B 1705 grade 0, that each driven tooth rests on its driver's flank, that the driven gears wait while a
+  driver turned back crosses the backlash, and that a screw turns once for each thread pitch it comes out, and
+  checks the core and the gears that do not mesh. `node tests/gears/page.mjs` (`--quick` for the desktop only) presses every control at
+    a desktop and a phone size, drags a gear, sweeps Spin and Take apart, and checks that the lit view stays above
+  the desk. After changing any file under
   `js/gears/` or `css/gears.css`, run `node tests/stamp.mjs gears`.
 - **Making it** (`gears/make.html`, linked from the gears page as "How to make the parts"): for each toy and each
   part, a dimensioned drawing and the part being machined from brass, step by step.

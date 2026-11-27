@@ -124,7 +124,7 @@ for (const [name, width, height, motion] of quick ? SIZES.slice(0, 1) : SIZES) {
   await page.close();
 }
 // The lit look (js/gears/look.js), which draws slowly without a graphics card: it starts without an error, draws
-// both shapes, and taking the set apart (which also lowers the desk under it) does not jump.
+// both shapes, taking the set apart (which also lowers the desk under it) does not jump, and the view stays above the desk.
 {
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: 'reduce' });
   page.on('console', (m) => { if (m.type() === 'error') fail(`lit: console: ${m.text()}`); });
@@ -140,6 +140,11 @@ for (const [name, width, height, motion] of quick ? SIZES.slice(0, 1) : SIZES) {
   for (let k = 0; k <= 10; k++) { await page.$eval('#apart', (el, v) => { el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); }, (k / 10).toFixed(2)); shots.push(await page.evaluate(SNAP)); }
   const d = shots.slice(1).map((s, i) => diff(shots[i], s)), med = d.slice().sort((a, b) => a - b)[d.length >> 1];
   d.forEach((x, i) => { if (x > 3 * med + 4) fail(`lit: the picture jumped taking apart from ${i / 10} to ${(i + 1) / 10} (${x.toFixed(1)} against ${med.toFixed(1)})`); });
+  // the set stands on the desk: the view cannot go below it, whole or apart
+  for (const e of [0, 1]) {
+    const above = await page.evaluate((e) => { const G = window.__gears; G.st.e = e; G.st.pitch = -1.3; G.redraw(); return G.aboveDesk; }, e);
+    if (!(above > 0)) fail(`lit: with the view turned down ${e ? 'and the set apart ' : ''}the camera went below the desk (${above})`);
+  }
   console.log(`lit: done (taking apart, steps ${d.map((x) => x.toFixed(1)).join(' ')})`);
   await page.close();
 }

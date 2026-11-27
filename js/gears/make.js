@@ -1,20 +1,20 @@
 // Gears on a cube and an octahedron, the workshop: for each part, its dimensioned drawing, and how it is made on a
 // lathe and a mill, step by step. The state is which toy, which part, which view, the machine time, and the camera.
-import { MM, parts, unitMM } from './model.js?v=42230d28';
-import { planOf, startOf, MANDREL, PARTS, NAMES, by, SHOWN } from './plan.js?v=42230d28';
-import { gearSpec, screwSpec, coreSpec, bearingSpec, cutterProfile, sideSetting } from './spec.js?v=42230d28';
-import { VISE, SQUARE, VBLOCK, boxOf, viseSeat, barSides, gripOf } from './fixture.js?v=42230d28';
-import { timeline, makeReplay, gapCut, DZ } from './cut.js?v=42230d28';
-import { makeLook } from './look.js?v=42230d28';
-import { makeShop, M4, TURN, turnedMesh, milledMesh, holeMesh, slotMesh } from './shop.js?v=42230d28';
-import { grow, lathe, box, gearMesh, smallParts } from './mesh.js?v=42230d28';
-import { collisions, turnedEnvelope } from './collide.js?v=42230d28';
-import { cutting, chipMesh, rnd } from './chips.js?v=42230d28';
-import { drawing } from './drawing.js?v=42230d28';
-import { perspective, lookAt, mul4 } from '../gl/gl.js?v=42230d28';
-import { dot, cross, norm, bodyFaces } from './model.js?v=42230d28';
-import { gamepad } from '../gamepad/gamepad.js?v=42230d28';
-import { touchSliders } from '../touch/slider.js?v=42230d28';
+import { MM, parts, unitMM } from './model.js?v=cbfbfc46';
+import { planOf, startOf, MANDREL, PARTS, NAMES, by, SHOWN } from './plan.js?v=cbfbfc46';
+import { gearSpec, screwSpec, coreSpec, bearingSpec, cutterProfile, sideSetting } from './spec.js?v=cbfbfc46';
+import { VISE, SQUARE, VBLOCK, boxOf, viseSeat, barSides, gripOf } from './fixture.js?v=cbfbfc46';
+import { timeline, makeReplay, gapCut, DZ } from './cut.js?v=cbfbfc46';
+import { makeLook } from './look.js?v=cbfbfc46';
+import { makeShop, M4, TURN, turnedMesh, milledMesh, holeMesh, slotMesh } from './shop.js?v=cbfbfc46';
+import { grow, lathe, box, gearMesh, smallParts } from './mesh.js?v=cbfbfc46';
+import { collisions, turnedEnvelope } from './collide.js?v=cbfbfc46';
+import { cutting, chipMesh, rnd } from './chips.js?v=cbfbfc46';
+import { drawing } from './drawing.js?v=cbfbfc46';
+import { perspective, lookAt, mul4 } from '../gl/gl.js?v=cbfbfc46';
+import { dot, cross, norm, bodyFaces } from './model.js?v=cbfbfc46';
+import { gamepad } from '../gamepad/gamepad.js?v=cbfbfc46';
+import { touchSliders } from '../touch/slider.js?v=cbfbfc46';
 
 const $ = (id) => document.getElementById(id);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;

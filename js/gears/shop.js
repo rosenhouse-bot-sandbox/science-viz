@@ -2,11 +2,11 @@
 // carriage, cross slide, compound, tool post, tailstock) and a knee mill (table, vise, spin indexer, tilting dividing
 // head, a head that tilts), drawn round the part being made. All sizes in millimeters; the machines are a typical
 // bench lathe's and a small knee mill's. The part's shape comes from cut.js; nothing here decides it.
-import { program } from '../gl/gl.js?v=42230d28';
-import { GLSL, withLit } from './look.js?v=42230d28';
-import { grow, lathe, box, poly, sphere, gearMesh } from './mesh.js?v=42230d28';
-import { bodyFaces, dot, cross, norm } from './model.js?v=42230d28';
-import { outline } from './cut.js?v=42230d28';
+import { program } from '../gl/gl.js?v=cbfbfc46';
+import { GLSL, withLit } from './look.js?v=cbfbfc46';
+import { grow, lathe, box, poly, sphere, gearMesh } from './mesh.js?v=cbfbfc46';
+import { bodyFaces, dot, cross, norm } from './model.js?v=cbfbfc46';
+import { outline } from './cut.js?v=cbfbfc46';
 
 const VS = `#version 300 es
 layout(location=0) in vec3 aPos; layout(location=1) in vec3 aNor; layout(location=2) in vec3 aT;

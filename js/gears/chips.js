@@ -3,7 +3,7 @@
 // time, so dragging the time slider shows the same chips as playing does. Free-cutting brass breaks into small
 // curled pieces, so each chip is a short curled strip. Where a chip comes from, which way it flies and where it
 // lands are the picture's choice, not worked out from the cut.
-import { grow } from './mesh.js?v=42230d28';
+import { grow } from './mesh.js?v=cbfbfc46';
 
 const G = 9810;                 // mm/s², down
 const PER_S = 60;               // chips a second of playing time
