@@ -191,7 +191,7 @@ Before pushing:
   `js/shoulder/`, `css/shoulder.css` or `shoulder/data/`, run `node tests/stamp.mjs shoulder`.
 - For Overshoot saccades, run `node tests/saccade/model.mjs` (no browser needed) after changing the model: it fails if
   saccade timing leaves the measured main sequence, a measured gain is not the gain set, a saccade's kind does not fit
-  its definition, a muscle pulls or shortens the wrong way, a muscle enters the eye, or the eyes twist. Then
+  its definition, a muscle pulls or shortens the wrong way, a muscle enters the eye or another muscle, the trace steps where there is no saccade, a caption is untrue at some target speed, or the eyes twist. Then
   `node tests/saccade/page.mjs` (`--quick` for the desktop only). Numbers on screen come from `js/saccade/model.js`;
   anything that is the page's own choice, not a measured value, says so in `js/saccade/facts.js`. After changing any
   file under `js/saccade/` or `css/saccade.css`, run `node tests/stamp.mjs saccade`.

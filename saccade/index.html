@@ -19,7 +19,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..700&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="../css/slider.css">
-<link rel="stylesheet" href="../css/saccade.css?v=7ec01cf7">
+<link rel="stylesheet" href="../css/saccade.css?v=5e5ad9d2">
 </head>
 <body>
 <canvas id="view" role="img" aria-label="Two eyes, with the muscles that turn them, following a target on a screen, at the chosen zoom" aria-describedby="capTitle capBody"></canvas>
@@ -60,7 +60,7 @@
 
   <figure class="tracebox">
     <canvas id="trace" role="img" aria-label="Graph over the last 2 seconds of how far the eyes are ahead of the target or behind it"></canvas>
-    <figcaption class="fine">How far the eyes are <b>ahead</b> of the target or <b>behind</b> it, over the last 2 s of the model's time, in degrees (up to 3°). <span class="k orange">Orange dots</span>: where overshoot saccades landed, ahead of the target after starting behind it.</figcaption>
+    <figcaption class="fine">How far the eyes are <b>ahead</b> of the target or <b>behind</b> it, over the last 2 s of the model's time, in degrees (up to 3°). <span class="k orange">Orange dots</span>: where overshoot saccades landed, ahead of the target after starting behind it.<span id="traceT"></span></figcaption>
   </figure>
 
   <div class="cap" id="cap" aria-live="polite">
@@ -84,7 +84,7 @@
   <dl class="nums" id="nums">
     <div class="wide big"><dd id="landV"></dd><dt>where the last saccade landed</dt></div>
     <div><dd id="gainV"></dd><dt>eye speed ÷ target speed while following, last 2 s (the pursuit gain)</dt></div>
-    <div><dd id="overV" class="orange"></dd><dt>saccades in the last 5 s that were overshoot saccades</dt></div>
+    <div><dd id="overV" class="orange"></dd><dt id="overT">saccades in the last 5 s that were overshoot saccades</dt></div>
     <div class="wide"><dd id="lastV"></dd><dt>the last saccade's size, time and top speed</dt></div>
   </dl>
 
@@ -99,7 +99,7 @@
   <details class="sources"><summary>Sources for what this page says</summary><ol id="sources"></ol></details>
 </main>
 
-<script type="module" src="../js/saccade/main.js?v=7ec01cf7"></script>
+<script type="module" src="../js/saccade/main.js?v=5e5ad9d2"></script>
 <script type="module" src="../js/pwa.js"></script>
 </body>
 </html>

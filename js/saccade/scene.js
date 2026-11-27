@@ -1,8 +1,8 @@
 // Overshoot saccades: the 3D picture. Two eyes with their six muscles and optic nerves, and the screen they
 // watch, all at true size in mm. The screen's picture (grid, target, where the eyes land) is drawn on a 2D canvas
 // and shown on the screen as a texture. Nothing here decides anything: it draws what model.js computes.
-import { program, meshBuffers, normals, perspective, lookAt, mul4 } from '../gl/gl.js?v=7ec01cf7';
-import { EYE_R, MUSCLES, OPTIC, SCREEN, musclePath, eyeCenter, rot, onScreen } from './model.js?v=7ec01cf7';
+import { program, meshBuffers, normals, perspective, lookAt, mul4 } from '../gl/gl.js?v=5e5ad9d2';
+import { EYE_R, MUSCLES, OPTIC, SCREEN, TUBE, tube, eyeMuscles, eyeCenter, rot, onScreen } from './model.js?v=5e5ad9d2';
 
 const VS = `#version 300 es
 layout(location=0) in vec3 aPos; layout(location=1) in vec3 aNor; layout(location=2) in vec3 aT;
@@ -67,13 +67,16 @@ void main(){
   }
   if (uKind == 5) {                    // a muscle (vT.x: mm from the insertion, vT.y: how hard it is driven, vT.z: tendon length)
     float tendon = 1. - smoothstep(vT.z - 4., vT.z + 4., vT.x);
-    vec3 m = mix(vec3(0.62, 0.2, 0.18), vec3(1.0, 0.32, 0.25), clamp(vT.y, 0., 1.));
+    // A muscle driven harder is drawn brighter, but only where it faces the camera. Toward its outline it keeps one
+    // color whatever its signal, so that a brighter muscle does not look wider: its width follows its length alone.
+    float face = smoothstep(0.25, 0.75, max(dot(n, normalize(uCam - vW)), 0.));
+    vec3 m = mix(vec3(0.62, 0.2, 0.18), vec3(1.0, 0.32, 0.25), clamp(vT.y, 0., 1.) * face);
     if (vT.y < -0.5) m = vec3(1.0, 0.78, 0.3);              // the muscle picked in the panel, drawn in gold
     vec3 base = mix(m, vec3(0.95, 0.92, 0.86), tendon);
     gRim = 0.25 * (1. - tendon); gRimCol = vec3(1.0, 0.85, 0.8);
     vec3 c = lit(base, n, mix(0.12, 0.15, tendon), mix(18., 30., tendon)) + base * 0.1 * tendon;
-    c += vec3(1.0, 0.35, 0.2) * 0.35 * clamp(vT.y - 0.6, 0., 1.) * (1. - tendon);
-    if (vT.y < -0.5) c += vec3(0.25, 0.18, 0.05);   // a muscle driven hard is drawn brighter
+    c += vec3(1.0, 0.35, 0.2) * 0.35 * clamp(vT.y - 0.6, 0., 1.) * (1. - tendon) * face;
+    if (vT.y < -0.5) c += vec3(0.25, 0.18, 0.05);
     o = vec4(c, 1.); return;
   }
   o = vec4(lit(uCol, n, 0.15, 30.), uAlpha);
@@ -128,36 +131,17 @@ function torus(R, rt, n1, n2) {
   return { pos: new Float32Array(pos), nor: new Float32Array(nor), idx: new Uint16Array(idx), tt: new Float32Array(pos.length) };
 }
 
-const NS = 56, NA = 14;                                  // samples along a muscle and round it
+const NS = TUBE.ns, NA = TUBE.na;                        // samples along a muscle and round it (the shapes are made in model.js)
 function tubeIndex(ns, na) {
   const idx = [];
   for (let i = 0; i < ns - 1; i++) for (let j = 0; j < na; j++) { const a = i * (na + 1) + j, b = a + na + 1; idx.push(a, b, a + 1, a + 1, b, b + 1); }
   return new Uint16Array(idx);
 }
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]], mul = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
-const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2], cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const norm = (a) => { const l = Math.hypot(...a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
-const smooth = (x) => { const t = Math.min(1, Math.max(0, x)); return t * t * (3 - 2 * t); };
 
-// The shape of a muscle across its length: half width and half thickness (mm) at s mm from its origin and e mm from
-// its insertion. Rectus muscles are about 10 mm wide and 2 to 4 mm thick at the belly [the sizes are rounded]; each
-// ends in a thin flat tendon at the eye.
-function profile(m, s, e) {
-  const tw = m.width / 2;
-  if (m.id === 'so') {
-    // the superior oblique: a round belly to near the loop at the front, then a round tendon through it, which
-    // fans out flat on its way to the eye
-    if (e > m.tendon + 10) return [1.0 + 1.3 * smooth(s / 10), 1.0 + 1.1 * smooth(s / 10)];
-    if (e > m.tendon) { const f = smooth((e - m.tendon) / 10); return [1.0 + 1.3 * f, 0.9 + 1.2 * f]; }
-    const f = smooth(1 - e / m.tendon * 1.25); return [1.1 + (tw - 1.1) * f, 1.0 - 0.84 * f];
-  }
-  const belly = m.id === 'io' ? [4.3, 1.8] : [4.6, 2.0];
-  const w0 = 1.4 + (belly[0] - 1.4) * smooth((s - 2) / 12), h0 = 1.0 + (belly[1] - 1.0) * smooth((s - 2) / 12);
-  const toT = smooth((e - m.tendon) / 7);                 // 1 on the belly, 0 at the start of the tendon
-  const w = m.id === 'io' ? w0 + (tw - w0) * (1 - toT) : w0 * toT + (tw * (0.85 + 0.15 * (1 - e / Math.max(1, m.tendon)))) * (1 - toT);
-  const h = h0 * toT + 0.16 * (1 - toT);
-  return [w, h];
-}
+const GAZE_RING = 0.75;                                  // radius in degrees of the ring round the place the eyes look (the target's is 0.4)
 
 export function makeScene(gl) {
   const P = program(gl, VS, FS), u = P.u;
@@ -178,41 +162,13 @@ export function makeScene(gl) {
   const loop = mk(torus(1.9, 0.55, 20, 8));                 // the trochlea: the loop the superior oblique runs through
   // the muscles and optic nerves change shape every frame
   const tIdx = tubeIndex(NS, NA), tubes = [];
-  const tube = () => { const b = meshBuffers(gl, NS * (NA + 1), tIdx, true); return { b, pos: new Float32Array(NS * (NA + 1) * 3), nor: new Float32Array(NS * (NA + 1) * 3), tt: new Float32Array(NS * (NA + 1) * 3) }; };
-  for (let i = 0; i < 2 * (MUSCLES.length + 1); i++) tubes.push(tube());
+  const buffers = () => ({ b: meshBuffers(gl, NS * (NA + 1), tIdx, true), tt: new Float32Array(NS * (NA + 1) * 3) });
+  for (let i = 0; i < 2 * (MUSCLES.length + 1); i++) tubes.push(buffers());
   const beam = meshBuffers(gl, 8, new Uint16Array([0, 1, 2, 1, 3, 2, 4, 5, 6, 5, 7, 6]), true);
   // the screen's picture
   const tex = [0, 1].map(() => { const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE); return t; });
   const pic = document.createElement('canvas'); pic.width = 1024; pic.height = Math.round(1024 * S.h / S.w);
   const ctx = pic.getContext('2d');
-
-  // fill one tube from a sampler along its length
-  function fillTube(T, at, L, frame, shape, tag) {
-    let prevW = null;
-    for (let i = 0; i < NS; i++) {
-      const s = L * i / (NS - 1), p = at(s), p2 = at(Math.min(L, s + 0.05)), p1 = at(Math.max(0, s - 0.05));
-      const t = norm(sub(p2, p1));
-      let w = frame(s, p); w = norm(sub(w, mul(t, dot(w, t))));
-      if (prevW && dot(w, prevW) < 0) w = mul(w, -1);
-      prevW = w;
-      let b = cross(t, w); const out = sub(p, frame.center || [0, 0, 0]); if (dot(b, out) < 0) b = mul(b, -1);
-      const [hw, hh, lift = 0] = shape(s, L - s), C = add(p, mul(b, lift)), rC = frame.center ? Math.hypot(...sub(C, frame.center)) : 1e9, out1 = frame.center ? norm(sub(C, frame.center)) : b;
-      for (let j = 0; j <= NA; j++) {
-        const a = 2 * Math.PI * j / NA, ca = Math.cos(a), sa = Math.sin(a), k = (i * (NA + 1) + j) * 3;
-        let q = add(C, add(mul(w, hw * ca), mul(b, hh * sa))), nn = norm(add(mul(w, ca / hw), mul(b, sa / hh)));
-        if (frame.center && rC < EYE_R + 4) {
-          // near the eye the muscle lies on it: its width curves round the eye instead of standing off it flat
-          const k2 = smooth((EYE_R + 4 - rC) / 3), d = norm(sub(q, frame.center)), q2 = add(frame.center, mul(d, rC + dot(b, out1) * hh * sa));
-          q = add(mul(q, 1 - k2), mul(q2, k2));
-          const n2 = norm(add(mul(d, sa), mul(w, ca * 0.6))); nn = norm(add(mul(nn, 1 - k2), mul(n2, k2)));
-        }
-        T.pos.set(q, k); T.nor.set(nn, k); T.tt.set(tag(s, L - s), k);
-      }
-    }
-    T.b.setPos(T.pos); T.b.setNor(T.nor); T.b.setTT(T.tt);
-  }
-  // a path made of parts, sampled by distance from its start
-  const along = (parts) => (s) => { for (const p of parts) { if (s <= p.L || p === parts[parts.length - 1]) return p.at(Math.min(1, s / p.L)); s -= p.L; } return null; };
 
   // the screen's picture, in screen pixels: x from the left, y from the top
   const px = (h, v) => { const q = onScreen(h, v); return [(q[0] / S.w + 0.5) * pic.width, (0.5 - q[1] / S.h) * pic.height]; };
@@ -227,15 +183,11 @@ export function makeScene(gl) {
       if (Math.abs(d) <= 14) { ctx.beginPath(); for (let h = -24; h <= 24; h += 2) { const q = px(h, d); h === -24 ? ctx.moveTo(...q) : ctx.lineTo(...q); } ctx.stroke(); }
     }
     const deg = px(1, 0)[0] - px(0, 0)[0];
-    // the target, drawn in gold: 0.8° across, with a faint halo no wider than itself
-    const T = px(...f.T);
-    const tg = ctx.createRadialGradient(T[0], T[1], deg * 0.3, T[0], T[1], deg * 0.65); tg.addColorStop(0, 'rgba(255,215,115,0.4)'); tg.addColorStop(1, 'rgba(255,215,115,0)');
-    ctx.fillStyle = tg; ctx.beginPath(); ctx.arc(T[0], T[1], deg * 0.65, 0, 7); ctx.fill();
-    ctx.fillStyle = '#ffd773'; ctx.beginPath(); ctx.arc(T[0], T[1], deg * 0.4, 0, 7); ctx.fill();
-    ctx.fillStyle = '#fff6dc'; ctx.beginPath(); ctx.arc(T[0], T[1], deg * 0.12, 0, 7); ctx.fill();
     if (withGaze) {
-      // where overshoot saccades landed in the last 1 s, drawn as small orange ticks, as on the trace in the panel
-      for (const L of f.landed) { const q = px(...L.p), a = 1 - L.age; ctx.strokeStyle = `rgba(255,154,77,${(0.95 * a).toFixed(3)})`; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(q[0], q[1] - deg * 0.7); ctx.lineTo(q[0], q[1] + deg * 0.7); ctx.stroke(); }
+      // Marks an eye tracker would add, drawn first so that none of them covers the target.
+      // Where overshoot saccades landed, as small orange ticks. Each stays as long as its dot stays on the trace in
+      // the panel (age runs from 0 to 1) and grows faint toward the end.
+      for (const L of f.landed) { const q = px(...L.p), a = 1 - L.age * L.age; ctx.strokeStyle = `rgba(255,154,77,${(0.95 * a).toFixed(3)})`; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(q[0], q[1] - deg * 0.7); ctx.lineTo(q[0], q[1] + deg * 0.7); ctx.stroke(); }
       // where the eyes have looked over the last 0.4 s, then where they look now, drawn in light blue
       const tr = f.trail;
       ctx.lineCap = 'round'; ctx.lineJoin = 'round';
@@ -244,45 +196,44 @@ export function makeScene(gl) {
         ctx.strokeStyle = `rgba(127,214,255,${(0.75 * i / tr.length).toFixed(3)})`; ctx.lineWidth = 2.5;
         ctx.beginPath(); ctx.moveTo(...a); ctx.lineTo(...b); ctx.stroke();
       }
+      // a thin ring round the place the eyes look, wider than the target, so that the target shows inside it
       const E = px(...f.E);
-      ctx.strokeStyle = 'rgba(5,8,16,0.85)'; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(E[0], E[1], deg * 0.25, 0, 7); ctx.stroke();
-      ctx.strokeStyle = '#7fd6ff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(E[0], E[1], deg * 0.25, 0, 7); ctx.stroke();
-      ctx.fillStyle = '#7fd6ff'; ctx.beginPath(); ctx.arc(E[0], E[1], 2.5, 0, 7); ctx.fill();
+      ctx.strokeStyle = 'rgba(5,8,16,0.85)'; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(E[0], E[1], deg * GAZE_RING, 0, 7); ctx.stroke();
+      ctx.strokeStyle = '#7fd6ff'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(E[0], E[1], deg * GAZE_RING, 0, 7); ctx.stroke();
     }
+    // the target, drawn in gold and last: 0.8° across, with a faint halo no wider than itself
+    const T = px(...f.T);
+    const tg = ctx.createRadialGradient(T[0], T[1], deg * 0.3, T[0], T[1], deg * 0.65); tg.addColorStop(0, 'rgba(255,215,115,0.4)'); tg.addColorStop(1, 'rgba(255,215,115,0)');
+    ctx.fillStyle = tg; ctx.beginPath(); ctx.arc(T[0], T[1], deg * 0.65, 0, 7); ctx.fill();
+    ctx.fillStyle = '#ffd773'; ctx.beginPath(); ctx.arc(T[0], T[1], deg * 0.4, 0, 7); ctx.fill();
+    ctx.fillStyle = '#fff6dc'; ctx.beginPath(); ctx.arc(T[0], T[1], deg * 0.12, 0, 7); ctx.fill();
   }
   function upload(t) { gl.bindTexture(gl.TEXTURE_2D, t); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, pic); gl.generateMipmap(gl.TEXTURE_2D); }
 
   const ident = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
   const place = (R, t) => new Float32Array([R[0][0], R[1][0], R[2][0], 0, R[0][1], R[1][1], R[2][1], 0, R[0][2], R[1][2], R[2][2], 0, t[0], t[1], t[2], 1]);
-  const I3 = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
   // a ring that faces along direction d
   const facing = (d, t) => { const zz = norm(d), xx = norm(Math.abs(zz[1]) < 0.9 ? cross([0, 1, 0], zz) : cross([1, 0, 0], zz)), yy = cross(zz, xx); return place([[xx[0], yy[0], zz[0]], [xx[1], yy[1], zz[1]], [xx[2], yy[2], zz[2]]], t); };
 
-  const L0 = {};                                         // each muscle's length with the eye looking straight ahead
   // build the eyes' moving parts for this frame. f.eyes: [{ side, R, P, drive: {id: 0..1} }]
+  // The muscles' shapes come from model.js (eyeMuscles), where the tests check that no two share space.
   function build(f) {
     let k = 0;
     for (const e of f.eyes) {
-      const ctr = eyeCenter(e.side);
+      const ctr = eyeCenter(e.side), bodies = eyeMuscles(e.R, e.side, ctr);
       for (const m of MUSCLES) {
-        const path = musclePath(m, e.R, e.side, EYE_R + 0.45), L = path.L, at0 = along(path.parts), at = (s) => add(at0(s), ctr);
-        // a muscle keeps its volume: as it shortens its belly grows wider and thicker, as it lengthens it thins. (It used
-        // to swell with its nerve signal, so that it bulged during the burst of a saccade without changing length.)
-        const key = m.id + e.side; if (!(key in L0)) L0[key] = musclePath(m, I3, e.side, EYE_R + 0.45).L;
-        const drv = e.drive[m.id], swell = Math.sqrt(L0[key] / L);
-        const wrapPart = path.parts[path.parts.length - 1], nW = wrapPart.normal;
-        const frame = (s) => nW;
-        frame.center = ctr;
-        const tag = e.pick === m.id ? -1 : drv;
-        fillTube(tubes[k++], at, L, frame, (s, ee) => { const [w, h] = profile(m, s, ee), g = ee > m.tendon + 3 ? swell : 1, hh = h * g; return [w * g, hh, Math.max(0, hh - 0.35)]; }, (s, ee) => [ee, tag, m.tendon]);
+        const b = bodies[m.id], T = tubes[k++], tag = e.pick === m.id ? -1 : e.drive[m.id], end = b.rings[NS - 1].s;
+        // for the shader: mm from the insertion, how hard the muscle is driven (or -1 for the one picked), tendon length
+        for (let i = 0; i < NS; i++) for (let j = 0; j <= NA; j++) { const q = (i * (NA + 1) + j) * 3; T.tt[q] = end - b.rings[i].s; T.tt[q + 1] = tag; T.tt[q + 2] = m.tendon; }
+        T.b.setPos(b.pos); T.b.setNor(b.nor); T.b.setTT(T.tt);
       }
       // the optic nerve: from the back of the eye, a little toward the nose, to the back of the orbit, with slack
       const mir = (p) => [e.side * p[0], p[1], p[2]], ex = rot(e.R, mir(OPTIC.exit)), nOut = norm(ex), ap = mir(OPTIC.apex);
       const P0 = add(ex, mul(nOut, -1.5)), P1 = add(ex, mul(nOut, 11)), P2 = add(ap, [e.side * 3, -1, -9]), P3 = ap;
       const bez = (s) => { const t = s / 40, a = 1 - t; return add(add(mul(P0, a * a * a), mul(P1, 3 * a * a * t)), add(mul(P2, 3 * a * t * t), mul(P3, t * t * t))).map((x, i) => x + ctr[i]); };
-      const fr = (s, p) => cross(norm(sub(bez(Math.min(40, s + 0.5)), bez(Math.max(0, s - 0.5)))), [0, 1, 0]);
-      fr.center = ctr;
-      fillTube(tubes[k++], bez, 40, fr, () => [1.8, 1.8, 0], () => [0, 0, 0]);
+      const fr = (s) => cross(norm(sub(bez(Math.min(40, s + 0.5)), bez(Math.max(0, s - 0.5)))), [0, 1, 0]);
+      const nerve = tube(bez, 40, fr, () => [1.8, 1.8, 0], ctr), T = tubes[k++];
+      T.tt.fill(0); T.b.setPos(nerve.pos); T.b.setNor(nerve.nor); T.b.setTT(T.tt);
     }
   }
 
@@ -330,7 +281,7 @@ export function makeScene(gl) {
     }
     gl.disable(gl.SCISSOR_TEST);
   }
-  return { build, draw, paint, upload: (i) => upload(tex[i]), I3 };
+  return { build, draw, paint, upload: (i) => upload(tex[i]) };
 }
 
 // a camera: from a point, looking at another, with the field of view (vertical, radians) and the region's shape
