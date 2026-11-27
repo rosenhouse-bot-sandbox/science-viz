@@ -1,11 +1,11 @@
 // Japanese maple: the controller. Two numbers drive the page: the zoom (0 = tree ... 4 = molecules)
 // and the season (0 = late March ... 1 = late December). The picture is redrawn only when one changes.
-import { dayOf, dateOf, dayLength, sunAt, takenIn, PHASES, phaseAt, LAT, clamp, smooth, mix, css, leafRGB } from './model.js?v=5ce163c7';
-import { makeWorld, TARGETS, CUT as LEAF_CUT } from './world.js?v=5ce163c7';
-import { quatOf, qmul, qrot, slerp, add, mul, unit, cross, lerp3 } from './gl.js?v=5ce163c7';
-import { drawSpectrum, drawStalk, drawChain } from './figs.js?v=5ce163c7';
-import { gamepad } from '../gamepad/gamepad.js?v=5ce163c7';
-import { touchSliders } from '../touch/slider.js?v=5ce163c7';
+import { dayOf, dateOf, dayLength, sunAt, takenIn, PHASES, phaseAt, LAT, clamp, smooth, mix, css, leafRGB } from './model.js?v=4d18d95f';
+import { makeWorld, TARGETS, CUT as LEAF_CUT } from './world.js?v=4d18d95f';
+import { quatOf, qmul, qrot, slerp, add, mul, unit, cross, lerp3 } from './gl.js?v=4d18d95f';
+import { drawSpectrum, drawStalk, drawChain } from './figs.js?v=4d18d95f';
+import { gamepad } from '../gamepad/gamepad.js?v=4d18d95f';
+import { touchSliders } from '../touch/slider.js?v=4d18d95f';
 
 const $ = (id) => document.getElementById(id);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -32,14 +32,14 @@ const HOP_RHO2 = 2.8;                    // changing where the Molecules scale l
 const CAP = {
   tree: [
     ['New leaves', 'This is a Japanese maple, Acer palmatum, about 4 m tall. The buds open in late March, and the leaves grow in pairs along each twig. A new leaf is pale yellow-green because it is still making chlorophyll, the pigment that absorbs light to make sugar.'],
-    ['Full leaf', 'The leaves lie flat in layers, so few are shaded by the ones above. In summer the Sun is higher at any hour and the days are longer. Under a clear sky the tree gets the most light now, and the leaves are at their greenest.'],
+    ['Full leaf', 'The leaves lie flat in layers, so few are shaded by the ones above. The tree gets the most light in June, when the Sun is highest and the days are longest.'],
     ['The outside turns first', 'Leaves in full sun turn first and turn reddest, because a leaf needs light to make the red pigment. Shaded leaves inside the crown turn yellow or orange.'],
     ['The crown turns', 'The leaves on the outside of the crown turn red first. The shaded leaves inside follow more slowly, through yellow and orange. The first leaves are falling.'],
     ['Leaf fall', 'A leaf falls once the layer of cells that held the stalk to the twig has come apart. The leaf we follow, ringed in white, is the last to fall.'],
   ],
   leaf: [
     ['One leaf unfolds', 'The leaf comes out of the bud folded like a fan and opens flat as it grows. It has seven pointed lobes, each with a vein down the middle. The veins bring water in and carry sugar out.'],
-    ['Green', 'Chlorophyll absorbs light near 440 nm and near 675 nm. Light near 550 nm is absorbed least, so more of it comes back or passes through than other wavelengths do. We see the leaf as green.'],
+    ['Why the leaf is green', 'Chlorophyll absorbs light near 440 nm and near 675 nm. Light near 550 nm is absorbed least, so more of it comes back or passes through than other wavelengths do. We see the leaf as green.'],
     ['Chlorophyll is taken apart', 'The leaf dismantles the proteins that hold the chlorophyll and sends the nitrogen from them back into the tree. The chlorophyll breaks down. Green lasts longest beside the veins.'],
     ['Red', 'The leaf makes a new pigment, anthocyanin, from sugar that builds up in the leaf. Anthocyanin absorbs light from about 480 to 580 nm. The light that comes back is mostly longer than 600 nm, which we see as red.'],
     ['The leaf breaks off', 'Across the foot of the stalk, a layer of cells dissolves the walls that join them, while cork seals the twig behind. Then the weight of the leaf breaks it off.'],
@@ -52,7 +52,7 @@ const CAP = {
     ['Sugar and nitrogen leave', 'Sugar and the nitrogen from the dismantled proteins leave through the vein before the stalk is sealed off. Cell walls, carotenoids and anthocyanin stay behind.'],
   ],
   cells: [
-    ['One cell', 'This is one of the tall cells. Full grown, it is 11 µm wide and 41 µm tall. The bodies along the wall are chloroplasts, where the chlorophyll is. The clear column down the middle is the vacuole, a store of water.'],
+    ['One cell', 'This is one of the tall cells. Full grown, it is 11 µm wide and 41 µm tall. The bodies along the wall are chloroplasts, where the chlorophyll is. The vacuole, a store of water, fills most of the cell.'],
     ['Chloroplasts', 'Each chloroplast is about 5 µm long and lies against the cell wall, next to the air spaces that bring carbon dioxide. Inside a clear envelope are stacks of membrane, like stacks of coins. The chlorophyll is in those membranes.'],
     ['Chloroplasts fade', 'The chlorophyll breaks down and the membrane stacks come apart. Only carotenoids remain, so the chloroplasts shrink and turn yellow.'],
     ['Crimson vacuoles', 'Anthocyanin dissolves in water, so it collects in the vacuole, not in the chloroplasts. The chloroplasts are yellow and the vacuoles are crimson. Together they make the leaf look red.'],
@@ -66,21 +66,21 @@ const CAP = {
     ['What is left', 'About half of the carotenoids are still here when the leaf falls. That is why a fallen maple leaf with little anthocyanin is yellow.'],
   ],
   vacuole: [
-    ['Water', 'This is the inside of the vacuole. In spring there is no pigment here, only water with salts and sugars dissolved in it. The dots of light pass straight through.'],
-    ['Water', 'This is the inside of the vacuole. All summer there is no pigment here, only water with salts and sugars dissolved in it. The dots of light pass straight through.'],
+    ['Water', 'This is the inside of the vacuole. In spring there is no pigment here. The sap is clear, and the dots of light pass straight through.'],
+    ['Water', 'This is the inside of the vacuole. Until the leaf turns, there is no pigment here. The sap is clear, and the dots of light pass straight through.'],
     ['Anthocyanin arrives', 'Each molecule is cyanidin 3-glucoside, the red pigment of maple leaves. It has three rings, the middle one including an oxygen atom, joined to one sugar. It is made outside the vacuole and moved in.'],
     ['Why anthocyanin is red', 'The three rings share one set of electrons, a shorter run than the chlorophyll ring. But the oxygen atoms and the positive charge shift the absorption to longer wavelengths than a plain chain that short would absorb: around 530 nm, which we see as green. The wavelengths that pass through are mostly longer than 600 nm, which we see as red.'],
     ['Still red', 'Anthocyanin is not taken back into the tree. It stays in the leaf when it falls.'],
   ],
 };
-const DOTS = 'Each dot of light stands for a little sunlight of one wavelength, drawn in the color we see it as. It moves far slower than light does. From Cells to Molecules the same light is drawn with smaller and smaller dots, which fall straight through until the molecules themselves are in view. The dots fall straight down, as at midday, whatever the Sun is doing in the Tree view. The page\'s model gives the chance that each wavelength is absorbed on this date, and each dot is drawn by lot with that chance. A dot is absorbed by chlorophyll or a carotenoid at a chloroplast, or by anthocyanin in a vacuole, with a flash. A real leaf also scatters light about inside itself. That lets it absorb more of the wavelengths we see as green than is drawn here (about three quarters of them in summer), and it sends some light back out of the upper side. Neither is drawn. The same number of dots is drawn on every date and at every wavelength from 400 to 700 nm, which is not the mix in real sunlight.';
+const DOTS = 'Each dot of light stands for a little sunlight of one wavelength, drawn in the color we see it as. It moves far slower than light does. From Cells to Molecules the same light is drawn with smaller and smaller dots, which fall straight through until the molecules themselves are in view. The dots fall straight down, as at midday, whatever the Sun is doing in the Tree view. The page\'s model gives the chance that each wavelength is absorbed on this date, and each dot is drawn by lot with that chance. A dot is absorbed by chlorophyll or a carotenoid at a chloroplast, or by anthocyanin in a vacuole, with a flash. A real leaf also scatters light about inside itself. That lets it absorb more of the wavelengths we see as green than is drawn here (about three quarters of them in summer), and it sends some light back out of the upper side. Neither is drawn. Fewer dots fall when less light reaches the leaf. Every wavelength from 400 to 700 nm is drawn equally often, which is not the mix in real sunlight.';
 const NOTE = {
-  tree: `The tree is drawn with ${world ? world.count.toLocaleString('en') : 'a few thousand'} leaves. A real tree this size has several times more. The white ring marks the leaf we follow. Dates are typical for Kyoto, ${LAT}° N. A fall takes seconds. Here it is spread over two and a half days so that it can be seen. Every day is shown at five in the afternoon, with the Sun where it stands then: well up in June, within a degree of the horizon by mid-November. The sky is always clear.`,
+  tree: `The tree is drawn with ${world ? world.count.toLocaleString('en') : 'a few thousand'} leaves. A real tree this size has several times more. The white ring marks the leaf we follow. Dates are typical for Kyoto, ${LAT}° N. A fall takes seconds. Here it is spread over two and a half days so that it can be seen. Every day is shown at 4 PM Japan time, with the Sun where it stands then. The sky is always clear.`,
   leaf: 'The white line is where the leaf is cut across. The ring marks the spot the next scales look at. When you zoom in, the piece beyond the cut slides aside so that the next scales can look at the cut face. A real leaf is not cut. A fall takes seconds. Here it is spread over two and a half days of the slider so that it can be seen.',
   tissue: 'This is a model. Real cells are less regular, and those at a cut would be sliced open. Only walls, chloroplasts and vacuoles are drawn. The ring marks the cell the next scale shows. ' + DOTS,
   cells: 'Only the walls, chloroplasts and vacuoles are drawn. The small ring marks where the Molecules scale looks. ' + DOTS,
   membrane: 'Sticks are bonds between atoms: carbon gray, nitrogen blue, oxygen red, magnesium pale green. Hydrogen is left out. The glowing bonds are the ones whose shared electrons absorb visible light. The beads underneath are the heads of the membrane\'s fat molecules. They have no color of their own, so they are tinted with the color the pigments give the whole membrane. The smooth mounds are the proteins that hold the pigments, drawn as plain lumps. They go as the chlorophyll goes. In a real membrane nearly every pigment sits inside one of them. Here the pigments are lifted onto the face of the membrane and spread out so that they can be seen. Chlorophyll comes in two kinds, a and b. Kind a is drawn, and only one of its five oxygen atoms. In autumn the real membrane is taken apart too, and the carotenoids that remain end up in drops of fat. Each dot of light stands for a little light of one wavelength, drawn in the color we see it as. It moves far slower than light does. A real wave of visible light is about a hundred times wider than this view. One molecule has no color: each is drawn in the color its pigment has in bulk.',
-  vacuole: 'Sticks are bonds between atoms. Carbon is drawn pale and oxygen dark red so that they show against the red water. Hydrogen is left out. The water\'s own color hides the rest of the cell, and molecules more than a hundred or so nanometers away. Real cell sap is far clearer than that. The glowing bonds are the ones whose shared electrons absorb visible light. Water is not drawn. The pigment is drawn a few times more crowded than it is in a deep red cell. Only the molecules nearest the middle are built atom by atom. Those further off are outlines of the three rings. Each dot of light stands for a little light of one wavelength. It moves far slower than light does.',
+  vacuole: 'Sticks are bonds between atoms. Carbon is drawn pale and oxygen dark red, so that they show against red sap. Hydrogen is left out. The sap is drawn hazy, so that it hides the rest of the cell and molecules more than a hundred or so nanometers away. Real sap is far clearer. The glowing bonds are the ones whose shared electrons absorb visible light. Water and the sugars and salts in it are not drawn. The pigment is drawn a few times more crowded than it is in a deep red cell. Only the molecules nearest the middle are built atom by atom. Those further off are outlines of the three rings. Each dot of light stands for a little light of one wavelength. It moves far slower than light does.',
 };
 const CUT = 'This is the foot of the leaf stalk, cut lengthwise, with the twig on the left. The brown cells have walls that fill with cork and seal the twig. Beside them, small cells dissolve the walls that join them, from the outside in. The pale strand is the vein, the last part to break. This is a diagram. Real cells are smaller and far more numerous.';
 
@@ -129,7 +129,7 @@ function zOf(u) { let a = 0, b = LAST; for (let n = 0; n < 40; n++) { const c = 
 const zShown = () => hop && hop.out ? zOf(clamp(uOf(st.z) - hop.out, KN.U[0], KN.U[LAST])) : st.z;
 // A hop between the two places in the cell: one move that pulls back and crosses together, as far back as the crossing needs and no
 // farther (van Wijk and Nuij's smooth zoom and pan). u is how far across, wd how wide the view, both in metres.
-const HOP_AWAY = Math.abs(TARGETS.vacuole[1] - TARGETS.membrane[1]) * 1e-6;   // metres between the two places in a full-grown leaf
+const HOP_AWAY = Math.hypot(...TARGETS.vacuole.map((v, i) => v - TARGETS.membrane[i])) * 1e-6;   // metres between the two places in a full-grown leaf
 function hopTo(to) {
   const side = Math.min(free.w, free.h), w0 = side / Math.exp(uOf(zShown())), w1 = side / Math.exp(uOf(st.z)), u1 = HOP_AWAY * cellScale * Math.abs(to - w), rho = Math.sqrt(HOP_RHO2);
   if (!(u1 > 0)) { hop = null; w = to; return; }
@@ -151,7 +151,7 @@ function aim(z) {
   if (Math.abs(fa.unit * 1e6 - cellScale) > 1e-9) { cellScale = fa.unit * 1e6; knots(); }
   const k0 = fitK(i), k1 = fitK(i + 1), k = Math.exp(uOf(z)), t = k0 / k * (1 - smooth(g));   // the next stop's point slides to the middle of the view, starting and ending at rest
   const at = lerp3(TARGETS.membrane, TARGETS.vacuole, w);                                  // where the Molecules scale looks, in the frame of the cut
-  const T = [TREE_AT, fa.centre, cut([38, 0, -33]), cut(TARGETS.vacuole), cut(at)];
+  const T = [TREE_AT, fa.centre, cut([38, 0, -33]), cut(TARGETS.cell), cut(at)];
   const target = lerp3(T[i + 1], T[i], t);
   // From the Leaf scale down the camera is set against the leaf: level with the cut wall, tipped up by an angle that changes with the scale.
   const phis = [PHI[0], PHI[1], PHI[2], PHI[3], mix(PHI[4], PHI_VAC, w)], phi = mix(phis[i], phis[i + 1], smooth(i === 1 ? (g - 0.25) / 0.6 : g));
@@ -212,7 +212,7 @@ function sync() {
   for (const [id, v] of [['Chl', p.chl], ['Car', p.car], ['Anth', p.anth], ['Absc', p.absc]]) { const t = pc(v); if (shown['b' + id] !== t) { shown['b' + id] = t; $('b' + id).style.width = t; $('v' + id).textContent = t; } }
   const dl = dayLength(day), hh = Math.floor(dl), mm = Math.round((dl - hh) * 60);
   const up = Math.round(sunAt(day).el * 180 / Math.PI), tk = (l) => Math.round(takenIn(p, l) * 100) + '%';
-  set('daylight', `Daylight on this date at ${LAT}° N: ${mm === 60 ? hh + 1 : hh} h ${String(mm === 60 ? 0 : mm).padStart(2, '0')} min; at five in the afternoon the Sun ${up > 0 ? 'is ' + up + '° up' : up === 0 ? 'is on the horizon' : 'has set'}.`);
+  set('daylight', `Daylight on this date at ${LAT}° N: ${mm === 60 ? hh + 1 : hh} h ${String(mm === 60 ? 0 : mm).padStart(2, '0')} min; at 4 PM the Sun ${up > 0 ? 'is ' + up + '° up' : up === 0 ? 'is on the horizon' : 'has set'}.`);
   set('taken', `In this page's model, of light going straight down through this leaf once, its pigments take in ${tk(450)} at 450 nm, ${tk(550)} at 550 nm and ${tk(675)} at 675 nm.`);
 
   const stalk = lvl === 1 && p.absc > 0.004, fk = (stalk ? 'c' : 's') + Math.round(st.s * 1000);

@@ -2,7 +2,7 @@
 // Positions and rotations are worked out in JavaScript numbers (64-bit) and only handed to the
 // graphics card at the end, because the page spans from metres down to a tenth of a nanometre.
 
-export { program } from '../gl/gl.js?v=5ce163c7';   // shared with the other 3D pages
+export { program } from '../gl/gl.js?v=4d18d95f';   // shared with the other 3D pages
 
 // A shape drawn many times. mesh: { pos: Float32Array (xyz), nor: Float32Array, idx: Uint16Array }.
 // layout: sizes of the per-copy numbers, which go to attribute locations 2, 3, ...

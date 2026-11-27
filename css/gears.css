@@ -109,7 +109,8 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family
 .stepnav .nav{width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:rgba(234,240,255,.07);color:var(--ink);display:grid;place-items:center;cursor:pointer;padding:0}
 @media (hover:hover){.stepnav .nav:hover{background:rgba(234,240,255,.16)}}
 .stepnav .nav:disabled{opacity:.35;cursor:not-allowed}
-.steptext{min-width:0;display:grid;gap:2px;min-height:5.6em;align-content:start}
+.steptext{min-width:0;display:grid;gap:2px;min-height:6.1em;align-content:start}
+@media (min-width:900px){.steptext{min-height:8.3em}}
 .steptext h2{margin:0;font-family:var(--display);font-weight:600;font-size:1.0625rem;letter-spacing:-.01em;line-height:1.2}
 .steptext p{margin:0;font-size:0.875rem;line-height:1.35;color:var(--ink2)}
 .steptext .tool{font-family:var(--mono);font-size:0.75rem;color:var(--gold)}

@@ -137,7 +137,6 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family
 .meter .lab span,.ctl .lab label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .meters.two .lab{flex-direction:column;align-items:flex-start;gap:0}
 .meter small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .scalebar{display:none}
 }
 @media (prefers-reduced-motion:reduce){.stages button i,.meter .track i,.meter .track.range i{transition:none}}
 

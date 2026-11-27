@@ -200,7 +200,14 @@ void main(){ vec2 uv = v*0.5+0.5;
   c += uBloom*(texture(B1, uv).rgb*0.55 + texture(B2, uv).rgb*0.5 + texture(B3, uv).rgb*0.6);
   c *= uExposure;
   c *= 1.0 - 0.28*pow(length(v*vec2(0.9,0.8)), 2.4);
-  c = clamp((c*(2.51*c+0.03))/(c*(2.43*c+0.59)+0.14), 0.0, 1.0);
+  // Tone mapping. Applied to each channel on its own, the curve flattens a bright colour's strongest
+  // channel and not the others, so bright red light over blue water would turn pink-white and a bright
+  // violet ray white: a change of colour where the wavelength has not changed. Bright light is mapped
+  // by its strongest channel instead, which keeps its hue; dim light, as before, channel by channel.
+  float m = max(c.r, max(c.g, c.b));
+  vec3 pc = clamp((c*(2.51*c+0.03))/(c*(2.43*c+0.59)+0.14), 0.0, 1.0);
+  vec3 hp = c*(clamp((m*(2.51*m+0.03))/(m*(2.43*m+0.59)+0.14), 0.0, 1.0)/max(m, 1e-6));
+  c = mix(pc, hp, smoothstep(0.2, 1.0, m));
   c = pow(c, vec3(1.0/2.2));
   c += (h(gl_FragCoord.xy + fract(uTime)*91.7)-0.5)/255.0;
   o = vec4(c, 1.0); }`;

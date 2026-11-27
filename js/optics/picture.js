@@ -1,16 +1,22 @@
 // What the screen shows in the candle challenges. The candle is drawn at the size and place the
-// traced light gives it (from where the light of its tip and of its foot lands), then every point
-// of it is spread into the spot that the traced rays make. Nothing is blurred by a made-up amount.
-// Only the brightness is adjusted: it is compressed, so a dim picture can still be seen.
+// traced light gives it (from where the ray through the middle of the opening lands, for its tip
+// and for its foot), then every point of it is spread into the spot that the traced rays make, and
+// once more by the width the wave nature of light gives the spot. Nothing is blurred by a made-up
+// amount. Light that misses the screen is missing from the picture. The picture is as bright as the
+// model says (it dims as the hole shrinks and as the picture grows), but compressed, so that a dim
+// picture can still be seen.
+
+import { gauss } from './scene.js';
 
 const sharp = document.createElement('canvas'), scratch = document.createElement('canvas');
 
 // `m` is the tally (hits as (height on the screen, weight, group) triples; groups 0 and 1 are the
-// tip and the foot). `pic` gives the candle's half height, the screen's half height (both mm) and
-// the share of the light the hole lets through.
-export function drawPicture(g, x, y, w, h, dpr, m, pic) {
-  const A = m.groups[0], B = m.groups[1], ok = A && B && A.w && B.w;
-  const ca = ok ? A.u / A.w : 0, cb = ok ? B.u / B.w : 0, mag = (ca - cb) / (2 * pic.tip), mid = (ca + cb) / 2;
+// tip and the foot). `pic` gives the candle's half height and the screen's (mm), where the middle of
+// the tip's light and of the foot's lands (`at`), whether the picture is too small to have a shape
+// (`dot`), and how brightly each part of it is lit (`light`). `sigma` is the wave's Gaussian spread (mm).
+export function drawPicture(g, x, y, w, h, dpr, m, pic, sigma = 0) {
+  const A = m.groups[0], B = m.groups[1], ok = A && B && (A.w || B.w) && isFinite(pic.at[0]) && isFinite(pic.at[1]);
+  const ca = ok ? pic.at[0] : 0, cb = ok ? pic.at[1] : 0, mag = (ca - cb) / (2 * pic.tip), mid = (ca + cb) / 2;
   // the spot, as rings of equal light about the middle of each point's light
   const rays = [];
   let tot = 0, r2 = 0;
@@ -20,7 +26,7 @@ export function drawPicture(g, x, y, w, h, dpr, m, pic) {
     rays.push([r, wt]); tot += wt; r2 += wt * r * r;
   }
   rays.sort((p, q) => p[0] - q[0]);
-  const f = Math.min(10, Math.max(1, Math.round(Math.sqrt(r2 / (tot || 1)) / 5)));   // a wide blur needs fewer pixels
+  const f = Math.min(10, Math.max(1, Math.round(Math.sqrt(r2 / (tot || 1) + 2 * (sigma * full) ** 2) / 5)));   // a wide blur needs fewer pixels
   const W = Math.max(8, Math.round(w * dpr / f)), H = Math.max(8, Math.round(h * dpr / f)), S = full / f;
   const RINGS = 12, taps = [];
   let acc = 0, sum = 0, count = 0;
@@ -36,8 +42,8 @@ export function drawPicture(g, x, y, w, h, dpr, m, pic) {
   if (sharp.width !== W || sharp.height !== H) { sharp.width = W; sharp.height = H; }
   const s = sharp.getContext('2d', { willReadFrequently: true });
   s.setTransform(1, 0, 0, 1, 0, 0); s.fillStyle = '#000'; s.fillRect(0, 0, W, H);
-  if (ok && Math.abs(mag) * S < 0.7) {
-    // too far off to have a shape at this scale: a dot, drawn just big enough to see
+  if (ok && pic.dot) {
+    // too small to have a shape (the model says when): a dot, drawn just big enough to see
     s.fillStyle = 'rgb(255,214,140)'; s.beginPath(); s.arc(W / 2, H / 2 - mid * S, Math.max(1, 1.7 * dpr / f), 0, 7); s.fill();
   } else if (ok) {
     s.setTransform(mag * S, 0, 0, -mag * S, W / 2, H / 2 - mid * S);           // candle millimetres to pixels; a negative `mag` turns it over
@@ -51,10 +57,11 @@ export function drawPicture(g, x, y, w, h, dpr, m, pic) {
   const src = s.getImageData(0, 0, W, H).data, lin = new Float32Array(W * H * 3), out = new Float32Array(W * H * 3);
   for (let i = 0, j = 0; i < src.length; i += 4) { lin[j++] = (src[i] / 255) ** 2; lin[j++] = (src[i + 1] / 255) ** 2; lin[j++] = (src[i + 2] / 255) ** 2; }
   for (let k = 0; k < taps.length; k += 3) {
-    const dx = taps[k], dy = taps[k + 1], wt = taps[k + 2] / count;
+    const dx = taps[k], dy = taps[k + 1], wt = taps[k + 2] / count * m.share;      // only the light that landed
     const x0 = Math.max(0, -dx), x1 = Math.min(W, W - dx), y0 = Math.max(0, -dy), y1 = Math.min(H, H - dy);
     for (let yy = y0; yy < y1; yy++) { let o = (yy * W + x0) * 3, i = ((yy + dy) * W + x0 + dx) * 3; for (let n = (x1 - x0) * 3; n > 0; n--) out[o++] += wt * lin[i++]; }
   }
+  gauss(out, W, H, 3, sigma * S, sigma * S);
   if (scratch.width !== W || scratch.height !== H) { scratch.width = W; scratch.height = H; }
   const sc = scratch.getContext('2d'), img = sc.createImageData(W, H), d = img.data, gain = pic.light ** 0.6;
   for (let i = 0, j = 0; i < d.length; i += 4) {

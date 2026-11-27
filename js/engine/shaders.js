@@ -5,11 +5,12 @@
 export const WORLD_FS = `#version 300 es
 precision highp float;
 uniform vec2 uRes, uCenter; uniform vec3 uCam, uRt, uUp, uFw, uSun; uniform float uTan;
-uniform float uPhi, uCutCar, uCutLift, uCutEnd, uGas, uGasStep, uRoad, uGasCut; uniform vec2 uTr, uWheel;
+uniform float uPhi, uCutCar, uCutLift, uCutEnd, uCutSlab, uGas, uGasStep, uRoad; uniform vec2 uTr, uWheel;
+uniform vec4 uRf, uGlow;      // for each cylinder, from the model: how far its flame front has got from the plug (m), and how strongly its burned gas glows (per m)
 layout(location = 0) out vec4 o; layout(location = 1) out vec4 o2;      // the picture; and how far away each pixel's surface is, for the dots of gas drawn after
 const vec3 EO = vec3(1.30, 0.36, 0.0);
 const float DECK = 0.2207, CR = 0.045, ROD = 0.145, BORE = 0.042, XC = -0.1615, VX = 0.0175;
-const float H0 = 0.0985;                                          // height of the gas at the bottom of the stroke
+const float GAS_CUT = -0.1455;                                   // the second cross cut, just in front of cylinder 4's spark plug
 const float OFF[4] = float[4](0., 540., 180., 360.);          // firing order 1-3-4-2
 const vec3 AX = vec3(0., 0.9455, 0.3256);                      // valve axis, 19 degrees from upright
 const float X4 = -0.144;
@@ -17,7 +18,8 @@ const float IX = -0.012;      // the injector is drawn 12 mm to one side of the 
 const vec3 INJ0 = vec3(IX, DECK + 0.0015, 0.0375), INJ1 = vec3(IX, DECK + 0.031, 0.102), INJ2 = vec3(IX, DECK + 0.032, 0.126);   // tip, bend, end
 const vec3 VS = vec3(0., DECK + 0.0083, 0.019);                // valve seat centre (folded: z is away from the middle)
 
-bool gCar = false, gLift = false, gEnd = false;      // which cut pieces are left out of the picture being drawn
+bool gCar = false, gLift = false, gEnd = false, gSlab = false;      // which cut pieces are left out of the picture being drawn
+float cutX(){ return gSlab ? GAS_CUT : XC; }      // the cross cut takes away the fixed parts and the gas nearer the end than this
 
 float hash(vec3 p){ p = fract(p * vec3(.1031, .1030, .0973)); p += dot(p, p.yxz + 33.33); return fract((p.x + p.y) * p.z); }
 float noise(vec3 p){ vec3 i = floor(p), f = fract(p); f = f*f*(3.-2.*f);
@@ -70,9 +72,9 @@ vec2 headD(vec3 p){
   return r;
 }
 float rearCut(vec3 p){   // negative inside what the cross cut takes away
-  float notch = box(p, vec3(-0.150, DECK + 0.12, 0.), vec3(0.0165, 0.101, 0.009), 0.);
+  float notch = box(p, vec3(-0.150, DECK + 0.11675, 0.), vec3(0.0165, 0.10425, 0.009), 0.);      // a slot that bares the spark plug, down to where it comes through the chamber's roof
   float inj = max(min(seg2(p.yz, INJ0.yz, INJ1.yz) - 0.0075, seg2(p.yz, INJ1.yz, INJ2.yz) - 0.0095), p.x - (X4 + IX + 0.005));   // and a slot that bares the injector
-  return min(min(p.x - XC, notch), inj);
+  return min(min(p.x - cutX(), notch), inj);
 }
 
 // ---- the engine's moving parts (never cut)
@@ -215,25 +217,19 @@ vec3 sky(vec3 d){
 // ---- gas: the flame's glow inside the cylinder (engine frame). The burned gas glows only faintly: it is the thinnest gas there. The dots that stand for the gas itself
 // are drawn afterwards, one by one, from the paths in flow.js.
 vec4 gasAt(vec3 p){
-  if (gEnd && p.x < uGasCut) return vec4(0.);
+  // the gas is cut by the same planes as the metal: the cross cut, and the near half of the block below the head
+  if (gEnd && p.x < cutX()) return vec4(0.);
   float xl; float j = cylOf(p.x, xl); float phi = phiOf(j);
   float top = pinY(phi) + 0.030, rad = length(vec2(xl, p.z));
   float roof = DECK + 0.015 - 0.35 * abs(p.z);
   vec3 BURN = vec3(1.0, 0.42, 0.08), FRONT = vec3(0.86, 0.80, 1.0);
-  float others = j == 3. || !gEnd ? 1. : 0.;     // once the end of the engine is off, only the cylinder looked into shows its gas
   if (rad < BORE - 0.0006 && p.y > top + 0.0006 && p.y < roof - 0.0004) {
-    // where the near half of the block is gone, the gas is left out too; once the end is off, the cylinder looked into shows all of its gas
-    if (gLift && p.y < DECK && p.z < 0. && !(j == 3. && gEnd)) return vec4(0.);
-    float h = DECK + 0.008 - top;
-    bool closed = phi >= 180. && phi < 540.;
-    float sq = closed ? H0 / h : 1.;
+    if (gLift && p.y < DECK && p.z < 0.) return vec4(0.);
+    float Rf = uRf[int(j)], glow = uGlow[int(j)];
     vec3 g = vec3(xl, p.y - (DECK + 0.0092), p.z); float rf = length(g) + 0.0035 * (noise(p * 260.) - .5) + 0.004 * (noise(p * 90.) - .5);
-    float Rf = 0.066 * pow(max(phi - 335., 0.) / 55., 1.5);
-    bool lit = phi > 335. && rf < Rf;
     vec3 cs = vec3(0.); float as = 0.;
-    float hot = 1. - smoothstep(372., 640., phi); hot *= hot;
-    if (lit) { float a = (8. * clamp(sq, 1., 10.) + 30. * step(XC + 0.001, uGasCut)) * others * hot * (0.55 + 0.9 * noise(p * 110.)); cs += mix(BURN, vec3(1.25, 0.5, 0.1), hot * .6) * (0.5 + 0.35 * hot) * a; as += a; }
-    if (phi > 335. && phi < 392.) { float e = (rf - Rf) / 0.0007, f = exp(-e * e) * 2600. * others; cs += FRONT * 2.6 * f; as += f; }
+    if (rf < Rf) { float a = glow * (0.55 + 0.9 * noise(p * 110.)), hot = clamp(glow / 60., 0., 1.); cs += mix(BURN, vec3(1.25, 0.5, 0.1), hot * .6) * (0.5 + 0.35 * hot) * a; as += a; }
+    if (Rf > 0. && Rf < 0.5) { float e = (rf - Rf) / 0.0007, f = exp(-e * e) * 2600.; cs += FRONT * 2.6 * f; as += f; }      // the front itself, until it has crossed
     if (phi > 335. && phi < 357.) {     // the spark, across the plug's gap: the breakdown, then the glow while the coil empties
       float k = phi - 335., f = exp(-dot(g, g) / (0.0014 * 0.0014)) * 9000. * (k < 1. ? 1. : 0.3 * (1. - smoothstep(12., 22., k)));
       cs += vec3(2.4, 2.2, 3.0) * f; as += f; }
@@ -250,13 +246,13 @@ void main(){
   vec3 rd = normalize(uFw + ndc.x * uTan * uRt + ndc.y * uTan * uUp), ro = uCam;
   float px = 2. * uTan / uRes.y;
   // A piece that is being cut away fades: the picture is drawn with it, then without it, and the two are mixed.
-  float fade = max(uCutCar * (1. - uCutCar), max(uCutLift * (1. - uCutLift), uCutEnd * (1. - uCutEnd))) > 1e-4
-    ? (uCutCar < .999 ? uCutCar : uCutLift < .999 ? uCutLift : uCutEnd) : 0.;
+  float fade = max(max(uCutCar * (1. - uCutCar), uCutSlab * (1. - uCutSlab)), max(uCutLift * (1. - uCutLift), uCutEnd * (1. - uCutEnd))) > 1e-4
+    ? (uCutCar < .999 ? uCutCar : uCutLift < .999 ? uCutLift : uCutEnd < .999 ? uCutEnd : uCutSlab) : 0.;
   vec3 outc = vec3(0.); vec2 far = vec2(1.);
   for (int pass = 0; pass < 2; pass++) {
   if (pass == 1 && fade <= 0.) break;
   float gone = pass == 0 ? .999 : .001;
-  gCar = uCutCar > gone; gLift = uCutLift > gone; gEnd = uCutEnd > gone;
+  gCar = uCutCar > gone; gLift = uCutLift > gone; gEnd = uCutEnd > gone; gSlab = uCutSlab > gone;
   float t = 0., m = 0.; bool hit = false; float tmax = 150.;
   for (int i = 0; i < 260; i++) { vec2 h = map(ro + rd * t); if (h.x < px * t * .5) { hit = true; m = h.y; break; } t += h.x * .82; if (t > tmax) break; }
   // Land on the surface itself. Stopping within half a pixel of it left each pixel a different small distance short,
@@ -312,7 +308,7 @@ void main(){
     // a cut face is drawn flat and pale, with fine hatching, so it reads as cut metal
     if ((m >= 6. && m <= 9.) || m == 22. || m == 23.) {
       bool onL = gLift && (m == 6. || m == 8. || m == 9.) && abs(e.z) < 0.0006 + gPx && abs(ne.z) > .9;
-      bool onR = gEnd && abs(rearCut(e)) < 0.0005 + gPx && (abs(ne.x) > .9 || abs(e.x - XC) > 0.001 + gPx);
+      bool onR = gEnd && abs(rearCut(e)) < 0.0005 + gPx && (abs(ne.x) > .9 || abs(e.x - cutX()) > 0.001 + gPx);
       cutFace = onL || onR;
     }
     if (cutFace) { base = hatch(m == 8. || m == 9. || m == 22. ? vec3(0.55, 0.56, 0.60) : m == 23. ? vec3(0.78, 0.66, 0.58) : vec3(0.80, 0.77, 0.71), e, 260.); metal = 0.; rough = .95; }
@@ -338,7 +334,7 @@ void main(){
   }
   // gas, marched in the engine's frame up to the surface
   if (uGas > .5) {
-    vec3 eo = toE(ro), ed = vec3(-rd.x, rd.y, -rd.z); vec3 bmin = vec3(gEnd ? uGasCut : -0.19, 0.03, -0.20), bmax = vec3(0.19, 0.31, 0.20);
+    vec3 eo = toE(ro), ed = vec3(-rd.x, rd.y, -rd.z); vec3 bmin = vec3(gEnd ? cutX() : -0.19, 0.03, -0.20), bmax = vec3(0.19, 0.31, 0.20);
     vec3 inv = 1. / ed, t0 = (bmin - eo) * inv, t1 = (bmax - eo) * inv, tn = min(t0, t1), tf = max(t0, t1);
     float a = max(max(tn.x, tn.y), max(tn.z, 0.)), b = min(min(tf.x, tf.y), min(tf.z, hit ? t : 1e3));
     if (b > a) {

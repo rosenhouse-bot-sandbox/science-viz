@@ -1,8 +1,8 @@
 // Gears on a cube and an octahedron: the workshop's drawings. One sheet per part, drawn the way a machinist
 // expects: third-angle views, sections hatched, every size the part needs and no more, a title block. All numbers
 // come from spec.js. The sheet is built as SVG from numbers only.
-import { gearSpec, spacerSpec, screwSpec, coreSpec, bearingSpec, MATERIAL } from './spec.js?v=57c9eaea';
-import { dot, cross, norm } from './model.js?v=57c9eaea';
+import { gearSpec, spacerSpec, screwSpec, coreSpec, bearingSpec, MATERIAL } from './spec.js?v=cbfbfc46';
+import { dot, cross, norm } from './model.js?v=cbfbfc46';
 
 const NS = 'http://www.w3.org/2000/svg';
 const D = Math.PI / 180;
@@ -172,13 +172,13 @@ function gearSheet(sh, S) {
   S.circle(c, k2 * rb); S.circle(c, k2 * g.pitchD / 2, 'cl');
   S.centerLine([c[0] - k2 * T.r - 3, c[1]], [c[0] + k2 * T.r + 3, c[1]]); S.centerLine([c[0], c[1] - k2 * T.r - 3], [c[0], c[1] + k2 * T.r + 3]);
   S.note(P(g.pitchD / 2 * Math.cos(-2.4), g.pitchD / 2 * Math.sin(-2.4)), [c[0] - k2 * T.r - 2, c[1] + k2 * T.r - 2], [`pitch Ø${f2(g.pitchD)}`], 'end');
-  S.note(P(rb * Math.cos(2.5), rb * Math.sin(2.5)), [c[0] - k2 * T.r - 2, c[1] - k2 * T.r * 0.7], ['681X bearing', 'pressed in flush'], 'end');
+  S.note(P(rb * Math.cos(2.5), rb * Math.sin(2.5)), [c[0] - k2 * T.r - 2, c[1] - k2 * T.r * 0.7], [`${bearingSpec().name} bearing, flush,`, 'held with retaining compound'], 'end');
   S.label([c[0], 8 + 4], `OUTER FACE  ${scaleText(k2)}`);
 
   // the gear's data
   const rows = [['Teeth', `${g.N}`], ['Module, outer end', `${g.m}`], ['Pressure angle', '20°'], ['Shaft angle', fa(g.shaft)], ['Pitch angle', fa(g.alpha)],
     ['Face angle', fa(g.tip)], ['Root angle', fa(g.root)], ['Pitch diameter', f2(g.pitchD)], ['Outer cone distance', f2(g.coneOut)], ['Face width', f2(g.face)],
-    ['Addendum / dedendum', `${f2(g.addendum)} / ${f2(g.dedendum)}`], ['Backlash, at pitch', f2(g.backlash)], ['Form cutter', `module ${g.m}, No. ${g.cutter}`], ['Mates with', 'the same gear']];
+    ['Addendum / dedendum', `${f2(g.addendum)} / ${f2(g.dedendum)}`], ['Backlash of a pair', f2(g.backlash)], ['Form cutter', `module ${g.m}, No. ${g.cutter}`], ['Mates with', 'the same gear']];
   table(S, S.W - 5 - 96, 99, rows);
   return { title: `Gear, ${sh.solid === 'cube' ? 'cube' : 'octahedron'}`, qty: sh.solid === 'cube' ? 4 : 8, scale: `${scaleText(k)}, ${scaleText(k2)}`, notes: ['Cut the teeth one gap at a time.', 'Check the mesh in pairs.'] };
 }
@@ -277,7 +277,7 @@ function screwSheet(sh, S) {
   S.hdim(V(z.boss, -r.fl), V(z.top, -r.fl), lo + 8, f2(s.thick));
   S.hdim(V(0, -r.th), V(z.top, -r.fl), lo + 24, f2(s.length));
   S.vdim(V(z.top, -r.fl), V(z.top, r.fl), x(z.top) + 9, `Ø${f2(s.flange)}`);
-  S.note(V((z.thread + z.shoulder) / 2, r.sh), [x(z.thread) - 6, y(r.fl) - 4], [`Ø${f2(s.shoulder)} g6, ground smooth:`, 'the bearing turns on this'], 'end');
+  S.note(V((z.thread + z.shoulder) / 2, r.sh), [x(z.thread) - 6, y(r.fl) - 4], [`Ø${f2(s.shoulder)} g6, turned:`, 'the inner ring sits on this'], 'end');
   S.note(V(z.thread * 0.6, r.th), [x(0) - 4, y(r.fl) + 14], [`M${s.thread} × ${s.pitch}`, `${ce} × 45° at the end`], 'end');
   S.note(V((z.shoulder + z.boss) / 2, r.bo), [x(z.top) + 8, y(r.fl) - 4], [`boss Ø${f2(s.boss)}`]);
   S.label([c[0], lo + 34], `SIDE  ${scaleText(k)}`);
@@ -290,7 +290,7 @@ function screwSheet(sh, S) {
   S.vdim(H(xw * 0.55, -s.slot / 2), H(xw * 0.55, s.slot / 2), H(xw * 0.55, 0)[0], f2(s.slot));
   S.text([e[0], e[1] - k * r.fl - 6], `slot ${s.slot} wide, ${s.slotD} deep`, { cls: 'nt' });
   S.label([e[0], e[1] + k * r.fl + 10], `HEAD  ${scaleText(k)}`);
-  return { title: `Shoulder screw, ${sh.solid === 'cube' ? 'cube' : 'octahedron'}`, qty: sh.solid === 'cube' ? 4 : 8, scale: scaleText(k), notes: ['From 7 mm round bar.', 'The shoulder\'s end clamps the spacer.'] };
+  return { title: `Shoulder screw, ${sh.solid === 'cube' ? 'cube' : 'octahedron'}`, qty: sh.solid === 'cube' ? 4 : 8, scale: scaleText(k), notes: ['From 7 mm round bar.', 'The boss clamps the inner ring and the spacer.'] };
 }
 function bearingSheet(sh, S) {
   const b = bearingSpec(), k = 18, c = [100, 96], V = view(c, k), w = b.B / 2, x = (u) => V(u, 0)[0];
@@ -298,6 +298,7 @@ function bearingSheet(sh, S) {
     S.path([[-w, b.d / 2], [-w, b.innerOD / 2], [w, b.innerOD / 2], [w, b.d / 2]].map(([u, v]) => V(u, sg * v)), 'sec', true);
     S.path([[-w, b.outerID / 2], [-w, b.D / 2], [w, b.D / 2], [w, b.outerID / 2]].map(([u, v]) => V(u, sg * v)), 'sec', true);
     el('circle', { cx: V(0, sg * b.pitch / 2)[0], cy: V(0, sg * b.pitch / 2)[1], r: k * b.ball / 2, class: 'ball' }, S.g);
+    for (const e of [1, -1]) S.line(V(e * (w - 0.12), sg * (b.innerOD / 2 + 0.06)), V(e * (w - 0.12), sg * b.outerID / 2));   // the shields, fixed in the outer ring
   }
   S.line(V(-w, b.d / 2), V(-w, -b.d / 2)); S.line(V(w, b.d / 2), V(w, -b.d / 2));
   S.centerLine(V(-w - 0.4, 0), V(w + 0.4, 0));
@@ -306,11 +307,11 @@ function bearingSheet(sh, S) {
   S.vdim(V(-w, -b.d / 2), V(-w, b.d / 2), x(-w) - 10, `Ø${b.d}`);
   S.label([c[0], V(0, -b.D / 2)[1] + 24], `SECTION  ${scaleText(k)}`);
   S.text([180, 80], `${b.name}: bought, not made.`, { cls: 'nt', anchor: 'start' });
-  S.text([180, 84], 'Open, deep groove, steel.', { cls: 'nt', anchor: 'start' });
-  S.text([180, 92], 'Press it into the gear,', { cls: 'nt', anchor: 'start' });
+  S.text([180, 84], 'Shielded, deep groove, steel.', { cls: 'nt', anchor: 'start' });
+  S.text([180, 92], 'Fit it into the gear,', { cls: 'nt', anchor: 'start' });
   S.text([180, 96], 'flush with the outer face,', { cls: 'nt', anchor: 'start' });
   S.text([180, 100], 'with a drop of retaining compound.', { cls: 'nt', anchor: 'start' });
-  return { title: 'Ball bearing 681X', qty: sh.solid === 'cube' ? 4 : 8, scale: scaleText(k), notes: [] };
+  return { title: `Ball bearing ${b.name}`, qty: sh.solid === 'cube' ? 4 : 8, scale: scaleText(k), notes: [] };
 }
 
 export function drawing(part, sh) {

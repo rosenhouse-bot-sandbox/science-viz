@@ -16,6 +16,11 @@ const THIN = 0.11;
 const WAIST = 1.25, BOX = [46, 46, 2.3], LEN = 30, RD = 1000;      // BOX: how far the beams are drawn; LEN: how far the photons run;      // RD: the drop's radius
 let prog = null, photons = [], photonKey = '', omegaT = 0, lastT = null;
 const rand = rng(23);
+// A photon's random numbers come from its own index and how many runs it has made, not from a shared
+// stream: so after a control is moved and moved back, each photon is where it was (the shared stream
+// would have moved on and dealt every photon new numbers).
+const hashU = (i, g, k) => { const x = Math.sin(i * 12.9898 + g * 78.233 + k * 37.719) * 43758.5453; return x - Math.floor(x); };
+const hashGauss = (i, g, k) => Math.sqrt(-2 * Math.log(Math.max(1e-12, hashU(i, g, k)))) * Math.cos(2 * Math.PI * hashU(i, g, k + 1));
 
 // The angle at which the rainbow ray meets the surface at each of its three crossings.
 export function presetAngle(S) {
@@ -98,6 +103,17 @@ function setup(S) {
 }
 // map from the solver's frame (light arrives from q.y > 0) to the scene (water below)
 const toScene = (q, c) => [q[0], q[1] * c.sy, q[2]];
+// How brightly each beam is drawn, for each unit of its area seen from the side: its irradiance, the
+// power it carries per unit of its width, relative to the arriving beam's. The reflected beam is as wide
+// as the arriving one, so it carries R. The passed beam carries 1 − R in a width cos θt / cos θi of the
+// arriving one's, so per unit width it is (1 − R) cos θi / cos θt. Each beam times its width adds up to
+// the arriving one, whichever way the field points, and straight on (0°) s and p are the same light.
+// (The square of the field would not do: in water, E is weaker and the magnetic field stronger than in
+// air for the same power, by about n.)
+export function beamGlow(S) {
+  const c = setup(S), ci = Math.cos(c.th), ct = Math.cos(c.F.thetaT);
+  return { arriving: 1, reflected: c.F.R, passed: (1 - c.F.R) * ci / ct, width: ct / ci };
+}
 const weights = S => S.focus === 'sun' ? [1, 0.22, 0.22] : S.focus === 'both' ? [1, 1, 1]
   : S.cross === 'back' ? [0.22, 1, 0.18] : [0.22, 0.18, 1];
 
@@ -172,7 +188,7 @@ float sg(float a){ return exp(-a*a); }       // a beam with a fairly flat top an
 vec3 field(vec3 p){
   vec3 q = vec3(p.x, p.y*uA.w, p.z);
   float w2 = uD.x*uD.x, gz = sg(q.z*q.z/(uC.y*uC.y)), ci = uA.z, c2 = ci*ci/w2;
-  float r = uC.x, tm = 1.0 + r;          // Fresnel's reflected and transmitted amplitudes
+  float r = uC.x, tm = uC.z;          // the reflected wave's amplitude (Fresnel's r), and the passed wave's, drawn as the root of its irradiance (see beamGlow)
   if(q.y >= 0.0){
     float xi = q.x + q.y*uD.z, xr = q.x - q.y*uD.z;
     float gi = gz*sg(xi*xi*c2), gr = abs(r)*gz*sg(xr*xr*c2);
@@ -234,7 +250,7 @@ void main(){
     gl.useProgram(prog.p); R.setRayUniforms(prog, T);
     gl.uniform4f(prog.u.uA, c.k0 * c.n1, si, ci, c.sy);
     gl.uniform4f(prog.u.uB, c.k0 * c.n2, st, ct, 0);
-    gl.uniform4f(prog.u.uC, c.F.r, wave ? THIN : WAIST, 0, omegaT);
+    gl.uniform4f(prog.u.uC, c.F.r, wave ? THIN : WAIST, Math.sqrt(beamGlow(S).passed), omegaT);
     gl.uniform4f(prog.u.uD, WAIST, wave ? 1 : 0, si / ci, st / ct);
     gl.uniform3fv(prog.u.uCol, col.map(x => x * 0.9 + 0.06)); gl.uniform3fv(prog.u.uW, W);
     // The drop's skin and the water under it are the same sphere the Drop scale draws, in the same
@@ -284,9 +300,11 @@ void main(){
         const over = T - ph.t0 - ph.dur;
         if (fresh || ph.u === undefined || over > 0) {
           const carry = !fresh && ph.u !== undefined && over < 0.15;
-          ph.u = rand.gauss() * WAIST * 0.5; ph.v = rand.gauss() * WAIST * 0.5;
-          ph.refl = rand() < c.F.R; ph.dur = dur * (0.7 + 0.3 * rand());
-          ph.t0 = T - (carry ? over : rand() * ph.dur);
+          if (!fresh && ph.u !== undefined) ph.g = (ph.g ?? 0) + 1;      // a new run, with new numbers; a control moved keeps the run
+          const g = ph.g ?? 0;
+          ph.u = hashGauss(i, g, 0) * WAIST * 0.5; ph.v = hashGauss(i, g, 2) * WAIST * 0.5;
+          ph.refl = hashU(i, g, 4) < c.F.R; ph.dur = dur * (0.7 + 0.3 * hashU(i, g, 5));
+          ph.t0 = T - (carry ? over : hashU(i, g, 6) * ph.dur);
         }
         const tHit = LEN * c.n1 / speed, t = T - ph.t0, x0 = ph.u / ci;
         let q, w;

@@ -2,8 +2,8 @@
 // every surface where it really is and bends by Snell's law, so spherical aberration is in the
 // picture because it is in the geometry. Lengths are in the level's own unit (mm or m).
 //
-// A scene is a list of surfaces. Each is a straight segment or an arc of a circle, and does one
-// thing to a ray: refract, mirror, absorb, or absorb and count (target).
+// A scene is a list of surfaces. Each is a straight segment, an arc of a circle or a conic, and
+// does one thing to a ray: refract, mirror, absorb, or absorb and count (target).
 
 const EPS = 1e-7;
 
@@ -11,6 +11,13 @@ export function seg(ax, ay, bx, by, extra) { return { kind: 'seg', ax, ay, bx, b
 // The part of the circle (cx, cy, r) on the `side` of its centre (-1: left half, +1: right half)
 // within `h` of the axis y = cy (and, with `hmin`, no nearer to it than that).
 export function arc(cx, cy, r, side, h, extra) { return { kind: 'arc', cx, cy, r, side, h, hmin: 0, ...extra }; }
+// A conic section turned about the axis y = 0, with its vertex at (vx, 0): y² = 2·R·X − (1 + Q)·X²,
+// where X = x − vx. R is the radius at the vertex, signed as a lens face is. Q = 0 is a sphere;
+// between −1 and 0 the curve is an ellipse that flattens toward its edge. Only the half that holds
+// the vertex is used, within `h` of the axis.
+export function conic(vx, R, Q, h, extra) { return { kind: 'conic', vx, R, Q, h, hmin: 0, ...extra }; }
+// How far the conic has left its vertex plane at height y.
+export const conicSag = (R, Q, y) => y * y / (R * (1 + Math.sqrt(1 - (1 + Q) * y * y / (R * R))));
 
 // A flat mirror of width w turning about (px, py), silvered on the side its normal (at angle phi,
 // radians anticlockwise from +x) points to. The back absorbs.
@@ -45,11 +52,28 @@ function hitArc(s, x, y, dx, dy) {
   return Infinity;
 }
 
+function hitConic(s, x, y, dx, dy) {
+  const X = x - s.vx, q = 1 + s.Q;
+  // a·t² + 2·b·t + c = 0
+  const a = dy * dy + q * dx * dx, b = y * dy - s.R * dx + q * X * dx, c = y * y - 2 * s.R * X + q * X * X;
+  let roots;
+  if (Math.abs(a) < 1e-14) roots = [-c / (2 * b)];
+  else { const disc = b * b - a * c; if (disc < 0) return Infinity; const r = Math.sqrt(disc); roots = a > 0 ? [(-b - r) / a, (-b + r) / a] : [(-b + r) / a, (-b - r) / a]; }
+  for (const t of roots) {
+    if (!(t > EPS)) continue;
+    const px = X + dx * t, py = y + dy * t;
+    if ((q * px - s.R) * Math.sign(s.R) < 0 && Math.abs(py) <= s.h && Math.abs(py) >= s.hmin) return t;
+  }
+  return Infinity;
+}
+const hit = (s, x, y, dx, dy) => (s.kind === 'arc' ? hitArc(s, x, y, dx, dy) : s.kind === 'conic' ? hitConic(s, x, y, dx, dy) : hitSeg(s, x, y, dx, dy));
+
 // Unit normal at a point of the surface, pointing to the surface's left (-x) side; for a segment
 // that runs along x, pointing up.
 function normalAt(s, px, py) {
   let nx, ny;
   if (s.kind === 'arc') { nx = (px - s.cx) / s.r; ny = (py - s.cy) / s.r; }
+  else if (s.kind === 'conic') { nx = (1 + s.Q) * (px - s.vx) - s.R; ny = py; const l = Math.hypot(nx, ny); nx /= l; ny /= l; }
   else { const ex = s.bx - s.ax, ey = s.by - s.ay, l = Math.hypot(ex, ey); nx = -ey / l; ny = ex / l; }
   if (nx > 1e-12 || (Math.abs(nx) <= 1e-12 && ny < 0)) { nx = -nx; ny = -ny; }
   return [nx, ny];
@@ -67,7 +91,7 @@ export function trace(scene, ray) {
   for (let hop = 0; hop < 40; hop++) {
     let best = Infinity, bs = null;
     for (const s of scene.surfaces) {
-      const t = s.kind === 'arc' ? hitArc(s, x, y, dx, dy) : hitSeg(s, x, y, dx, dy);
+      const t = hit(s, x, y, dx, dy);
       if (t < best) { best = t; bs = s; }
     }
     if (!bs) {                       // nothing ahead: run to the edge of the world
@@ -179,3 +203,22 @@ export function paraxial(surfaces, nm, x0 = -1e3) {
   const k = o.pts.length, sl = (o.pts[k - 1] - o.pts[k - 3]) / (o.pts[k - 2] - o.pts[k - 4]);
   return { f: -y0 / sl, at: o.pts[k - 4] - o.pts[k - 3] / sl };
 }
+
+// ── where rays stop being enough ───────────────────────────────────────────────────────────────
+// Light is a wave. Through a round opening, a far-off point lands as the Airy pattern: brightness
+// (2·J1(x)/x)², where x = π·r/(λ·N), r is the distance from the middle, λ the wavelength and N the
+// f-number (how far the light travels after the opening, over the opening's width).
+// J1 by its power series, good to x of about 6.
+function j1(x) { let term = x / 2, sum = term; for (let k = 1; k < 40; k++) { term *= -(x * x / 4) / (k * (k + 1)); sum += term; } return sum; }
+function root(fn, a, b) { for (let i = 0; i < 80; i++) { const m = (a + b) / 2; if ((fn(a) < 0) === (fn(m) < 0)) a = m; else b = m; } return (a + b) / 2; }
+// The pattern's first dark ring is at J1's first zero. Its width across that ring is AIRY_K·λ·N.
+export const AIRY_K = 2 * root(j1, 3, 4.5) / Math.PI;                                  // 2.44
+// The game's measure of blur is twice the root-mean-square distance of the light from its middle.
+// The Airy pattern's faint outer rings make that measure endless, so the pattern is stood in for by
+// the Gaussian that is as wide at half its height. The pattern falls to half at x = X_HALF, a
+// Gaussian exp(−r²/2σ²) falls to half at r = σ·√(2·ln 2), and its root-mean-square radius is σ·√2.
+// So twice that radius is WAVE_K·λ·N, with WAVE_K = (2·X_HALF/π) / √(ln 2).
+const X_HALF = root((x) => (2 * j1(x) / x) ** 2 - 0.5, 1, 2.5);
+export const WAVE_K = 2 * X_HALF / Math.PI / Math.sqrt(Math.LN2);                      // 1.24
+// The spread, across one direction, of the Gaussian whose blur by that measure is `wave`.
+export const waveSigma = (wave) => wave / (2 * Math.SQRT2);

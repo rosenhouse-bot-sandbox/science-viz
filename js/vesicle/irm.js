@@ -103,9 +103,11 @@ export function irmOptics(lambda, focus = 0) {
   // that phase is a whole number of turns, darkest half a turn away, repeating every lambda / 2n.
   const kz = 2 * k0 * N_CELL, wr = Math.cos(ph) * re + Math.sin(ph) * im, wi = Math.sin(ph) * re - Math.cos(ph) * im, psi0 = Math.atan2(wr, -wi);
   const first = (target) => GAP + ((((target - psi0) % (2 * PI)) + 2 * PI) % (2 * PI)) / kz;
-  let half = 0; while (half < PSF_N - 1 && h0.re[half] > h0.re[0] / 2) half++;
+  // The blur's full width at half its peak, read between the two samples that straddle the half.
+  let half = 1; while (half < PSF_N - 1 && h0.re[half] > h0.re[0] / 2) half++;
+  const fwhm = 2 * PSF_DR * (half - 1 + (h0.re[half - 1] - h0.re[0] / 2) / (h0.re[half - 1] - h0.re[half]));
   return { lambda, focus, k0, kz, psi0, bright: first(0), dark: first(PI), re, im, I: re * re + im * im, glass: rGM * rGM, fringe: lambda / (2 * N_CELL), apart, dz, dzF,
-    h, peak: h0.re[0], fwhm: 2 * half * PSF_DR, strehl, blurF: 1 / Math.sqrt(strehl),
+    h, peak: h0.re[0], fwhm, strehl, blurF: 1 / Math.sqrt(strehl),
     // Contrast at radius r (nm) from the centre of a spot with complex strength c (see moment).
     spot: (c, r) => c[0] * at(h.re, r) - c[1] * at(h.im, r) };
 }

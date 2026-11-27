@@ -10,6 +10,32 @@ import { routeOrtho } from './route.js';
 
 export const LAYERED_STAGES = ['input', 'cycles', 'layers', 'order', 'place', 'route'];
 
+// Which nodes can reach each other along the arrows: nodes get the same number when a route runs
+// from each to the other. An edge is on a cycle when its two nodes have the same number.
+export function cycleSets(n, E) {
+  const out = Array.from({ length: n }, () => []);
+  for (const [s, t] of E) out[s].push(t);
+  const index = new Int32Array(n).fill(-1), low = new Int32Array(n), set = new Int32Array(n).fill(-1), held = [];
+  let next = 0, sets = 0;
+  for (let r = 0; r < n; r++) {
+    if (index[r] >= 0) continue;
+    const stack = [[r, 0]]; index[r] = low[r] = next++; held.push(r);
+    while (stack.length) {
+      const top = stack[stack.length - 1], v = top[0];
+      if (top[1] < out[v].length) {
+        const w = out[v][top[1]++];
+        if (index[w] < 0) { index[w] = low[w] = next++; held.push(w); stack.push([w, 0]); }
+        else if (set[w] < 0) low[v] = Math.min(low[v], index[w]);
+        continue;
+      }
+      stack.pop();
+      if (stack.length) { const u = stack[stack.length - 1][0]; low[u] = Math.min(low[u], low[v]); }
+      if (low[v] === index[v]) { for (;;) { const w = held.pop(); set[w] = sets; if (w === v) break; } sets++; }
+    }
+  }
+  return set;
+}
+
 // 1. Which edges to turn round so that no cycle is left.
 export function breakCycles(g, how) {
   const n = g.n, E = g.edges, rev = E.map(() => false);
@@ -52,7 +78,11 @@ export function breakCycles(g, how) {
   }
   const rank = new Int32Array(n);
   left.concat(right.reverse()).forEach((v, i) => { rank[v] = i; });
-  E.forEach(([s, t], i) => { rev[i] = rank[s] > rank[t]; });
+  // The line-up can put an edge that is on no cycle backwards. Turning it would serve nothing, so it
+  // is left alone: the edges that stay turned are all inside sets of nodes that reach each other,
+  // and those alone decide whether a cycle is left.
+  const set = cycleSets(n, E);
+  E.forEach(([s, t], i) => { rev[i] = rank[s] > rank[t] && set[s] === set[t]; });
   return rev;
 }
 
@@ -204,9 +234,59 @@ function layoutPiece(n, E, o, S) {
   };
   for (let v = 0; v < n; v++) { spread(outs[v], (e) => a4[chains[e][1]], pOut, v); spread(ins[v], (e) => a4[chains[e][chains[e].length - 2]], pIn, v); }
 
+  // where edge e meets each member of its chain: a port on its first and last node, and the dot's place between
+  const px = chains.map((ch, e) => ch.map((v, k) => (k === 0 ? pOut[e] : k === ch.length - 1 ? pIn[e] : a4[v])));
+  // Two edges must not run along one line. In the gap between two layers that can happen when one edge
+  // leaves the layer above at the place along it where another enters the layer below: the first
+  // runs down to its track and the second runs down from its own. Giving the first the higher track
+  // keeps them apart. Where that cannot be done (each of two edges leaves where the other enters, or
+  // one of them runs straight across the gap), the two ends are moved a little apart.
+  const CLOSE = 2.4, straightOn = (e, k) => Math.abs(px[e][k] - px[e][k + 1]) <= 0.5;
+  const meets = (p, q) => p[0] !== q[0] && Math.abs(px[p[0]][p[1]] - px[q[0]][q[1] + 1]) < CLOSE;   // p leaves where q enters
+  const inGap = (l) => { const here = []; chains.forEach((ch, e) => { for (let k = 0; k + 1 < ch.length; k++) if (lay[ch[k]] === l) here.push([e, k]); }); return here; };
+  // the pieces that cannot all be put in order: what is left when a piece with nothing above it is taken away, again and again
+  const knot = (here) => {
+    const left = new Set(here.map((_, i) => i));
+    for (let found = true; found;) {
+      found = false;
+      for (const i of left) if (![...left].some((j) => j !== i && meets(here[j], here[i]))) { left.delete(i); found = true; }
+    }
+    return left;
+  };
+  if (o.rt === 'ortho') {
+    const room = chains.map((ch, e) => ch.map((v, k) => (v >= n ? S.gap * 0.18 : (k === 0 ? outs : ins)[v].length > 1 ? Math.min(1.5, (S.sa[v] - 12) / ((k === 0 ? outs : ins)[v].length - 1) / 4) : 1.5)));
+    const shift = (e, k, d) => {
+      let k0 = k, k1 = k;
+      while (k0 > 0 && Math.abs(px[e][k0 - 1] - px[e][k0]) <= 0.5) k0--;
+      while (k1 + 1 < px[e].length && Math.abs(px[e][k1 + 1] - px[e][k1]) <= 0.5) k1++;
+      let most = Math.abs(d);
+      for (let i = k0; i <= k1; i++) most = Math.min(most, room[e][i]);
+      for (let i = k0; i <= k1; i++) { px[e][i] += Math.sign(d) * most; room[e][i] -= most; }
+      return most > 0;
+    };
+    const far = (x, y) => (Math.abs(y - x) <= 0.5 ? 0 : Math.sign(y - x));
+    const part = ([e, k], [f, j]) => {   // e leaves at a place and goes on towards d1; f comes from d2 and enters there
+      const d1 = far(px[e][k], px[e][k + 1]), d2 = far(px[f][j + 1], px[f][j]);
+      if (!d1 && !d2) return false;
+      if (!d1) return shift(f, j + 1, d2 * 3);
+      if (!d2) return shift(e, k, d1 * 3);
+      const one = shift(e, k, (d1 !== d2 ? d1 : -d1) * 1.5), two = shift(f, j + 1, d2 * 1.5);
+      return one || two;
+    };
+    for (let pass = 0, again = true; again && pass < 8; pass++) {
+      again = false;
+      for (let l = 0; l + 1 < L; l++) {
+        const here = inGap(l), tied = knot(here);
+        here.forEach((p, i) => here.forEach((q, j) => {
+          if (i === j || !meets(p, q)) return;
+          if (straightOn(...p) || straightOn(...q) || (tied.has(i) && tied.has(j))) again = part(p, q) || again;
+        }));
+      }
+    }
+  }
   // the pieces of edge in each gap between layers
   const segs = Array.from({ length: Math.max(0, L - 1) }, () => []);
-  chains.forEach((ch, e) => { for (let k = 0; k + 1 < ch.length; k++) segs[lay[ch[k]]].push({ e, k, a1: k === 0 ? pOut[e] : a4[ch[k]], a2: k === ch.length - 2 ? pIn[e] : a4[ch[k + 1]], t: -1 }); });
+  chains.forEach((ch, e) => { for (let k = 0; k + 1 < ch.length; k++) segs[lay[ch[k]]].push({ e, k, a1: px[e][k], a2: px[e][k + 1], t: -1 }); });
   const tracks = segs.map(() => 0);
   if (o.rt === 'ortho') {
     // Each piece that moves sideways runs along a track in the gap. Of two pieces, the one whose
@@ -214,8 +294,11 @@ function layoutPiece(n, E, o, S) {
     const inside = (x, s) => x > Math.min(s.a1, s.a2) + 0.25 && x < Math.max(s.a1, s.a2) - 0.25;
     const cost = (p, q) => (inside(q.a1, p) ? 1 : 0) + (inside(p.a2, q) ? 1 : 0);   // crossings if p is above q
     segs.forEach((list, l) => {
-      const need = list.filter((s) => Math.abs(s.a1 - s.a2) > 0.5);
-      need.sort((p, q) => cost(p, q) - cost(q, p) || p.a1 - q.a1);
+      const sorted = list.filter((s) => Math.abs(s.a1 - s.a2) > 0.5);
+      sorted.sort((p, q) => cost(p, q) - cost(q, p) || p.a1 - q.a1);
+      // a piece goes above every piece that enters where it leaves; otherwise the order above stands
+      const need = [], over = (p, q) => meets([p.e, p.k], [q.e, q.k]);
+      while (sorted.length) { let i = sorted.findIndex((q) => !sorted.some((p) => p !== q && over(p, q))); if (i < 0) i = 0; need.push(sorted.splice(i, 1)[0]); }
       need.forEach((s, i) => {
         let t = 0;
         for (let j = 0; j < i; j++) { const r = need[j]; if (Math.min(s.a1, s.a2) <= Math.max(r.a1, r.a2) + 5 && Math.min(r.a1, r.a2) <= Math.max(s.a1, s.a2) + 5) t = Math.max(t, r.t + 1); }
@@ -233,7 +316,17 @@ function layoutPiece(n, E, o, S) {
   const leave = (v) => (v < n ? mid(lay[v]) + S.sc[v] / 2 : bot(lay[v])), enter = (v) => (v < n ? mid(lay[v]) - S.sc[v] / 2 : top[lay[v]]);
 
   const paths = chains.map((ch, e) => {
-        if (o.rt === 'poly') return [[pOut[e], leave(ch[0])], ...ch.slice(1, -1).map((d) => [a4[d], mid(lay[d])]), [pIn[e], enter(ch[ch.length - 1])]];
+    if (o.rt === 'poly') {
+      // Straight from layer to layer. A piece runs straight only across the gap between two layers,
+      // where there is no node; it passes through a layer upright, at its dot.
+      const pts = [], last = ch.length - 1, add = (a, c) => { const p = pts[pts.length - 1]; if (!p || Math.abs(p[0] - a) > 1e-6 || Math.abs(p[1] - c) > 1e-6) pts.push([a, c]); };
+      ch.forEach((v, k) => {
+        if (k === 0) { add(px[e][0], leave(v)); add(px[e][0], bot(lay[v])); }
+        else if (k === last) { add(px[e][k], top[lay[v]]); add(px[e][k], enter(v)); }
+        else { add(px[e][k], top[lay[v]]); add(px[e][k], bot(lay[v])); }
+      });
+      return pts;
+    }
     const pts = [];
     for (let k = 0; k + 1 < ch.length; k++) {
       const l = lay[ch[k]], s = segs[l].find((q) => q.e === e && q.k === k), P = [s.a1, leave(ch[k])], Q = [s.a2, enter(ch[k + 1])];
@@ -338,6 +431,15 @@ function layoutGraph(n, edges, w, h, o) {
 
 const moved = (pts, d) => pts.map((p) => [p[0] + d[0], p[1] + d[1]]);
 
+// Why each turned edge was turned, counted: it is on a cycle of nodes; or it is on none, and runs
+// between two boxes against the order the boxes were given; or it is on none, and File order
+// turned it because it points back in the file.
+function reasons(g, rev, between) {
+  const set = cycleSets(g.n, g.edges), why = { cycle: 0, boxes: 0, file: 0 };
+  g.edges.forEach(([s, t], e) => { if (rev[e]) why[set[s] === set[t] ? 'cycle' : between && between(e) ? 'boxes' : 'file']++; });
+  return why;
+}
+
 // o.grp 'box' on a graph with groups: each group is laid out by itself and becomes a box, the
 // boxes are then laid out as if each were one large node, and edges between boxes are routed last
 // around the nodes. ELK can do this in one pass (hierarchyHandling: INCLUDE_CHILDREN), with the
@@ -356,7 +458,7 @@ export function layered(g, o) {
       }));
       finish({ pos, edges, boxes: [], bands: st >= 2 ? G.bands : [], dots: st >= 2 && st <= 4 });
     }
-    return { stages: LAYERED_STAGES, snaps, facts: { reversed: G.rev.filter(Boolean).length, layers: G.layers, bends: G.bends }, rev: G.rev, grouped: false };
+    return { stages: LAYERED_STAGES, snaps, facts: { reversed: G.rev.filter(Boolean).length, turned: reasons(g, G.rev), layers: G.layers, bends: G.bends }, rev: G.rev, grouped: false };
   }
 
   const K = g.groups.length, pad = 13;
@@ -394,5 +496,5 @@ export function layered(g, o) {
     if (P) inner.forEach((G, k) => { for (const b of G.bands) bands.push({ x: b.x + P.O[k][0], y: b.y + P.O[k][1], w: b.w, h: b.h }); });
     finish({ pos, edges, boxes: P ? boxesAt(P.O) : [], bands, dots: st >= 2 && st <= 4 });
   }
-  return { stages: LAYERED_STAGES, snaps, facts: { reversed: rev.filter(Boolean).length, layers: outer.layers, bends }, rev, grouped: true };
+  return { stages: LAYERED_STAGES, snaps, facts: { reversed: rev.filter(Boolean).length, turned: reasons(g, rev, (e) => innerOf[e] < 0), layers: outer.layers, bends }, rev, grouped: true };
 }

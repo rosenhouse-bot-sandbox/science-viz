@@ -5,7 +5,7 @@
 import { SAMPLES, parseTopology } from './graphs.js';
 import { layered } from './layered.js';
 import { gridSearch } from './search.js';
-import { measure, midLabels, labelsCovered } from './common.js';
+import { measure, midLabels, labelsCovered, passed } from './common.js';
 import { runReal, cancelD2, realLayout } from './real.js';
 import { gamepad } from '../gamepad/gamepad.js';
 import { touchSliders } from '../touch/slider.js';
@@ -24,8 +24,8 @@ const CONTROLS = [
   { id: 'cyc', m: 'layered', stage: 1, label: 'Edges to turn', options: [['greedy', 'Greedy'], ['dfs', 'Depth first'], ['file', 'File order']] },
   { id: 'grp', m: 'layered', stage: 2, label: 'Groups', options: [['box', 'Boxes'], ['colour', 'Color only']], only: () => graph && graph.groups.length > 0 },
   { id: 'lay', m: 'layered', stage: 2, label: 'Layer for each node', options: [['longest', 'Longest path'], ['tight', 'Short edges'], ['width', 'Width limit']] },
-  { id: 'wmax', m: 'layered', stage: 2, label: 'Most nodes in a layer', min: 1, max: 10, only: () => P.lay === 'width' },
-  { id: 'sw', m: 'layered', stage: 3, label: 'Sorting passes', min: 0, max: 10 },
+  { id: 'wmax', m: 'layered', stage: 2, label: 'Most nodes in a layer, per connected piece', min: 1, max: 10, only: () => P.lay === 'width' },
+  { id: 'sw', m: 'layered', stage: 3, label: () => (P.eng === 'real' ? 'Sorting effort' : 'Sorting passes'), min: 0, max: 10 },
   { id: 'seed', m: 'search', stage: 2, label: 'Seed', min: 1, max: 40 },
   { id: 'tries', m: 'search', stage: 2, label: 'Tries', min: 1, max: 12 },
   { id: 'flow', m: 'search', own: true, stage: 2, label: () => 'Point edges ' + P.dir, min: 0, max: 10 },
@@ -39,7 +39,7 @@ const CONTROLS = [
 const P = { g: 'topology', m: 'layered', eng: 'own', grp: 'box', cyc: 'greedy', lay: 'longest', wmax: 4, sw: 6, seed: 1, tries: 3, flow: 3, cross: 5, rt: 'ortho', gap: 22, lgap: 44, dir: 'down', lab: 'off' };
 const STAGE_NAME = { input: 'Input', cycles: 'Turn', layers: 'Layers', order: 'Sort', place: 'Align', route: 'Route', boxes: 'Group', search: 'Search', real: 'Result' };
 const NOTE = {
-  layered: 'The five steps of ELK Layered, written again for this page. This is not ELK’s own code.',
+  layered: 'The five steps of ELK Layered, in a simpler form written for this page. This is not ELK’s own code.',
   search: 'This is not TALA’s code. Real TALA first finds trees, hubs, clusters and layered parts, then places and routes. This simpler search keeps the same outline: boxes, seeded tries, the best score, right-angle edges.',
 };
 
@@ -49,7 +49,9 @@ const REAL_NOTE = {
   search: 'This is the real TALA, inside D2’s WebAssembly build (@d2lang/d2 0.1.34), loaded from jsDelivr. It gives the finished layout only.',
 };
 let failed = '', perSeed = 0, toEnd = false, job = 0, working = '', workT = 0, workTimer = 0, tookS = 0, wait = 0;
-let graph = null, layout = null, stage = 0, q = 0, mix = 1, from = null, shown = null;
+// A change of settings glides the nodes to their new places (mix 0 to 1) and then brings in the new edges (1 to MIX).
+const LAND = 0.4, MIX = 1 + LAND;
+let graph = null, layout = null, stage = 0, q = 0, mix = MIX, from = null, shown = null;
 let playing = false, dwell = 0, hot = -1, dirty = false, raf = 0, lastT = 0, view = { s: 1, tx: 0, ty: 0 }, lastAspect = 0;
 const graphs = new Map();
 
@@ -106,7 +108,11 @@ function use(next, o, glide) {
   const last = layout.snaps.length - 1;
   if (toEnd) { stage = last; toEnd = false; }
   if (stage > last) { stage = last; q = last; }
-  if (glide && shown && !still.matches) { from = shown; mix = 0; } else mix = 1;
+  const S = layout.snaps;
+  layout.rest = S.map((a, i) => i + 1 < S.length && (a.pos === S[i + 1].pos || a.pos.every((p, v) => Math.abs(p[0] - S[i + 1].pos[v][0]) < 1e-6 && Math.abs(p[1] - S[i + 1].pos[v][1]) < 1e-6)));   // no node moves between this step and the next
+  layout.longest = Math.max(...graph.labels.map((t) => t.length));
+  if (layout.real && !layout.waiting) for (const e of S[1].edges) e.given = true;   // the engine's own lines are drawn as it gave them
+  if (glide && shown && !still.matches) { from = shown; mix = 0; } else mix = MIX;
   panel(); kick();
 }
 // ---- the real engines ----
@@ -121,7 +127,7 @@ async function ask(o) {
   try {
     const next = await runReal(g, o);
     if (id !== job) return;
-    working = ''; clearInterval(workTimer); tookS = (performance.now() - workT) / 1000;
+    working = ''; clearInterval(workTimer); tookS = next.took;   // the layout alone, without the download and the start
     if (P.m === 'search') perSeed = tookS / o.tries * 55 / Math.max(1, g.n);   // seconds for each seed, scaled to a 55-node graph, for the next estimate
     use(next, o, true); stage = 1; if (still.matches || !shown) q = 1;
     panel(); kick();
@@ -135,7 +141,7 @@ async function ask(o) {
     $('status').textContent = failed; panel();
   }
 }
-const stats = (i) => layout.stats[i] || (layout.stats[i] = { ...measure(layout.snaps[i].edges), covered: labelsCovered(layout.snaps[i].labels, layout.snaps[i].pos, layout.o) });
+const stats = (i) => layout.stats[i] || (layout.stats[i] = { ...measure(layout.snaps[i].edges, { pos: layout.snaps[i].pos, pairs: layout.graph.edges, o: layout.o }), covered: labelsCovered(layout.snaps[i].labels, layout.snaps[i].pos, layout.o) });
 
 function setGraph(id, keepStage) {
   P.g = id; $('graph').value = id; hot = -1; failed = '';
@@ -170,12 +176,18 @@ function caption(id) {
       if (g.repeats || g.loops.length) t += ' Left out of the count: ' + [g.repeats ? n(g.repeats, 'edge that repeats', 'edges that repeat') + ' an earlier one' : '', g.loops.length ? n(g.loops.length, 'edge', 'edges') + ' from a node to itself' : ''].filter(Boolean).join(', and ') + '.';
       return t;
     }
-    case 'cycles': return f.reversed
-      ? 'A cycle is a route along the arrows that comes back to where it began. ' + (f.reversed === 1 ? 'One arrow is' : f.reversed + ' arrows are') + ' turned around, drawn in red, so that no cycle is left.'
-      : 'A cycle is a route along the arrows that comes back to where it began. This graph has none, so no arrow is turned.';
-    case 'layers': if (layout.grouped) return 'A layer is one ' + (down ? 'row' : 'column') + '. Inside each group’s box, a node goes in a layer after every node that points to it. The boxes are then put in layers the same way, each as one large node.';
+    case 'cycles': {
+      const T = f.turned, k = f.reversed, arrows = (c) => (c === 1 ? 'One arrow is' : c + ' arrows are');
+      const def = 'A cycle is a route along the arrows that comes back to where it began. ';
+      if (!k) return def + 'This graph has none, so no arrow is turned.';
+      if (P.cyc === 'file') return def + (k === 1 ? 'One arrow points' : k + ' arrows point') + ' back to an earlier ' + (layout.grouped ? 'box, or to an earlier node in the same box' : 'node in the file') + '. File order turns ' + (k === 1 ? 'it' : 'them') + ' around, drawn in red, so no cycle is left.';
+      if (!T.boxes) return def + arrows(k) + ' turned around, drawn in red, so that no cycle is left.';
+      if (!T.cycle) return def + 'The nodes form none, but the boxes do. ' + arrows(k) + ' turned around, drawn in red, so that no cycle of boxes is left.';
+      return def + arrows(k) + ' turned around, drawn in red, so that no cycle is left. ' + (T.boxes === 1 ? 'One of them is' : T.boxes + ' of them are') + ' on a cycle of boxes only.';
+    }
+    case 'layers': if (layout.grouped) return 'A layer is one ' + (down ? 'row' : 'column') + '. Inside each box, a node goes in a layer after every node that points to it, and an edge that passes over a layer gets a dot in it. The boxes are then put in layers the same way, each as one large node.';
       return 'A layer is one ' + (down ? 'row' : 'column') + '. Each node goes in a layer after every node that points to it. An edge that passes over a layer gets a dot in it' + (f.bends ? ': ' + n(f.bends, 'dot', 'dots') + ' here.' : '; here no edge does.');
-    case 'order': { const a = stats(2).crossings, b = stats(3).crossings; return 'Each layer is sorted so that a node sits near the nodes it joins in the next layer. Crossings ' + (a === b ? 'stay at ' + a : 'go from ' + a + ' to ' + b) + '.'; }
+    case 'order': { const a = stats(2).crossings, b = stats(3).crossings; return (P.sw === 0 ? 'With 0 passes, no layer is sorted.' : 'Each layer is sorted so that a node sits near the nodes it joins in the next layer.') + ' Crossings ' + (a === b ? 'stay at ' + a : 'go from ' + a + ' to ' + b) + '.'; }
     case 'place': if (layout.grouped) return 'Nodes slide along the layer they are in, and boxes do the same, keeping their order, until joined ones line up.';
       return 'Nodes slide along the layer they are in, keeping their order, until joined nodes line up and edges run straight.';
     case 'route': return (P.lab === 'on' ? 'Each label is put at the middle of its edge. This page’s code does not move it clear of anything. ' : '') + (P.m === 'layered'
@@ -187,7 +199,12 @@ function caption(id) {
     case 'boxes': return g.groups.length
       ? 'The file puts each node in a group. Each group gets a box, and boxes and nodes sit on grids in file order.'
       : 'The nodes sit on a grid in file order, with spare cells to move into.';
-    case 'search': return 'Two nodes' + (g.groups.length ? ', or two boxes,' : '') + ' swap places, and the swap is kept if the score drops. The score adds up edge length, bends and crossings. Lowest of ' + n(f.tries.length, 'try', 'tries') + ': ' + f.tries[f.best] + ', down from ' + f.firstScore + '.';
+    case 'search': {
+      const terms = ['edge length', 'bends'], best = f.tries[f.best];
+      if (P.cross) terms.push('crossings');
+      if (P.flow) terms.push('edges that do not point ' + P.dir);
+      return 'Each try shuffles the nodes' + (g.groups.length ? ' and boxes' : '') + ', then swaps two at a time and keeps a swap that lowers the score. The score adds up ' + terms.slice(0, -1).join(', ') + ' and ' + terms[terms.length - 1] + '. Lowest of ' + n(f.tries.length, 'try', 'tries') + ': ' + best + (best < f.firstScore ? ', down from ' + f.firstScore + '.' : '. File order scored ' + f.firstScore + '.');
+    }
   }
   return '';
 }
@@ -207,6 +224,23 @@ function panel() {
   for (const b of $('method').children) b.setAttribute('aria-pressed', String(b.dataset.v === P.m));
   $('methodNote').textContent = failed && P.eng === 'own' ? failed : P.eng === 'real' ? REAL_NOTE[P.m] : NOTE[P.m];
   $('links-layered').hidden = P.m !== 'layered'; $('links-search').hidden = P.m !== 'search';
+  $('graphFacts').textContent = graph.n + ' nodes · ' + graph.edges.length + ' edges' + (graph.groups.length ? ' · ' + graph.groups.length + ' groups' : '');
+  // The words and numbers belong to a picture at rest. While the nodes glide they stay as they were, and change when the glide ends.
+  if (!moving()) tell(ids);
+  for (const c of CONTROLS) {
+    const row = $('ctl-' + c.id);
+    row.hidden = !!(c.m && c.m !== P.m) || !!(c.only && !c.only()) || !!(c.own && P.eng === 'real');
+    if (c.id === 'eng') row.querySelector('[data-v=real]').textContent = REAL_NAME[P.m];
+    row.querySelector('.name').textContent = typeof c.label === 'function' ? c.label() : c.label;
+    if (c.options) for (const b of row.querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.v === P[c.id]));
+    else { const inp = row.querySelector('input'); inp.value = P[c.id]; inp.style.setProperty('--v', (P[c.id] - c.min) / (c.max - c.min) * 100 + '%'); row.querySelector('b').textContent = P[c.id]; }
+  }
+  $('prev').setAttribute('aria-disabled', String(stage === 0));
+  $('next').setAttribute('aria-disabled', String(stage === ids.length - 1));
+  pick(); writeHash();
+}
+const moving = () => dirty || q !== stage || mix < MIX;   // a changed setting that is not laid out yet counts: its glide is about to start
+function tell(ids) {
   $('eyebrow').textContent = 'Step ' + (stage + 1) + ' of ' + ids.length;
   if (working) {   // the engine is running: say so where the step's name goes, with the time so far and what to expect
     const sec = Math.round((performance.now() - workT) / 1000), est = Math.round((perSeed || 8) * P.tries * graph.n / 55);
@@ -218,32 +252,23 @@ function panel() {
     $('capTitle').textContent = STAGE_NAME[ids[stage]];
     $('capText').textContent = caption(ids[stage]);
   }
-  $('graphFacts').textContent = graph.n + ' nodes · ' + graph.edges.length + ' edges' + (graph.groups.length ? ' · ' + graph.groups.length + ' groups' : '');
   const st = stats(stage), f = layout.facts;
   meter(0, 'Crossings', st.crossings);
   if (P.lab === 'on') meter(1, 'Labels covered', layout.snaps[stage].labels.length ? st.covered : '…');
-  else meter(1, 'Edge length', Math.round(st.length / layout.o.nodeW));
+  else meter(1, 'Edge length', Math.round(st.length / layout.o.nodeW), false, 'node widths');
   if (layout.real) meter(2, 'Seconds', working || stage === 0 ? '…' : tookS.toFixed(1));
   else if (P.m === 'layered') meter(2, 'Turned edges', stage >= 1 ? f.reversed : 0, stage >= 1 && f.reversed > 0);
-  else meter(2, 'Score', stage >= 2 ? f.tries[f.best] : f.firstScore);
-  for (const c of CONTROLS) {
-    const row = $('ctl-' + c.id);
-    row.hidden = !!(c.m && c.m !== P.m) || !!(c.only && !c.only()) || !!(c.own && P.eng === 'real');
-    if (c.id === 'eng') row.querySelector('[data-v=real]').textContent = REAL_NAME[P.m];
-    row.querySelector('.name').textContent = typeof c.label === 'function' ? c.label() : c.label;
-    if (c.options) for (const b of row.querySelectorAll('button')) b.setAttribute('aria-pressed', String(b.dataset.v === P[c.id]));
-    else { const inp = row.querySelector('input'); inp.value = P[c.id]; inp.style.setProperty('--v', (P[c.id] - c.min) / (c.max - c.min) * 100 + '%'); row.querySelector('b').textContent = P[c.id]; }
-  }
-  $('prev').setAttribute('aria-disabled', String(stage === 0));
-  $('next').setAttribute('aria-disabled', String(stage === ids.length - 1));
-  thumbs(); pick(); writeHash();
+  // the score of the picture shown; routing does not change it, so at Route it is still the Search step's
+  else meter(2, stage === 3 ? 'Score at Search' : 'Score', stage >= 2 ? f.tries[f.best] : stage === 1 ? f.firstScore : f.inputScore);
+  thumbs();
 }
-function meter(i, name, value, turned) {
+function meter(i, name, value, turned, unit) {
   const box = $('meters');
   while (box.children.length <= i) { const d = document.createElement('div'); d.className = 'meter'; d.append(document.createElement('span'), document.createElement('b')); box.append(d); }
   const d = box.children[i];
   d.classList.toggle('turned', !!turned);
   d.firstChild.textContent = name; d.lastChild.textContent = String(value);
+  if (unit) { const u = document.createElement('small'); u.textContent = unit; d.lastChild.append(' ', u); }
 }
 function pick() {
   let t = '';
@@ -349,12 +374,15 @@ function head(a, b, size, centre) {
   ctx.lineTo(tx - dx * size + dy * size * 0.45, ty - dy * size - dx * size * 0.45);
   ctx.closePath(); ctx.fill();
 }
+let straight = [], ends = null;   // this frame's straight lines; and, for the page test, where every line drawn begins and ends
 function edge(e, pts, alpha, i, size) {
   if (alpha <= 0.004) return;
   const [s, t] = graph.edges[i], lit = hot >= 0 && (s === hot || t === hot);
   ctx.globalAlpha = alpha * (hot < 0 ? 0.62 : lit ? 1 : 0.16);
   ctx.strokeStyle = ctx.fillStyle = e.mark ? TURNED : lit ? INK : EDGE;
   ctx.lineWidth = (lit ? 1.9 : 1.2) / view.s;
+  if (e.kind === 'line' && !e.given) straight.push({ pts, s, t, alpha: ctx.globalAlpha, ink: ctx.strokeStyle, width: ctx.lineWidth });
+  if (ends) ends.push([s, t, pts[0][0], pts[0][1], pts[pts.length - 1][0], pts[pts.length - 1][1], alpha]);
   trace(pts, e.kind);
   const n = pts.length, centre = e.kind === 'line';
   if (e.turned) head(pts[1], pts[0], size, centre); else head(pts[n - 2], pts[n - 1], size, centre);
@@ -369,11 +397,18 @@ function draw() {
   if (canvas.width !== Math.round(W * dpr) || canvas.height !== Math.round(H * dpr)) { canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr); }
   ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, canvas.width, canvas.height);
   if (!layout) return;
-  const S = layout.snaps, o = layout.o, i = Math.min(S.length - 1, Math.floor(q)), A = S[i], B = S[Math.min(S.length - 1, i + 1)], f = ease(q - i);
+  const S = layout.snaps, o = layout.o, i = Math.min(S.length - 1, Math.floor(q)), A = S[i], B = S[Math.min(S.length - 1, i + 1)], raw = q - i;
+  // An edge stays on its two nodes while they glide. A straight line is carried from one step's line to the
+  // next. Where it cannot be (a routed line has other bends), the nodes move first with a straight line
+  // between them, and the routed line comes in once they are at rest.
+  const carried = (ea, eb) => ea.kind === 'line' && eb.kind === 'line' && ea.pts.length === eb.pts.length;
+  const lands = raw > 0 && !layout.rest[i] && A.edges.some((ea, k) => !carried(ea, B.edges[k]));
+  const f = ease(lands ? Math.min(1, raw / (1 - LAND)) : raw), land = lands ? Math.max(0, (raw - (1 - LAND)) / LAND) : 0;
   let pos = f === 0 || A.pos === B.pos ? A.pos : mixPts(A.pos, B.pos, f), bb = mixBox(A.bbox, B.bbox, f);
-  const m = mix < 1 && from ? ease(mix) : 1;
+  const gliding = mix < MIX && !!from, m = gliding ? ease(Math.min(1, mix)) : 1;
   if (m < 1) { pos = mixPts(from.pos, pos, m); bb = mixBox(from.bb, bb, m); }
   shown = { pos, bb };
+  straight = []; ends = window.__graph ? [] : null;
   const a = area(), s = Math.min(a.w / (bb.w + 24), a.h / (bb.h + 24), 1.7);
   view = { s, tx: a.x + a.w / 2 - (bb.x + bb.w / 2) * s, ty: a.y + a.h / 2 - (bb.y + bb.h / 2) * s };
   ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * view.tx, dpr * view.ty);
@@ -391,14 +426,15 @@ function draw() {
 
   // edges
   const size = Math.max(6.5, 5 / s);
-  if (m < 1) { ctx.globalAlpha = (1 - m) * 0.5; ctx.strokeStyle = EDGE; ctx.lineWidth = 1.2 / s; ctx.beginPath(); for (const [u, v] of graph.edges) { ctx.moveTo(pos[u][0], pos[u][1]); ctx.lineTo(pos[v][0], pos[v][1]); } ctx.stroke(); }
-  const fade = m * m;
+  // After a change of settings the new lines come in when the nodes have reached their new places; until then each edge is a straight line between its two nodes.
+  const fade = gliding ? Math.max(0, (mix - 1) / LAND) : 1, between = (k) => [pos[graph.edges[k][0]], pos[graph.edges[k][1]]];
+  if (fade < 1) graph.edges.forEach((_, k) => edge({ kind: 'line', mark: false, turned: false }, between(k), 1 - fade, k, size));
   A.edges.forEach((ea, k) => {
     const eb = B.edges[k];
-    if (f === 0) edge(ea, ea.pts, fade, k, size);
-    else if (ea.kind === 'line' && eb.kind === 'line' && ea.pts.length === eb.pts.length && ea.turned === eb.turned && ea.mark === eb.mark) edge(ea, mixPts(ea.pts, eb.pts, f), fade, k, size);
-    else if (ea.kind === 'line' && eb.kind === 'line' && ea.pts.length === eb.pts.length) { const p = mixPts(ea.pts, eb.pts, f); edge(ea, p, fade * (1 - f), k, size); edge(eb, p, fade * f, k, size); }
-    else { edge(ea, ea.pts, fade * (1 - f), k, size); edge(eb, eb.pts, fade * f, k, size); }
+    if (raw === 0) edge(ea, ea.pts, fade, k, size);
+    else if (carried(ea, eb)) { const p = mixPts(ea.pts, eb.pts, f); if (ea.turned === eb.turned && ea.mark === eb.mark) edge(ea, p, fade, k, size); else { edge(ea, p, fade * (1 - f), k, size); edge(eb, p, fade * f, k, size); } }
+    else if (!lands) { edge(ea, ea.pts, fade * (1 - f), k, size); edge(eb, eb.pts, fade * f, k, size); }   // the nodes are at rest: one line fades into the other
+    else { edge({ kind: 'line', mark: ea.mark && eb.mark, turned: false }, between(k), fade * (1 - land), k, size); edge(eb, eb.pts, fade * land, k, size); }
   });
   // the dots that hold an edge's place in a layer
   const dots = ((A.dots ? 1 - f : 0) + (B.dots ? f : 0)) * fade;
@@ -413,13 +449,12 @@ function draw() {
   // edge labels: a plate where the label sits, and its text when that is large enough to read
   const plates = (snap, alpha) => {
     if (!snap.labels.length || alpha <= 0.01) return;
-    const read = 10 * s >= 5.5;
     ctx.font = LABEL_FONT; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     snap.labels.forEach((l) => {
       const [u, v] = graph.edges[l.e] || [], lit = hot >= 0 && (u === hot || v === hot), dim = hot >= 0 && !lit;
       ctx.globalAlpha = alpha * (dim ? 0.25 : 0.92); ctx.fillStyle = '#131b33'; rounded(l.x - l.w / 2, l.y - l.h / 2, l.w, l.h, 3); ctx.fill();
       ctx.globalAlpha = alpha * (dim ? 0.2 : 0.7); ctx.strokeStyle = lit ? INK : EDGE; ctx.lineWidth = 0.7 / s; ctx.stroke();
-      if (read) { ctx.globalAlpha = alpha * (dim ? 0.3 : 1); ctx.fillStyle = INK; ctx.fillText(l.text, l.x, l.y + 0.5); }
+      ctx.globalAlpha = alpha * (dim ? 0.3 : 1); ctx.fillStyle = INK; ctx.fillText(l.text, l.x, l.y + 0.5);
     });
   };
   if (A.labels === B.labels) plates(A, fade); else { plates(A, fade * (1 - f)); plates(B, fade * f); }
@@ -427,16 +462,29 @@ function draw() {
   // nodes
   const near = hot >= 0 ? new Set([hot]) : null;
   if (near) for (const [u, v] of graph.edges) { if (u === hot) near.add(v); if (v === hot) near.add(u); }
-  const text = 11.5 * s >= 6.2;
-  ctx.font = '500 11.5px "JetBrains Mono", ui-monospace, Menlo, monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   for (let v = 0; v < graph.n; v++) {
     const c = colour(v), x = pos[v][0] - o.nodeW / 2, y = pos[v][1] - o.nodeH / 2, dim = near && !near.has(v);
     ctx.globalAlpha = 1; ctx.fillStyle = '#0a1022'; rounded(x, y, o.nodeW, o.nodeH, 7); ctx.fill();
     ctx.globalAlpha = dim ? 0.1 : v === hot ? 0.5 : 0.24; ctx.fillStyle = c; ctx.fill();
     ctx.globalAlpha = dim ? 0.3 : 1; ctx.strokeStyle = v === hot ? INK : c; ctx.lineWidth = Math.max(1, 1 / s) * (v === hot ? 2 : 1.2); ctx.stroke();
-    if (text) { ctx.fillStyle = INK; ctx.globalAlpha = dim ? 0.35 : 0.95; ctx.fillText(graph.labels[v], pos[v][0], pos[v][1] + 0.5); }
   }
+  // Before the edges are routed, an edge is a straight line between its two nodes, and it can pass a
+  // node that it does not join. That stretch is drawn over the node, so that the line is seen to go on.
+  for (const l of straight) {
+    const over = passed(l.pts, pos, o, l.s, l.t);
+    if (!over.length) continue;
+    ctx.save(); ctx.beginPath();
+    for (const v of over) ctx.rect(pos[v][0] - o.nodeW / 2, pos[v][1] - o.nodeH / 2, o.nodeW, o.nodeH);
+    ctx.clip();
+    ctx.globalAlpha = l.alpha; ctx.strokeStyle = l.ink; ctx.lineWidth = l.width; trace(l.pts, 'line');
+    ctx.restore();
+  }
+  // A node's name is drawn at every size of the picture, as large as the node allows when the picture is small.
+  const name = Math.min(Math.max(11.5, 6.5 / s), o.nodeH - 6, (o.nodeW - 8) / (0.62 * layout.longest));
+  ctx.font = '500 ' + name + 'px "JetBrains Mono", ui-monospace, Menlo, monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (let v = 0; v < graph.n; v++) { ctx.fillStyle = INK; ctx.globalAlpha = near && !near.has(v) ? 0.35 : 0.95; ctx.fillText(graph.labels[v], pos[v][0], pos[v][1] + name * 0.04); }
   ctx.globalAlpha = 1;
+  if (window.__graph) window.__graph.frame({ moving: moving(), title: $('capTitle').textContent, text: $('capText').textContent, w: o.nodeW, h: o.nodeH, pos, ends });
 }
 
 function kick() { if (!raf) raf = requestAnimationFrame(tick); }
@@ -445,13 +493,15 @@ function tick(t) {
   const dt = lastT ? Math.min(50, t - lastT) : 16; lastT = t;
   if (dirty) { dirty = false; compute(true); }
   let busy = false;
-  if (mix < 1) { mix = Math.min(1, mix + dt / 420); busy = true; }
+  const was = moving();
+  if (mix < MIX) { mix = Math.min(MIX, mix + dt / 420); busy = true; }
   if (q !== stage) { const step = dt / 700 * Math.max(1, Math.abs(stage - q) * 0.8); q = Math.abs(stage - q) <= step ? stage : q + Math.sign(stage - q) * step; busy = true; }
   else if (playing) {
     dwell += dt;
     if (dwell > (still.matches ? 1500 : 700)) { if (stage < layout.snaps.length - 1) go(stage + 1); else { setPlaying(false); $('status').textContent = 'The steps have finished.'; } }
     busy = playing;
   }
+  if (was && !moving()) panel();   // the glide has ended: now the words and numbers are this picture's
   draw();
   if (busy || dirty) kick(); else lastT = 0;
 }

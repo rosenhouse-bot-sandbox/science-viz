@@ -2,11 +2,11 @@
 // carriage, cross slide, compound, tool post, tailstock) and a knee mill (table, vise, spin indexer, tilting dividing
 // head, a head that tilts), drawn round the part being made. All sizes in millimeters; the machines are a typical
 // bench lathe's and a small knee mill's. The part's shape comes from cut.js; nothing here decides it.
-import { program } from '../gl/gl.js?v=57c9eaea';
-import { GLSL, withLit } from './look.js?v=57c9eaea';
-import { grow, lathe, box, poly, sphere, gearMesh } from './mesh.js?v=57c9eaea';
-import { bodyFaces, dot, cross, norm } from './model.js?v=57c9eaea';
-import { outline } from './cut.js?v=57c9eaea';
+import { program } from '../gl/gl.js?v=cbfbfc46';
+import { GLSL, withLit } from './look.js?v=cbfbfc46';
+import { grow, lathe, box, poly, sphere, gearMesh } from './mesh.js?v=cbfbfc46';
+import { bodyFaces, dot, cross, norm } from './model.js?v=cbfbfc46';
+import { outline } from './cut.js?v=cbfbfc46';
 
 const VS = `#version 300 es
 layout(location=0) in vec3 aPos; layout(location=1) in vec3 aNor; layout(location=2) in vec3 aT;
@@ -46,7 +46,8 @@ void main(){
   vec3 n = normalize(vN), v = normalize(uCam - vW);
   if (dot(n, v) < 0.) n = -n;
   vec3 base; float rough = 0.3;
-  if (kind == 0) { base = uTint * 1.08; rough = 0.3; base *= 0.96 + 0.04 * sin(vT.y * 140.); }                       // turned or milled brass
+  if (kind == 0) { base = uTint * 1.08; rough = 0.3; base *= 0.96 + 0.04 * sin(vT.y * 140.); }                       // turned brass
+  else if (kind == 15 || kind == 16) { base = uTint * 1.08; rough = 0.3; }                                     // milled brass: 15 by a fly cutter or an end mill's bottom, 16 by a cutter's side
   else if (kind == 1) { base = vec3(0.6, 0.62, 0.65); rough = 0.42; base *= 0.95 + 0.05 * sin(vT.y * 3.); }  // machined steel
   else if (kind == 2) { base = uPaint; rough = 0.75; base *= 0.94 + 0.06 * hash(floor(vL * 1.5)); }           // painted cast iron
   else if (kind == 3) { base = vec3(0.6, 0.62, 0.65); rough = 0.38; }                                        // ground tool steel
@@ -55,7 +56,7 @@ void main(){
   else if (kind == 6) { base = uTint * 1.05; rough = 0.15; }                                                   // chips
   else if (kind == 8) { base = uTint * 0.55; rough = 0.5; }                                                    // inside a hole
   else if (kind == 9) { base = uTint * (0.35 + 0.3 * smoothstep(-0.6, 0.6, sin(vT.y * 20.944))); rough = 0.5; }  // a tapped hole
-  else if (kind == 10) { float a = atan(vL.y, vL.x); base = vec3(0.78, 0.8, 0.83) * (0.55 + 0.45 * smoothstep(-0.3, 0.3, sin(a * vT.y + vL.z * vT.z - uSpin))); rough = 0.15; } // fluted cutter
+  else if (kind == 10) { float a = atan(vL.y, vL.x); base = vec3(0.78, 0.8, 0.83) * (0.55 + 0.45 * smoothstep(-0.3, 0.3, sin(a * vT.y - vL.z * vT.z + uSpin))); rough = 0.15; } // fluted cutter: right-hand flutes, turning clockwise seen from the shank
   else if (kind == 11) { base = vec3(0.05, 0.05, 0.055); rough = 0.6; }                                         // black
   else if (kind == 12) { base = uPaint * 0.35; rough = 0.8; }                                                    // a T-slot's shadow
   else if (kind == 13) { base = vec3(0.42, 0.44, 0.47); rough = 0.45; }                                       // chuck jaws, hardened and ground
@@ -66,10 +67,11 @@ void main(){
 #ifdef LIT
   {
     // as in photos of real shops: brass bright, steel a satin mid gray, black oxide a dark gray, cast iron lumpy under its paint
-    bool brass = kind == 0 || kind == 5 || kind == 6 || kind == 8 || kind == 9 || kind == 14, mtl = kind != 2 && kind != 11 && kind != 12;
+    bool brass = kind == 0 || kind == 5 || kind == 6 || kind == 8 || kind == 9 || kind == 14 || kind == 15 || kind == 16, mtl = kind != 2 && kind != 11 && kind != 12;
     if (brass) base = clamp(base / uTint, 0., 1.2) * vec3(0.98, 0.80, 0.52);
     if (kind == 14) base = vec3(0.86, 0.76, 0.55) * (0.94 + 0.06 * hash(floor(vL * 2.5)));
-    int fin = (kind == 0 || kind == 5) ? 1 : (kind == 1 ? 4 : (mtl ? 0 : 3));
+    // the marks a cut leaves: rings from turning, arcs from a fly cutter or an end mill's bottom, none from a cutter's side
+    int fin = (kind == 0 || kind == 5) ? 1 : (kind == 15 ? 2 : (kind == 1 ? 4 : (mtl ? 0 : 3)));
     float rr = mtl ? (brass && kind != 14 ? rough * 0.5 : max(rough, 0.42)) : 0.55;
     // the machines and tools are used, not polished: satin steel dulled by an oil film, wear and grime, which stay put
     // on each part (its own coordinates, in millimeters) as it moves
@@ -176,15 +178,12 @@ function latheParts() {
   let m0 = mark(g); lathe(g, [[0, -75], [36, -75], [36, -66], [50, -66], [50, -58], [52, -56], [52, -20], [50, -18], [16, -18], [16, -18]], 1, 96); place(g, m0, ALONG_X);
   for (let k = 0; k < 3; k++) { m0 = mark(g); box(g, [-38, 49, -3], [-32, 52.3, 3], K(11)); place(g, m0, M4.rx(k * 2 * Math.PI / 3 + Math.PI / 3)); }
   p.chuck = g;
-  // the collet chuck (turns): body, nut, and the collet's face
-  g = grow(); m0 = mark(g);
-  lathe(g, [[0, -75], [36, -75], [36, -66], [26, -64], [26, -24], [17, -16], [17, -4], [8, -4], [8, -2], [0, -2]], 1, 96); place(g, m0, ALONG_X);
-  for (let k = 0; k < 6; k++) { m0 = mark(g); box(g, [-16, 15.6, -1.5], [-6, 17.6, 1.5], K(4)); place(g, m0, M4.rx(k * Math.PI / 3)); }
-  p.collet = g;
   // the carriage (moves along x with the tool), the cross slide (moves in z), the compound (turns to the taper's angle)
   g = grow(); box(g, [-32, -CENTER - 4, -60], [32, -CENTER + 14, 58], K(2)); box(g, [-44, -CENTER - 36, 52], [44, -CENTER + 8, 70], K(2)); p.carriage = g;
   g = grow(); box(g, [-26, -CENTER + 14, -40], [26, -CENTER + 30, 44], K(2)); let m1 = mark(g); cyl(g, 4, 0, 34, 1); place(g, m1, M4.t(0, -CENTER + 22, 44)); p.cross = g;
-  g = grow(); box(g, [-18, -CENTER + 30, -22], [18, -CENTER + 42, 26], K(2)); m1 = mark(g); cyl(g, 3, 0, 26, 1); place(g, m1, M4.t(0, -CENTER + 36, 26)); p.compound = g;
+  // the compound: its base turns on the cross slide to the taper's angle, and its top slide carries the tool post along that angle
+  g = grow(); box(g, [-18, -CENTER + 30, -22], [18, -CENTER + 36, 26], K(2)); p.compound = g;
+  g = grow(); box(g, [-15, -CENTER + 36, -22], [15, -CENTER + 42, 26], K(2)); m1 = mark(g); cyl(g, 3, 0, 26, 1); place(g, m1, M4.t(0, -CENTER + 39, 26)); p.top = g;
   // the tool post: a block with a slot the 6 mm bit sits in, clamped by two screws from the top
   g = grow(); box(g, [-7, -CENTER + 42, 13], [15, -6.2, 37], K(4)); box(g, [-7, 0.2, 13], [15, 4, 37], K(4)); box(g, [13, -6.2, 13], [15, 0.2, 37], K(4));
   for (const z of [19, 30]) { m1 = mark(g); cyl(g, 2.5, 0, 4, 4, 20); place(g, m1, M4.mul(M4.t(4, 4, z), M4.rx(-Math.PI / 2))); }
@@ -200,8 +199,17 @@ function latheParts() {
   m0 = mark(g); lathe(g, [[0.7, 0], [8, 0], [8, 5], [0.7, 5], [0.7, 0]], 4, 64); place(g, m0, ALONG_X); p.die = g;
   return p;
 }
+// the collet chuck (turns): body, nut, and the collet, whose face is at x = 0 and whose bore is the size it grips (rg).
+// stop (for a short part set in by its end): where the part's inner end is; a stop rod fills the bore from there back.
+export function colletMesh(rg, stop = null) {
+  const g = grow(); let m0 = mark(g);
+  lathe(g, [[0, -75], [36, -75], [36, -66], [26, -64], [26, -24], [17, -16], [17, -4], [8, -4], [7, 0], [rg, 0], [rg, -20], [0, -20]], 1, 96); place(g, m0, ALONG_X);
+  if (stop !== null && stop > -20 && stop < 0) { m0 = mark(g); lathe(g, [[0, -20], [rg - 0.05, -20], [rg - 0.05, stop], [0, stop]], 1, 48); place(g, m0, ALONG_X); }
+  for (let k = 0; k < 6; k++) { m0 = mark(g); box(g, [-16, 15.6, -1.5], [-6, 17.6, 1.5], K(4)); place(g, m0, M4.rx(k * Math.PI / 3)); }
+  return g;
+}
 // lathe tools, local frame: the cutting tip at the origin, shank toward +z (the operator), top face at y = 0
-function latheTool(t) {
+export function latheTool(t) {
   const g = grow(), m0 = mark(g);
   if (t.type === 'part') { box(g, [-t.w, -9, 0], [0, 0, 28], K(3)); return g; }
   if (t.type === 'boring') {
@@ -213,7 +221,8 @@ function latheTool(t) {
       place(g, m, new Float32Array([1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1]));
     }
     let m = mark(g); lathe(g, [[0, 2.4], [0.9, 2.4], [0.9, 9], [2.5, 10.6], [2.5, 44], [0, 44]], 3, 24); place(g, m, M4.mul(M4.t(0, -1.2, -0.9), ALONG_X));
-    m = mark(g); box(g, [30, -7, -3.5], [46, 1, 14], K(1));     // its holder, clamped in the tool post
+    // its holder: a block round the bar, with a 6 mm shank that lies in the tool post's slot under the two screws
+    box(g, [31, -7, -3.5], [45, 1.5, 12], K(1)); box(g, [31, -6, 12], [45, 0, 34], K(1));
     return g;
   }
   // a ground high-speed-steel bit, 6 mm square: nothing of it lies past the tip on the cutting side, so it can reach a shoulder
@@ -226,10 +235,11 @@ function latheTool(t) {
   return g2;
 }
 // a drill, center drill or reamer, local: the tip at the origin, body along +z
-function rotaryTool(t) {
+export function rotaryTool(t) {
   const g = grow(), r = t.d / 2;
-  if (t.type === 'center') { const pr = t.d / 2 * 0.4 || 0.5;
-    lathe(g, [[0, 0], [pr, pr * 0.6], [pr, 1.5], [r * 1.6, 1.5 + (r * 1.6 - pr) * 1.7], [r * 1.6, 22], [0, 22]], 3, 32); return g; }
+  // a center drill, to the sizes the pass cuts with (cut.js): a 118° point, a pilot 1.2 diameters long, a 60° cone, the body
+  if (t.type === 'center') { const pr = t.pilot / 2, pl = t.pilot * 1.2;
+    lathe(g, [[0, 0], [pr, pr / Math.tan(59 * Math.PI / 180)], [pr, pl], [r, pl + (r - pr) / Math.tan(30 * Math.PI / 180)], [r, 22], [0, 22]], 3, 32); return g; }
   if (t.type === 'reamer') { lathe(g, [[0, 0], [r * 0.9, 0], [r, 0.3], [r, 14], [r * 0.95, 16], [r * 0.95, 40], [0, 40]], 10, 48);
     for (let i = 0; i < g.T.length; i += 3) { g.T[i + 1] = 6; g.T[i + 2] = 0; } return g; }
   // a twist drill: 118° point, fluted body, plain shank
@@ -240,6 +250,9 @@ function rotaryTool(t) {
   return g;
 }
 
+// A cutter on the mill turns clockwise seen from its shank: about its own axis the angle goes down. The cutters'
+// teeth are built to match (their cutting faces are on the side of the smaller angle), and so are a drill's flutes.
+export const TURN = -1;
 // ---- the mill ----
 // x along the table, y toward the column, z up. The table's top is z = 0.
 function millParts() {
@@ -299,33 +312,32 @@ export function millTool(t) {
     box(g, [-0.5, -0.5, 22], [0.5, 0.5, 26], K(3)); return g; }
   return g;
 }
-// a form cutter for gear teeth (local: axis z, centered), with its arbor
-function gearCutter(t) {
-  const g = grow(), R = t.d / 2, w = t.w, Z = 14;
-  // the rim: teeth with the gap's shape on their sides, approximated by a trapezoid tooth outline
-  const pts = [];
+// a form cutter for gear teeth (local: axis z, centered), with its arbor. t.profile: half the cutter's width at each
+// height above its lowest point (spec.js). Each tooth's cutting face is the one at the smaller angle: the cutter
+// turns clockwise seen from +z.
+export function gearCutter(t) {
+  const g = grow(), R = t.d / 2, w = t.w, Z = 14, H = 3.2;
+  const prof = [...(t.profile || [[0, w * 0.2]]).filter((q) => q[0] < H - 0.05), [H, w / 2]];
+  lathe(g, [[8, -w / 2], [R - H, -w / 2], [R - H, w / 2], [8, w / 2]], 3, 72);
+  const quad = (a, b, c, d) => poly(g, [a, b, c, d], norm(cross([b[0] - a[0], b[1] - a[1], b[2] - a[2]], [d[0] - a[0], d[1] - a[1], d[2] - a[2]])), K(3));
   for (let k = 0; k < Z; k++) {
-    const a = k * 2 * Math.PI / Z, s = 2 * Math.PI / Z;
-    pts.push([R - 3.2, a], [R, a + s * 0.08], [R, a + s * 0.45], [R - 3.2, a + s * 0.62]);
-  }
-  const ring = pts.map(([r, a]) => [r * Math.cos(a), r * Math.sin(a)]);
-  // body
-  lathe(g, [[8, -w / 2], [R - 3.2, -w / 2], [R - 3.2, w / 2], [8, w / 2]], 3, 72);
-  // teeth as thin prisms between the profile and the body, with a tapered (form) edge
-  for (let k = 0; k < Z; k++) {
-    const q = ring.slice(4 * k, 4 * k + 4), m0 = mark(g);
-    prism(g, q.slice().reverse().map(([x, y]) => [x, y]), -w / 2, w / 2, 3);
-    // narrow each tooth's top edge to the gap's width at the bottom: the cutter's profile
-    for (let i = m0; i < mark(g); i++) {
-      const x = g.P[3 * i], y = g.P[3 * i + 1], r = Math.hypot(x, y), z = g.P[3 * i + 2];
-      const f = Math.max(0, (r - (R - 3.2)) / 3.2); g.P[3 * i + 2] = z * (1 - 0.6 * f);
+    const a0 = k * 2 * Math.PI / Z, s = 2 * Math.PI / Z;
+    // the tooth's four corners at height y below its top: front (the cutting face) and back, either side
+    const at = ([y, hw]) => { const r = R - y, af = a0 + 0.08 * s * (1 - y / H), ab = a0 + 0.45 * s + 0.17 * s * y / H;
+      return { f: [-1, 1].map((e) => [r * Math.cos(af), r * Math.sin(af), e * hw]), b: [-1, 1].map((e) => [r * Math.cos(ab), r * Math.sin(ab), e * hw]) }; };
+    const L = prof.map(at);
+    quad(L[0].f[0], L[0].f[1], L[0].b[1], L[0].b[0]);
+    for (let i = 0; i + 1 < L.length; i++) {
+      const A = L[i], B = L[i + 1];
+      quad(A.f[0], A.f[1], B.f[1], B.f[0]); quad(A.b[0], A.b[1], B.b[1], B.b[0]);
+      for (const e of [0, 1]) quad(A.f[e], A.b[e], B.b[e], B.f[e]);
     }
   }
   cyl(g, 8, -18, 18, 1);
   cyl(g, 4, -120, 120, 1);
   return g;
 }
-function sawCutter(t) {
+export function sawCutter(t) {
   const g = grow(), R = t.d / 2, Z = 48, w = t.w / 2;
   lathe(g, [[5, -w], [R - 0.8, -w], [R - 0.8, w], [5, w]], 3, 96);
   for (let k = 0; k < Z; k++) {
@@ -356,13 +368,18 @@ export function turnedMesh(S, kind = 0) {
   }
   return g;
 }
-// a convex milled part from its planes; with a plane part-way cut, two pieces: the part cut so far and the rest
+// a convex milled part from its planes. With a plane part-way cut: the part below the cut, whole, and on it the
+// slab the cutter has not reached yet. A face looks as the cutter that made it left it.
+const faceKind = (k) => (k === 'stock' ? 14 : k === 'fly' || k === 'end' ? 15 : k === 'chamfer' || k === 'split' ? 16 : 0);
 export function milledMesh(M) {
-  const g = grow(), add = (planes, ...skip) => { for (const f of bodyFaces(planes)) { if (skip.includes(f.kind)) continue; poly(g, f.poly, f.n, K(f.kind === 'stock' ? 14 : 0, 0)); } };
-  if (!M.cut) add(M.planes);
-  else if (M.cut.R) {
+  const g = grow(), add = (planes, ...skip) => { for (const f of bodyFaces(planes)) { if (skip.includes(f.kind)) continue; poly(g, f.poly, f.n, K(faceKind(f.kind), 0)); } };
+  if (!M.cut) { add(M.planes); return g; }
+  const c = M.cut, under = { n: c.n.map((x) => -x), d: -c.d, kind: 'under' };
+  add([...M.planes, { n: c.n, d: c.d, kind: c.kind || 'cut' }]);
+  if (c.R) {
     // a fly cutter or end mill: the edge of the cut is the front arc of its circle, taken as chords in bands across the feed
-    const c = M.cut, { R, v, vc } = c, a = c.s - R, vs = bodyFaces(M.planes).flatMap((f) => f.poly.map((q) => dot(q, v)));
+    const { R, v, vc } = c, a = c.s - R, vs = bodyFaces([...M.planes, under]).flatMap((f) => f.poly.map((q) => dot(q, v)));
+    if (!vs.length) return g;
     const v0 = Math.min(...vs) - 0.01, v1 = Math.max(...vs) + 0.01, N = 12;
     const at = (y) => { const k = Math.min(Math.abs(y - vc), R); return a + Math.sqrt(R * R - k * k); };
     for (let i = 0; i < N; i++) {
@@ -370,14 +387,9 @@ export function milledMesh(M) {
       // the chord's normal, pointing ahead: m · p = m · A on the chord
       const m = norm([0, 1, 2].map((k) => c.u[k] * (y1 - y0) - v[k] * (x1 - x0))), A = [0, 1, 2].map((k) => c.u[k] * x0 + v[k] * y0);
       const md = dot(m, A), band = [{ n: v, d: y1, kind: 'band' }, { n: v.map((x) => -x), d: -y0, kind: 'band' }];
-      add([...M.planes, ...band, { n: m.map((x) => -x), d: -md, kind: 'split' }], 'band');
-      add([...M.planes, ...band, { n: m, d: md, kind: 'split' }, { n: c.n, d: c.d, kind: 'cut' }], 'split', 'band');
+      add([...M.planes, under, ...band, { n: m.map((x) => -x), d: -md, kind: 'split' }], 'band', 'under');
     }
-  } else {
-    const c = M.cut;
-    add([...M.planes, { n: c.u.map((x) => -x), d: -c.s, kind: 'split' }]);                 // ahead of the tool: still whole
-    add([...M.planes, { n: c.u, d: c.s, kind: 'split' }, { n: c.n, d: c.d, kind: 'cut' }], 'split');   // behind it: cut
-  }
+  } else add([...M.planes, under, { n: c.u.map((x) => -x), d: -c.s, kind: 'split' }], 'under');   // ahead of the tool: still whole
   return g;
 }
 // the walls of holes: drilled (with the drill's point), spotted (a 90° cone), tapped (with the thread drawn)
@@ -399,21 +411,27 @@ export function holeMesh(M) {
   }
   return g;
 }
-// a screw's slot walls, as far as it has been sawn: the slot runs along y across the flange, x within ±w/2
-export function slotMesh(top, R, w, depth, from, to) {
-  const g = grow(), lo = Math.max(Math.min(from, to), -R), hi = Math.min(Math.max(from, to), R), z0 = top - depth;
+// a screw's slot, as far as it has been sawn: the slot runs along y across the flange, x within ±w/2. The saw's rim
+// is a circle, so ahead of its nearest point (at `to`) the floor rises along its arc (lead: how far ahead the arc
+// leaves the head's top).
+export function slotMesh(top, R, w, depth, from, to, lead = 0) {
+  const g = grow(), sg = Math.sign(to - from) || 1, far = to + sg * lead, lo = Math.max(Math.min(from, far), -R), hi = Math.min(Math.max(from, far), R), z0 = top - depth;
   if (hi <= lo) return g;
-  const xw = w / 2, ext = (y) => Math.sqrt(Math.max(0, R * R - y * y));
-  const ys = []; for (let k = 0; k <= 24; k++) ys.push(lo + (hi - lo) * k / 24);
-  for (const s of [1, -1]) for (let k = 0; k < 24; k++) { const a = ys[k], b = ys[k + 1]; if (ext(a) < xw && ext(b) < xw) continue; poly(g, [[s * xw, a, z0], [s * xw, b, z0], [s * xw, b, top], [s * xw, a, top]], [-s, 0, 0], K(0)); }
-  for (let k = 0; k < 24; k++) { const a = ys[k], b = ys[k + 1]; poly(g, [[-xw, a, z0], [xw, a, z0], [xw, b, z0], [-xw, b, z0]], [0, 0, 1], K(0)); }
+  const Rs = lead ? (lead * lead + depth * depth) / (2 * depth) : 0;
+  const floor = (y) => { const a = (y - to) * sg; return a <= 0 || !Rs ? z0 : Math.min(top, z0 + Rs - Math.sqrt(Math.max(0, Rs * Rs - a * a))); };
+  const xw = w / 2, ext = (y) => Math.sqrt(Math.max(0, R * R - y * y)), n = 32;
+  const ys = []; for (let k = 0; k <= n; k++) ys.push(lo + (hi - lo) * k / n);
+  for (const s of [1, -1]) for (let k = 0; k < n; k++) { const a = ys[k], b = ys[k + 1]; if (ext(a) < xw && ext(b) < xw) continue; poly(g, [[s * xw, a, floor(a)], [s * xw, b, floor(b)], [s * xw, b, top], [s * xw, a, top]], [-s, 0, 0], K(16)); }
+  for (let k = 0; k < n; k++) { const a = ys[k], b = ys[k + 1]; poly(g, [[-xw, a, floor(a)], [xw, a, floor(a)], [xw, b, floor(b)], [-xw, b, floor(b)]], [0, 0, 1], K(16)); }
+  // where the arc runs out through the head's far side, the metal still under it
+  for (const y of [lo, hi]) if (floor(y) > z0 + 1e-6) poly(g, [[-xw, y, z0], [xw, y, z0], [xw, y, floor(y)], [-xw, y, floor(y)]], [0, y > 0 ? 1 : -1, 0], K(16));
   return g;
 }
 
 export function makeShop(gl, lit) {
   const prog = program(gl, VS, lit ? withLit(FS) : FS), u = prog.u;
   const L = latheParts(), MP = millParts(), up = (g) => mesh(gl, g);
-  const lathe3 = { base: up(L.base), chuck: up(L.chuck), collet: up(L.collet), carriage: up(L.carriage), cross: up(L.cross), compound: up(L.compound), post: up(L.post), holder: up(L.holder), tail: up(L.tail), quill: up(L.quill), jacobs: up(L.jacobs), die: up(L.die) };
+  const lathe3 = { base: up(L.base), chuck: up(L.chuck), carriage: up(L.carriage), cross: up(L.cross), compound: up(L.compound), top: up(L.top), post: up(L.post), holder: up(L.holder), tail: up(L.tail), quill: up(L.quill), jacobs: up(L.jacobs), die: up(L.die) };
   const mill = { table: up(MP.table), indexer: up(indexerParts()), jacobs: up(MP.jacobs), nut: up(MP.nut) }; const dv = dividingParts(); mill.dbase = up(dv.base); mill.dhead = up(dv.head);
   const quill = grow(); lathe(quill, [[0, 0], [17, 0], [17, 22], [22, 26], [34, 28], [34, 160], [0, 160]], 1, 72); mill.quill = up(quill);
   const cache = new Map(), memo = (key, make) => { if (!cache.has(key)) cache.set(key, up(make())); return cache.get(key); };
@@ -425,7 +443,7 @@ export function makeShop(gl, lit) {
   const BRASS = [0.93, 0.72, 0.4], PAINT = [0.27, 0.32, 0.36];
 
   return {
-    gl, M4, memo, latheTool, rotaryTool, millTool, gearCutter, sawCutter, mesh: (g) => mesh(gl, g, true),
+    gl, M4, memo, latheTool, rotaryTool, millTool, gearCutter, sawCutter, colletMesh, mesh: (g) => mesh(gl, g, true),
     // f: what to draw (see make.js), cam: { vp, pos, rot }
     draw(f, cam, vpx, hook) {
       gl.viewport(vpx.x, vpx.y, vpx.w, vpx.h);
@@ -434,9 +452,10 @@ export function makeShop(gl, lit) {
       gl.disable(gl.DEPTH_TEST); gl.uniformMatrix4fv(u.uVP, false, I); gl.uniformMatrix4fv(u.uM, false, I); gl.uniform1i(u.uCut, 0); back.draw();
       gl.enable(gl.DEPTH_TEST);
       gl.uniformMatrix4fv(u.uVP, false, cam.vp); gl.uniform3fv(u.uCam, cam.pos); gl.uniformMatrix3fv(u.uV, false, cam.rot);
-      gl.uniform3fv(u.uTint, BRASS); gl.uniform3fv(u.uPaint, PAINT); gl.uniform1f(u.uHi, 0); gl.uniform1f(u.uSpin, f.spin || 0);
+      gl.uniform3fv(u.uTint, BRASS); gl.uniform3fv(u.uPaint, PAINT); gl.uniform1f(u.uHi, 0);
       const draw = (m, M) => { gl.uniformMatrix4fv(u.uM, false, M); m.draw(); };
       for (const it of f.items) {
+        gl.uniform1f(u.uSpin, it.spin || 0);      // a cutter's flutes turn only if the cutter does
         if (it.part) {
           // the part, with its holes and slot cut out
           gl.uniform1i(u.uCut, 1);

@@ -152,47 +152,54 @@ export class Camera {
     this.ctx = canvas.getContext('2d'); this.img = this.ctx.createImageData(CAM.px, CAM.px);
     this.f = new Float32Array(CAM.px * CAM.px); this.trace = trace; this.tctx = trace.getContext('2d');
     this.fo = new Float32Array(CAM.px * CAM.px);
-    this.r = rng(99); this.curve = null; this.peak = 0; this.peakO = 0;
+    this.r = rng(99); this.curve = null; this.site = 0; this.siteO = 0;
   }
   // emit: [[x, z, brightness at 510 nm, spread, brightness at 589 nm]...] in nm, where spread is how
   // far a vesicle's tags have wandered (it widens the blur and lowers the peak); bg: out-of-focus background.
   // Returns without drawing unless a new frame is due: the picture only changes once per exposure.
   // blur, blurO: how much wider than its best the objective's blur is in each band (1 when in focus).
-  render(emit, bg, reshuffle, blur = 1, blurO = 1) {
+  // own: how many of the first entries of emit are our vesicle's tags. The readout (site, siteO) is what the four
+  // pixels around the fusion site recorded in this frame, less what everything else in the field is expected to
+  // put there (the background and the other vesicles), so it is our vesicle's light alone, in photons per pixel.
+  render(emit, bg, reshuffle, blur = 1, blurO = 1, own = 0) {
     if (!reshuffle && this.drawn) return;
     this.drawn = true;
     const n = CAM.px, half = n / 2, s0 = CAM.sigma / CAM.nm;
     // Brightness 1 means the same number of photons in either band; the wider blur spreads them thinner.
+    const rest = [0, 0], mid = [half - 1, half].flatMap((j) => [j * n + half - 1, j * n + half]);
+    const here = (f) => mid.reduce((t, i) => t + f[i], 0) / 4;
     for (const [f, at, s] of [[this.f, 2, s0 * blur], [this.fo, 4, CAM.sigmaO / CAM.nm * blurO]]) {
       f.fill(bg);
-      for (const e of emit) {
+      let ours = null;
+      emit.forEach((e, ei) => {
+        if (ei === own) ours = here(f) - bg;                 // our vesicle's own light at the site: its tags come first
         const b0 = e[at] || 0, spread = e[3];
-        if (b0 < 1e-4) continue;
+        if (b0 < 1e-4) return;
         const sw = spread ? Math.hypot(s, spread / CAM.nm) : s, k = 1 / (2 * sw * sw), b = b0 * s0 * s0 / (sw * sw);
         const cx = e[0] / CAM.nm + half - 0.5, cy = e[1] / CAM.nm + half - 0.5, R = Math.min(20, Math.ceil(sw * 3.5));
-        if (cx < -R || cy < -R || cx > n + R || cy > n + R) continue;
+        if (cx < -R || cy < -R || cx > n + R || cy > n + R) return;
         for (let j = Math.max(0, Math.floor(cy - R)); j <= Math.min(n - 1, Math.ceil(cy + R)); j++)
           for (let i = Math.max(0, Math.floor(cx - R)); i <= Math.min(n - 1, Math.ceil(cx + R)); i++)
             f[j * n + i] += b * Math.exp(-((i - cx) * (i - cx) + (j - cy) * (j - cy)) * k);
-      }
+      });
+      rest[at / 2 - 1] = here(f) - (ours === null ? here(f) - bg : ours);      // what the same four pixels would hold without our vesicle
     }
     // One exposure. Light arrives as whole photons, so each pixel records a Poisson-distributed
     // count around its expected value (shot noise), plus a little read noise from the sensor.
-    const d = this.img.data, r = this.r, G = CAM.photons, z0 = (n - CAM.zoom) / 2, z1 = z0 + CAM.zoom;
+    const d = this.img.data, r = this.r, G = CAM.photons, z0 = (n - CAM.zoom) / 2;
     const expose = (lam) => {
       let c = 0;
       if (lam < 30) { const L = Math.exp(-lam); for (let q = r(); q > L; q *= r()) c++; }
       else c = Math.round(lam + Math.sqrt(lam) * r.gauss());
       return Math.max(0, Math.round(c + CAM.read * r.gauss()));
     };
-    let peak = 0, peakO = 0;
+    let site = 0, siteO = 0;
     for (let i = 0; i < n * n; i++) {
       const c = expose(this.f[i] * G), co = expose(this.fo[i] * G);
-      const x = i % n, y = (i - x) / n;
-      if (x >= z0 && x < z1 && y >= z0 && y < z1) { if (c > peak) peak = c; if (co > peakO) peakO = co; }
+      if (mid.includes(i)) { site += c / 4; siteO += co / 4; }
       overlay(d, i * 4, c, co, 2.3 * G, 0.72);
     }
-    this.peak = peak; this.peakO = peakO;
+    this.site = Math.round(site - rest[0] * G); this.siteO = Math.round(siteO - rest[1] * G);
     this.ctx.putImageData(this.img, 0, 0);
     // The second display is the middle of the very same frame, magnified: no new information.
     if (this.zctx) this.zctx.putImageData(this.img, -z0, -z0, z0, z0, CAM.zoom, CAM.zoom);

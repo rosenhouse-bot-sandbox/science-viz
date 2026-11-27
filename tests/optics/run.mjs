@@ -11,25 +11,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { findChromium, serve } from '../lib/serve.mjs';
+import { PLAYS } from './plays.mjs';      // a known solution of each challenge
 
 const here = import.meta.dirname, out = path.join(here, 'out');
 
 const { server, origin: base } = await serve();
 fs.mkdirSync(out, { recursive: true });
-
-// What to do in each challenge: choices to click, sliders to set by keyboard, then knobs to drag
-// (from a world point; `rev` when the value rises as the pointer goes left). The values are a known solution; the test checks the page agrees.
-const PLAYS = {
-  burn: { keys: { c: 15 }, drags: [{ param: 'x', at: [-50, -21], to: -61 }] },
-  picture: { clicks: { lens: 1 }, keys: { D: 13 }, drags: [{ param: 'xs', at: [50, -19], to: 65 }] },
-  far: { keys: { near: 0.05 }, drags: [{ param: 'xs', at: [66, -19], to: 40 }] },
-  specs: { keys: { P: -4.5 }, drags: [] },
-  camera: { keys: { q: 0.7 }, drags: [{ param: 'D', at: [-6, 12], to: 12.8 }] },
-  colour: { clicks: { glass: 0 }, keys: { c: 11.5 }, drags: [] },
-  doublet: { clicks: { glass: 1 }, keys: { c1: 45.5, c: -2 }, drags: [] },
-  wide: { keys: { q: -2.25 }, drags: [{ param: 'xi', at: [-6, -21], to: -11.5 }] },
-  tower: { keys: {}, drags: [{ param: 't0', at: [22, -6], to: 3.5 }, { param: 't1', at: [64, -6], to: -2 }, { param: 't2', at: [106, -6], to: -10.75 }] },
-};
 
 // When a challenge opens, every control must be on the screen and inside the visible part of the panel.
 const landing = (page) => page.evaluate(() => {

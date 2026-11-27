@@ -1,10 +1,10 @@
 // Overshoot saccades: the controller. The state is the zoom (0 Screen, 1 Eyes, 2 Muscles), healthy or poor pursuit,
 // how fast time runs, and the target. The simulation in model.js moves the eyes; scene.js draws them.
-import { makeSim, STEP, INSET_DEG, CATCHUP, SCREEN, MUSCLES, PURSUIT, onScreen, gazeOf, eyeGaze, listing, turnOf, rate, musclePath, rot } from './model.js?v=7ec01cf7';
-import { makeScene, camera } from './scene.js?v=7ec01cf7';
-import { SRC, CONDITIONS, SACCADES, CAPTIONS, NOTE, NOTE_SRC, MODEL, MODEL_SRC, INSET } from './facts.js?v=7ec01cf7';
-import { gamepad } from '../gamepad/gamepad.js?v=7ec01cf7';
-import { touchSliders } from '../touch/slider.js?v=7ec01cf7';
+import { makeSim, STEP, INSET_DEG, TRACE_S, SCREEN, MUSCLES, PURSUIT, learnTime, onScreen, gazeOf, eyeGaze, listing, turnOf, rate, musclePath, rot } from './model.js?v=5e5ad9d2';
+import { makeScene, camera } from './scene.js?v=5e5ad9d2';
+import { SRC, CONDITIONS, SACCADES, CAPTIONS, NOTE, NOTE_SRC, MODEL, MODEL_SRC, INSET, COUNT, TRACE } from './facts.js?v=5e5ad9d2';
+import { gamepad } from '../gamepad/gamepad.js?v=5e5ad9d2';
+import { touchSliders } from '../touch/slider.js?v=5e5ad9d2';
 
 const PINCH = 0.9;   // scales of zoom for each e-fold of finger spread: one full spread is about one scale, as on Maple and Engine
 
@@ -18,7 +18,9 @@ let scene = null, broken = false;
 const STOPS = [
   { id: 'screen', name: 'Screen', pivot: [0, -30, -280], yaw: 0.14, pitch: 0.42, dist: 660 },
   { id: 'eyes', name: 'Eyes', pivot: [0, 0, -5], yaw: 2.25, pitch: 0.45, dist: 190 },
-  { id: 'muscles', name: 'Muscles', pivot: [28, 0, 18], yaw: 0.02, pitch: 1.2, dist: 175 },
+  // from above, with both eyes in the picture: the two eyes turn together, and their muscles can be compared.
+  // `wide` is half the width in mm that must fit across the free part of the screen (both eyes and their outer muscles).
+  { id: 'muscles', name: 'Muscles', pivot: [0, 0, 13], yaw: 0, pitch: 1.2, dist: 175, wide: 54 },
 ];
 const LAST = STOPS.length - 1;
 const SIDE = [0, -20, 72];                          // pulls the path between Screen and Eyes out to the side, halfway between them
@@ -30,6 +32,8 @@ let sim = makeSim({ cond: st.cond, sacc: st.sacc, speed: st.tspeed, auto: st.aut
 const drawn = { z: 0, t: 0 };                          // what the last picture showed (for the tests)
 let dirty = true, raf = 0, last = 0, fly = null, acc = 0, zoomAt = -1e9, held = null, frame = null;
 
+const TRACE_DEG = 3;                                // the trace in the panel shows this far either side of the target
+
 // ---- what the eyes and muscles are doing now ----
 function compute() {
   const s = sim.s, P = onScreen(s.E[0], s.E[1]), ve = s.Ve, speed = [ve[1], -ve[0], 0];
@@ -38,9 +42,9 @@ function compute() {
     for (const m of MUSCLES) { rates[m.id] = rate(m.id, side, turn, speed); drive[m.id] = rates[m.id] / 400; }
     return { side, R, dir, drive, rates, pick: st.pick };
   });
+  // where overshoot saccades landed, for as long as their dots stay on the trace in the panel. `age` runs from 0 to 1.
+  const landed = s.events.filter((e) => e.kind === 'overshoot' && e.t1 > s.t - TRACE_S).map((e) => ({ p: e.E1, age: (s.t - e.t1) / TRACE_S }));
   // the last 0.4 s of where the eyes looked, for the trail on the screen
-  // where overshoot saccades landed in the last 1 s of the model's time
-  const landed = s.events.filter((e) => e.kind === 'overshoot' && e.t1 > s.t - 1).map((e) => ({ p: e.E1, age: s.t - e.t1 }));
   const trail = [], B = sim.B;
   for (let j = s.k - 400; j <= s.k; j += 4) if (j > 0) { const J = sim.at(j); trail.push([B.eh[J], B.ev[J]]); }
   const c = cam();
@@ -53,7 +57,9 @@ function cam() {
   // between Screen and Eyes the camera swings round the side, and stands back so that the eyes and the screen stay in view
   const M = i === 0 ? SIDE : a.pivot.map((x, k) => (x + b.pivot[k]) / 2);
   const pivot = a.pivot.map((x, k) => (1 - f) * (1 - f) * x + 2 * f * (1 - f) * M[k] + f * f * b.pivot[k]);
-  const dist = a.dist * Math.pow(b.dist / a.dist, f) * (1 + (i === 0 ? 0.3 : 0) * Math.sin(Math.PI * f));
+  // a stop that must show a width stands back as far as the free part of the screen needs
+  const far = (s) => (s.wide ? Math.max(s.dist, s.wide / (Math.tan(FOV / 2) * free.w / free.h)) : s.dist), da = far(a), db = far(b);
+  const dist = da * Math.pow(db / da, f) * (1 + (i === 0 ? 0.3 : 0) * Math.sin(Math.PI * f));
   const yaw = a.yaw + (b.yaw - a.yaw) * f + st.yaw, pitch = clamp(a.pitch + (b.pitch - a.pitch) * f + (i === 0 ? 0.25 * Math.sin(Math.PI * f) : 0) + st.pitch, -1.2, 1.35);
   const pos = [pivot[0] + dist * Math.cos(pitch) * Math.sin(yaw), pivot[1] + dist * Math.sin(pitch), pivot[2] + dist * Math.cos(pitch) * Math.cos(yaw)];
   return { pos, at: pivot, dist };
@@ -92,7 +98,6 @@ function draw() {
 }
 
 // ---- the trace: how far the eyes are ahead of the target (up) or behind it (down), over the last 2 s ----
-const TRACE_S = 2, TRACE_DEG = 3;
 function trace() {
   const c = $('trace'), r = c.getBoundingClientRect(), d = Math.min(2, devicePixelRatio || 1);
   if (!r.width) return;
@@ -105,19 +110,15 @@ function trace() {
   x.font = `${11 * d}px 'Source Sans 3', sans-serif`; x.fillStyle = 'rgba(234,240,255,.55)'; x.textBaseline = 'top'; x.fillText('ahead', 6 * d, 4 * d);
   x.textBaseline = 'bottom'; x.fillText('behind', 6 * d, H - 4 * d);
   x.fillStyle = '#ffd773'; x.textBaseline = 'bottom'; x.textAlign = 'right'; x.fillText('target', W - 6 * d, Y(0) - 2 * d); x.textAlign = 'left';
-  const n = Math.min(s.k, Math.round(TRACE_S / STEP));
-  // along the way the target moves (kept through a moment when it stands still)
-  let u = [1, 0];
-  { const J = sim.at(s.k - n), v = [B.vth[J], B.vtv[J]], l = Math.hypot(...v); if (l > 1) u = [v[0] / l, v[1] / l]; }
-  x.strokeStyle = '#7fd6ff'; x.lineWidth = 1.8 * d; x.lineJoin = 'round'; x.beginPath();
-  for (let j = s.k - n, f = true; j <= s.k; j += 2) {
-    const J = sim.at(j), v = [B.vth[J], B.vtv[J]], l = Math.hypot(...v); if (l > 1) u = [v[0] / l, v[1] / l];
-    const e = (B.eh[J] - B.th[J]) * u[0] + (B.ev[J] - B.tv[J]) * u[1], t = s.t - (s.k - j) * STEP;
-    f ? x.moveTo(X(t), Y(e)) : x.lineTo(X(t), Y(e)); f = false;
-  }
-  x.stroke();
+  // The model works out the line (model.js, trace). Where the target turns round, ahead becomes behind though nothing
+  // jumps: the line is broken there, and a thin line in the target's gold marks the turn.
+  const tr = sim.trace(TRACE_S, 2);
+  x.strokeStyle = 'rgba(255,215,115,.55)'; x.lineWidth = d;
+  for (const t of tr.turns) { x.beginPath(); x.moveTo(X(t), 3 * d); x.lineTo(X(t), H - 3 * d); x.stroke(); }
+  x.strokeStyle = '#7fd6ff'; x.lineWidth = 1.8 * d; x.lineJoin = 'round';
+  for (const line of tr.lines) { x.beginPath(); line.forEach(([t, e], k) => (k ? x.lineTo(X(t), Y(e)) : x.moveTo(X(t), Y(e)))); x.stroke(); }
   x.fillStyle = '#ff9a4d';
-  for (const e of s.events) if (e.kind === 'overshoot' && e.t1 > s.t - TRACE_S) { x.beginPath(); x.arc(X(e.t1), Y(e.ahead), 3.2 * d, 0, 7); x.fill(); }
+  for (const [t, a] of tr.dots) { x.beginPath(); x.arc(X(t), Y(a), 3.2 * d, 0, 7); x.fill(); }
 }
 
 // ---- the panel ----
@@ -152,9 +153,11 @@ function sync() {
   for (const li of $('muscleList').children) li.querySelector('button').setAttribute('aria-pressed', String(st.pick === li.dataset.id));
   writeHash();
 }
+// Where a saccade landed. "On the target" is within the scatter of a landing of its size (model.js, landTol), which
+// can be a few hundredths of a degree, so distances are given to the hundredth.
 function landText(e) {
-  const a = Math.abs(e.ahead).toFixed(1);
-  return { overshoot: `${a}° ahead of the target`, catchup: Math.abs(e.ahead) <= CATCHUP.onTarget ? 'on the target' : `${a}° short of the target`, anticipatory: `${a}° ahead of the target`, backup: 'back toward the target', past: `${a}° past the target`, short: `${a}° short of the target`, on: 'on the target', other: Math.abs(e.ahead) <= CATCHUP.onTarget ? 'on the target' : `${a}° ${e.ahead > 0 ? 'ahead of' : 'short of'} the target` }[e.kind];
+  const a = Math.abs(e.ahead).toFixed(2), on = Math.abs(e.ahead) <= e.tol, side = e.ahead > 0 ? 'ahead of' : 'short of';
+  return { overshoot: `${a}° ahead of the target`, catchup: on ? 'on the target' : `${a}° short of the target`, anticipatory: `${a}° ahead of the target`, backup: 'back toward the target', past: `${a}° past the target`, short: `${a}° short of the target`, on: 'on the target', other: on ? 'on the target' : `${a}° ${side} the target` }[e.kind];
 }
 function sources() {
   const ol = $('sources'); ol.replaceChildren();
@@ -260,7 +263,7 @@ function controls() {
     b.addEventListener('pointerenter', () => { st.pick = m.id; touch(); }); b.addEventListener('pointerleave', () => { st.pick = null; touch(); });
   }
   for (const [k, list] of [['note', NOTE], ['modelNote', MODEL]]) for (const t of list) { const p = document.createElement('p'); p.className = 'fine'; p.textContent = t; $(k).append(p); }
-  $('insetText').textContent = INSET;
+  $('insetText').textContent = INSET; $('overT').textContent = COUNT; $('traceT').textContent = TRACE;
   $('insetLabel').textContent = `Right eye's view, ${INSET_DEG}° across`;
   // a finger or mouse on the picture: on the screen it moves the target; elsewhere it turns the view. Two fingers zoom.
   const fingers = new Map(); let drag = null, span = 0;
@@ -305,8 +308,8 @@ function start() {
   scene = makeScene(gl);
   cv.addEventListener('webglcontextlost', (e) => { e.preventDefault(); scene = null; });
   cv.addEventListener('webglcontextrestored', () => { scene = makeScene(gl); touch(); });
-  // start with the target already swinging and the eyes following, a few seconds in
-  sim.advance(3);
+  // start with the target already swinging and the eyes following: two swings in, so that the swing is learned
+  sim.advance(2 * learnTime(st.tspeed));
   $('loading').hidden = true;
   touch();
 }

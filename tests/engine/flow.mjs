@@ -1,6 +1,8 @@
 // Checks how the gas moves on the Engine page (js/engine/flow.js) without a browser: works out the dots' paths as
 // the page does and fails if gas is made or lost, sits unevenly, is inside metal, or leaves any way but down the
-// exhaust pipe.
+// exhaust pipe; if the dots that have burned are not the share the model's pressure has burned; if the burned gas
+// pushed back into the intake port at the top is missing; or if the gas at the spot the Molecules scale looks at is
+// not the gas the model says is there.
 //
 //   node tests/engine/flow.mjs
 import * as M from '../../js/engine/model.js';
@@ -22,7 +24,7 @@ for (let i = 0; i < P.n; i++) {
   if (P.pos[b * 3 + 2] * 1e-5 > -F.Z_END) stay++;
   for (let k = a; k < b; k++) if (!(P.time[k + 1] > P.time[k])) { ok(false, `dot ${i}'s path goes back in time`); break; }
 }
-ok(stay < P.n * 0.02, `${stay} of ${P.n} dots never leave by the exhaust pipe (a few may be let go after four cycles)`);
+ok(stay === 0 && P.left === 0, `${stay} of ${P.n} dots end inside the engine, and ${P.left} were still there when the paths ended: every dot leaves by the exhaust pipe`);
 
 // through the cycle: as many dots in the cylinder as the model has gas there, evenly spread, none in metal. The air's
 // dots are one cycle's charge less the fuel's share, and the fuel's come in through the injector as it sprays.
@@ -63,6 +65,8 @@ const ratio = (phi, Rf, burnedOf) => {
     if (!F.inChamber(x, y, z)) continue; vall++; if (Math.hypot(x, y - M.PLUG_GAP[1], z) < Rf) vin++; }
   return { dens: (nb / vin) / (nu / (vall - vin)), nb, inside };
 };
+const burnedOf = (i, t) => { for (let b = 0; b < F.BURNS; b++) { const bt = P.burn[i * F.BURNS + b]; if (bt <= t && bt > t - 360) return true; } return false; };      // by this cycle's flame
+const everBurned = (i, t) => { for (let b = 0; b < F.BURNS; b++) if (P.burn[i * F.BURNS + b] <= t) return true; return false; };
 const hash01 = (a, b) => { let h = (a * 374761393 + b * 668265263) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 for (const phi of [350, 360, 370]) {
   const R = F.burnRoom(phi), top = M.pistonTop(phi), p = [0, 0, 0]; let nb = 0, vin = 0, vall = 0;
@@ -73,11 +77,49 @@ for (const phi of [350, 360, 370]) {
   ok(Math.abs(d * R.E - 1) < 0.05, `at ${phi}° evenly spread gas, once burned, is ${d.toFixed(3)} times as dense as unburned (want 1/${R.E.toFixed(2)})`);
 }
 for (const phi of [350, 360]) {
-  const R = F.burnRoom(phi), burnedOf = (i, t) => { for (let b = 0; b < 4; b++) { const bt = P.burn[i * 4 + b]; if (bt <= t && bt > t - 360) return true; } return false; };
+  const R = F.burnRoom(phi);
   const now = ratio(phi, R.Rf, burnedOf), before = ratio(M.SPARK - 1, R.Rf), d = now.dens / before.dens;
   ok(now.nb > 20 && Math.abs(d * R.E - 1) < 0.35, `at ${phi}° the burned dots are ${(1 / d).toFixed(2)} times thinner than before the spark, against the unburned (want ${R.E.toFixed(2)})`);
   ok(now.inside < 3, `at ${phi}° ${now.inside} unburned dots sit inside the flame`);
   console.log(`at ${phi}°: ${now.nb} burned dots; burned gas ${(1 / d).toFixed(2)} times thinner than unburned (model ${R.E.toFixed(2)})`);
+}
+
+// one burn: the share of the cylinder's dots that the flame has reached is the share of the mass that the model's pressure has burned
+{ let worst = 0, worstAt = 0;
+  for (let phi = M.SPARK + 5; phi <= 400; phi += 5) {
+    let n = 0, nb = 0;
+    for (let i = 0; i < P.n; i++) for (let k = 0; k < P.cycles; k++) { const t = phi + 720 * k; if (!F.at(P, i, t, at, k) || !F.inChamber(at[0], at[1], at[2])) continue; n++; if (burnedOf(i, t)) nb++; }
+    const d = Math.abs(nb / n - M.burnedShare(phi)); if (d > worst) { worst = d; worstAt = phi; }
+    if (phi >= M.FLAME_OUT) ok(nb === n, `${n - nb} dots in the cylinder are unburned at ${phi}°, after the front has crossed`);
+  }
+  ok(worst < 0.05, `the burned share of the dots differs from the model's burned share of the mass by ${(worst * 100).toFixed(1)}% at ${worstAt}° (5% allowed)`);
+  console.log(`burned share of the dots against the model: worst ${(worst * 100).toFixed(1)}%, at ${worstAt}°`);
+}
+
+// the top, with both valves a little open: burned gas is pushed back into the intake port, as much as the model has there, and comes in again
+{ const KG = M.P_IN / (287 * M.T_FRESH);      // kg in a cubic meter of the intake pipe's gas
+  const inPort = (phi) => { let n = 0; for (let i = 0; i < P.n; i++) for (let k = 0; k < P.cycles; k++) { const t = phi + 720 * k; if (F.at(P, i, t, at, k) && at[2] > 0 && !F.inChamber(at[0], at[1], at[2]) && everBurned(i, t)) n++; } return n; };
+  let most = 0, mostAt = 0; for (let a = 0; a < 60; a += 1) if (M.backIn(a) > most) { most = M.backIn(a); mostAt = a; }
+  const want = most / (P.perDot * KG), have = inPort(mostAt);
+  ok(want > 10 && have > 0.6 * want && have < 1.4 * want, `at ${mostAt}° ${have} burned dots are in the intake port; the model has ${want.toFixed(0)} dots' worth of burned gas there`);
+  ok(inPort(700) === 0 && inPort(90) === 0 && inPort(300) === 0, `burned dots are in the intake port at other times (${inPort(700)} at 700°, ${inPort(90)} at 90°, ${inPort(300)} at 300°)`);
+  // left over: the burned dots still in the cylinder when the intake valve shuts are the model's share of the charge
+  let n = 0, nb = 0; for (let i = 0; i < P.n; i++) for (let k = 0; k < P.cycles; k++) { const t = M.IVC + 5 + 720 * k; if (F.at(P, i, t, at, k) && F.inChamber(at[0], at[1], at[2])) { n++; if (everBurned(i, t)) nb++; } }
+  ok(Math.abs(nb / n - M.LEFT_OVER) < 0.015, `${(nb / n * 100).toFixed(1)}% of the dots in the cylinder are burned gas left from the last cycle; the model has ${(M.LEFT_OVER * 100).toFixed(1)}%`);
+  console.log(`burned gas pushed back into the intake port at ${mostAt}°: ${have} dots (model ${want.toFixed(0)}); left over in the charge: ${nb} of ${n} dots (model ${(M.LEFT_OVER * n).toFixed(0)})`);
+}
+
+// the gas at the spot the Molecules scale looks at: the burned gas of the last cycle until SPOT_FRESH, fuel from SPOT_FUEL on
+{ const sx = M.SPOT[0] - M.X4, sy = M.SPOT[1], sz = M.SPOT[2], R = 0.014;
+  const nearSpot = (phi) => { let all = 0, old = 0, fuel = 0; for (let i = 0; i < P.n; i++) for (let k = 0; k < P.cycles; k++) { const t = phi + 720 * k; if (!F.at(P, i, t, at, k) || !F.inChamber(at[0], at[1], at[2]) || Math.hypot(at[0] - sx, at[1] - sy, at[2] - sz) > R) continue; all++; if (everBurned(i, t)) old++; else if (P.fuel[i] && P.fuelAt[i] <= t) fuel++; } return { all, old, fuel }; };
+  const before = nearSpot(M.SPOT_FRESH - 14), after = nearSpot(M.SPOT_FRESH + 14);
+  ok(before.all > 5 && before.old > 0.7 * before.all, `${M.SPOT_FRESH - 14}°: ${before.old} of the ${before.all} dots near the spot are burned gas (the model has burned gas there until ${M.SPOT_FRESH}°)`);
+  ok(after.all > 5 && after.old < 0.3 * after.all, `${M.SPOT_FRESH + 14}°: ${after.old} of the ${after.all} dots near the spot are burned gas (the model has fresh air there from ${M.SPOT_FRESH}°)`);
+  let early = { all: 0, fuel: 0 }, late = { all: 0, fuel: 0 };
+  for (let d = 20; d <= 60; d += 10) { const e = nearSpot(M.SPOT_FUEL - d), l = nearSpot(M.SPOT_FUEL + d); early.all += e.all - e.old; early.fuel += e.fuel; late.all += l.all - l.old; late.fuel += l.fuel; }
+  const rE = early.fuel / early.all / F.FUEL_SHARE, rL = late.fuel / late.all / F.FUEL_SHARE;
+  ok(rE < 0.45 && rL > 0.7 && rL < 1.4, `near the spot the dots hold ${rE.toFixed(2)} of the mixture's share of fuel before ${M.SPOT_FUEL}° and ${rL.toFixed(2)} of it after (the model has fuel there from ${M.SPOT_FUEL}°)`);
+  console.log(`near the spot: burned ${before.old}/${before.all} at ${M.SPOT_FRESH - 14}°, ${after.old}/${after.all} at ${M.SPOT_FRESH + 14}°; fuel ${rE.toFixed(2)} of the mixture's share before ${M.SPOT_FUEL}°, ${rL.toFixed(2)} after`);
 }
 
 // dots pass the valves only while they are open

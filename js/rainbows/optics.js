@@ -40,6 +40,47 @@ export function wlRGB(l) {
 }
 export const cssRGB = (c, a = 1) => `rgba(${c.map(x => Math.round(255 * Math.pow(Math.min(1, Math.max(0, x)), 1 / 2.2))).join(',')},${a})`;
 
+// The colour drawn follows a wavelength slider by an ease. Eased in nanometres, the colour drawn would
+// change fastest where hue changes fastest with wavelength (near 490 and 590 nm), in bursts. So the ease
+// runs along the path the display colour takes: ARC adds up the change of colour on screen from 250 nm,
+// plus a little for each nanometre so that the ultraviolet, all one tint, is crossed as well. It is
+// scaled to run from 0 at 250 nm to 1 at 700 nm.
+const ARC_LO = 250, ARC_HI = 700, ARC_NM = 0.004;
+const ARC = (() => {
+  const gam = c => c.map(x => Math.pow(Math.min(1, Math.max(0, x)), 1 / 2.2)), t = [0];
+  let p = gam(wlRGB(ARC_LO));
+  for (let l = ARC_LO + 1; l <= ARC_HI; l++) { const c = gam(wlRGB(l)); t.push(t[t.length - 1] + Math.hypot(c[0] - p[0], c[1] - p[1], c[2] - p[2]) + ARC_NM); p = c; }
+  return t.map(x => x / t[t.length - 1]);
+})();
+export function colourArc(l) {
+  const x = Math.min(ARC_HI - ARC_LO, Math.max(0, l - ARC_LO)), i = Math.min(ARC_HI - ARC_LO - 1, Math.floor(x));
+  return ARC[i] + (ARC[i + 1] - ARC[i]) * (x - i);
+}
+function arcWavelength(s) {
+  let lo = 0, hi = ARC.length - 1;
+  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (ARC[m] <= s) lo = m; else hi = m; }
+  return ARC_LO + lo + (s - ARC[lo]) / (ARC[lo + 1] - ARC[lo]);
+}
+// One frame of the ease, dt seconds long: from the wavelength drawn toward the slider's. It closes 9 e-folds a
+// second of the gap plus a steady quarter of the whole path a second, so it arrives (from anywhere, in about a
+// quarter of a second); and it never moves more than three whole paths a second, which bounds how much the
+// color can change in one frame. When the slider turns back past the color drawn, the color rests one frame
+// before it turns (`state` keeps its last step), so that no frame is undone by the next.
+export const EASE = { rate: 9, steady: 0.25, most: 3 };
+export function easeWavelength(drawn, goal, dt, state = {}) {
+  const a = colourArc(drawn), gap = colourArc(goal) - a;
+  if (state.at === undefined || Math.abs(state.at - a) > 1e-6) { state.last = 0; state.on = state.was = false; }      // the color drawn was set from outside
+  // Turning back: rest this frame. (Not when it has been on the slider for two frames and the slider turns: then
+  // it moves with the slider. A color that has only just caught up with a slider coming the other way rests.)
+  if (gap * (state.last || 0) < 0 && !(state.on && state.was)) { state.last = 0; state.was = state.on; state.on = false; state.at = a; return drawn; }
+  const go = Math.min(EASE.most * dt, Math.abs(gap) * (1 - Math.exp(-dt * EASE.rate)) + EASE.steady * dt);
+  state.was = state.on;
+  if (Math.abs(gap) <= go) { state.last = gap; state.on = true; state.at = colourArc(goal); return goal; }
+  const step = go > 0 ? Math.sign(gap) * go : 0;
+  state.last = step; state.on = false; state.at = a + step;
+  return step ? arcWavelength(a + step) : drawn;
+}
+
 // A set of wavelengths whose display colours add up to white: sunlight, for drawing.
 export function spectrumSet(list) {
   const cols = list.map(wlRGB), sum = [0, 0, 0];
@@ -115,11 +156,13 @@ export function bowAngle(n, k = 1) {     // radians from the antisolar point
   const D = deviation(bowB(n, k), n, k);
   return k === 1 ? Math.PI - D : D - Math.PI;
 }
-// Wavelength whose primary bow sits at a given angle from the antisolar point (or null outside the band).
-export function wavelengthAt(angle) {
+// Wavelength whose bow after k reflections sits at a given angle from the antisolar point (or null outside
+// that bow). The first bow has red outside; the second, red inside.
+export function wavelengthAt(angle, k = 1) {
   let lo = 380, hi = 720;
-  if (angle < bowAngle(nWater(lo)) || angle > bowAngle(nWater(hi))) return null;
-  for (let i = 0; i < 40; i++) { const m = (lo + hi) / 2; if (bowAngle(nWater(m)) < angle) lo = m; else hi = m; }
+  const f = l => (bowAngle(nWater(l), k) - angle) * (k === 1 ? 1 : -1);
+  if (f(lo) > 0 || f(hi) < 0) return null;
+  for (let i = 0; i < 40; i++) { const m = (lo + hi) / 2; if (f(m) < 0) lo = m; else hi = m; }
   return (lo + hi) / 2;
 }
 

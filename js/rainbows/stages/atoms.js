@@ -20,17 +20,26 @@ let phase = 0, lastT = null;
 const WHITE = [0.82, 0.88, 1.0], BCOL = [0.35, 0.75, 1.0], GRID = [0.35, 0.75, 1.0], CLOUD = [0.45, 0.68, 1.0], CORE = [1.0, 0.5, 0.38];
 const css = c => O.cssRGB(c);
 
-// The exact plane-wave solution for light arriving at an angle with its electric field along y
-// (across the plane of the bend, which is the floor of the scene). Fresnel gives r and t.
-function setup(S) {
-  const l = S.lambda, n = O.nWater(l), th = Math.min(75, S.tilt) * DEG;
+// The exact plane-wave solution for light arriving at an angle, polarized as the Surface scale above was
+// set: with s, its electric field along y, across the plane of the bend (the floor of the scene); with p,
+// in that plane, and the magnetic field along y. Fresnel gives t, the electric field in the water against
+// the arriving one's. (The light here is the light at the Surface scale: it keeps its polarization.)
+const UP = [0, 1, 0], DOWN = [0, -1, 0];
+export function setup(S) {
+  const l = S.lambda, n = O.nWater(l), th = Math.min(75, S.tilt) * DEG, p = S.pol === 'p';
   const si = Math.sin(th), ci = Math.cos(th), sT = si / n, cT = Math.sqrt(1 - sT * sT);
-  const k0 = 2 * Math.PI / lamD(l), wT = phase, r = (ci - n * cT) / (ci + n * cT), t = 1 + r;
-  return { l, n, th, thT: Math.asin(sT), k0, wT, r, t,
-    di: [ci, 0, -si], dt: [cT, 0, -sT], dr: [-ci, 0, -si],          // directions of travel
-    bi: [si, 0, ci], bt: [sT, 0, cT], br: [si, 0, -ci],             // the magnetic field's direction, k × E
-    inWater: p => t * Math.cos(n * k0 * (cT * p[0] - sT * p[2]) - wT) };
+  const k0 = 2 * Math.PI / lamD(l), wT = phase, t = p ? 2 * ci / (n * ci + cT) : 2 * ci / (ci + n * cT);
+  const bi = [si, 0, ci], bt = [sT, 0, cT];      // across the ray, in the plane of the bend
+  return { l, n, th, thT: Math.asin(sT), k0, wT, t, p,
+    di: [ci, 0, -si], dt: [cT, 0, -sT],          // directions of travel
+    bi, bt,
+    // which way E and B point, in the air and in the water (B along k × E)
+    eI: p ? bi : UP, eT: p ? bt : UP, bI: p ? DOWN : bi, bT: p ? DOWN : bt,
+    inWater: q => t * Math.cos(n * k0 * (cT * q[0] - sT * q[2]) - wT) };
 }
+// How far the electrons are drawn to swing for a unit field, so that at 0° the swing is as drawn before.
+// Each swing is this times the field where the electrons are, which in the water is t times the arriving one.
+export const swingPerField = S => 0.42 * O.energySplit(S.lambda).response * (1 + O.nWater(S.lambda)) / 2;
 const pct = x => (x * 100).toFixed(1) + '%';
 
 // ---- the two moving pictures in the panel ----
@@ -125,8 +134,8 @@ export default {
 <figure class="fig"><canvas data-fig="sum" role="img" aria-label="This shows a wave crossing from air into water. In the water it falls further and further behind a dashed copy of itself that carries on as if there were no water. Below, each layer of molecules gives off a small wave of its own, a quarter of a cycle behind."></canvas>
 <figcaption>Above: the wave (bold) beside the wave as it would be with no water (dashed). Below: the small wave that the moving electrons in one layer of molecules give off, a quarter of a cycle behind (one layer in three is drawn). Adding each one delays the wave a little more, ${(lagAt(l) / DEG).toFixed(0)}° of phase per layer at this wavelength. Each layer drawn stands for about ${Math.round(LAYER / 0.31 / 10) * 10} real ones, and reflection is left out.</figcaption></figure>`;
     return `${figs}<ul class="scenekey">
-${key(col, '<b>Electric field E</b> of the light, pointing up, then down')}
-${S.bfield ? key(css(BCOL), '<b>Magnetic field B</b>: points side to side, in step with E') : ''}
+${key(col, S.pol === 'p' ? '<b>Electric field E</b> of the light, pointing side to side in the plane of the bend' : '<b>Electric field E</b> of the light, pointing up, then down')}
+${S.bfield ? key(css(BCOL), S.pol === 'p' ? '<b>Magnetic field B</b>: points up and down, in step with E' : '<b>Magnetic field B</b>: points side to side, in step with E') : ''}
 ${key(css(CLOUD), '<b>Electrons</b> of a water molecule, drawn as one disc, pushed by E', 1)}
 ${key(css(CORE), '<b>Nuclei</b> of the molecule, too heavy to move visibly', 1)}
 <li><i class="dash"></i><span><b>Dashed, on the floor</b>: the way straight on, and the perpendicular to the surface</span></li></ul>
@@ -165,7 +174,7 @@ ${bar('Water', [[e.electric, C.el], [e.stretch, C.st], [e.motion, C.mo], [e.magn
       { p: at(mid(c.di, [1, 0, 0]), -2.7, YF), text: (c.th / DEG).toFixed(1) + '°', cls: 'num' },
       { p: at(mid(c.dt, [1, 0, 0]), 2.9, YF), text: (c.thT / DEG).toFixed(1) + '°', cls: 'num' },
     ];
-    if (S.bfield) L.push({ p: at(c.di, -3.6, 0, c.bi, AMP + 0.3), text: 'Magnetic field B', cls: 'key', color: css(BCOL) });
+    if (S.bfield) L.push({ p: c.p ? at(c.di, -3.6, -AMP - 0.3) : at(c.di, -3.6, 0, c.bi, AMP + 0.3), text: 'Magnetic field B', cls: 'key', color: css(BCOL) });
     return L;
   },
 
@@ -237,25 +246,25 @@ void main(){ o = vec4(dropSkin(IN*uEye*${IN.s.toFixed(6)}, IN*rayDir(), uSkin, u
     R.flushLines({ dash: [0.3, 0, 0.5] });
 
     // the wave along each ray: electric field up and down and, when asked for, magnetic field across, in step
-    const ribbon = (d, b, s0, s1, k, amp, bamp) => {
+    const ribbon = (d, eh, bh, s0, s1, k, amp, bamp) => {
       let pe = null, pb = null, i = 0;
       for (let s = s0; s <= s1; s += 0.07, i++) {
         const f = Math.cos(k * s - c.wT), edge = Math.min(1, (s - s0) / 1.2 + (s0 === 0 ? 1 : 0), (s1 - s) / 0.9);
-        const o = [d[0] * s, 0, d[2] * s], E = [o[0], AMP * amp * f, o[2]], B = [o[0] + b[0] * AMP * bamp * f, 0, o[2] + b[2] * AMP * bamp * f];
+        const o = [d[0] * s, 0, d[2] * s], E = V.mad(o, eh, AMP * amp * f), B = V.mad(o, bh, AMP * bamp * f);
         if (pe) { R.seg(pe, E, col, 0.95 * edge, 2.6); if (S.bfield) R.seg(pb, B, BCOL, 0.6 * edge, 1.8); }
         if (i % 3 === 0) { R.seg(o, E, col, 0.3 * edge, 1.1); if (S.bfield) R.seg(o, B, BCOL, 0.2 * edge, 1.0); }
         pe = E; pb = B;
       }
     };
     R.seg(V.mul(c.di, -SI), [0, 0, 0], WHITE, 0.2, 1.1); R.seg([0, 0, 0], V.mul(c.dt, ST), WHITE, 0.2, 1.1);
-    ribbon(c.di, c.bi, -SI, 0, c.k0, 1, 1);
-    ribbon(c.dt, c.bt, 0, ST, c.n * c.k0, c.t, c.n * c.t);
+    ribbon(c.di, c.eI, c.bI, -SI, 0, c.k0, 1, 1);
+    ribbon(c.dt, c.eT, c.bT, 0, ST, c.n * c.k0, c.t, c.n * c.t);
     R.flushLines();
 
-    // molecules: a fixed core, and an electron cloud pushed against the field
-    const swing = 0.42 * e.response / c.t;
+    // molecules: a fixed core, and an electron cloud pushed against the field there, as far as that field is strong
+    const swing = swingPerField(S);
     for (const m of mols) {
-      const p = molPos(m, c), q = [p[0], p[1] - swing * c.inWater(p), p[2]];
+      const p = molPos(m, c), q = V.mad(p, c.eT, -swing * c.inWater(p));
       R.pt(p, CORE, 0.8, 0.1);
       R.pt(q, CLOUD, 0.16, 0.4);
       R.seg(p, q, CLOUD, 0.7, 1.4);

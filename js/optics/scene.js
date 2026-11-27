@@ -1,10 +1,13 @@
 // A night scene as the sensor records it, for the inset: white stars, two of them close together,
 // and a lit window. Every point of the scene is spread into the spot the traced rays make, so a
 // soft lens gives soft stars and a lens that separates the wavelengths gives coloured fringes.
-// Nothing is blurred by a made-up amount. Brightness is compressed so a faint smear still shows.
+// The spot is then spread once more by the width the wave nature of light gives it, which the model
+// works out (trace.js). Nothing is blurred by a made-up amount. Brightness is compressed so a faint
+// smear still shows.
 //
-// A panel is one piece of sensor: `spots` lists, for each kind of light landing there, its colour
-// and its `taps` (dx, dy, weight triples in device pixels, weights adding to 1).
+// A panel is one piece of sensor: `spots` lists, for each kind of light landing there, its colour,
+// its `taps` (dx, dy, weight triples in device pixels, weights adding to 1) and `sigma`, the wave's
+// Gaussian spread across and up (pixels of the reduced picture).
 
 const sharp = document.createElement('canvas'), scratch = document.createElement('canvas');
 
@@ -34,6 +37,28 @@ export function sliceTaps(list, f) {
   return list.flatMap(([dy, wt]) => [0, Math.round(-dy / f), wt / tot]);
 }
 
+// Spread a picture (`ch` numbers for each of W × H pixels) by a Gaussian, sx pixels across and sy up
+// and down. Light spread past the picture's edge is lost. A spread under a quarter of a pixel is left out.
+export function gauss(a, W, H, ch, sx, sy) {
+  for (const [sigma, across] of [[sx, true], [sy, false]]) {
+    if (!(sigma >= 0.25)) continue;
+    const r = Math.min(60, Math.ceil(3 * sigma)), ker = new Float32Array(2 * r + 1);
+    let sum = 0;
+    for (let i = -r; i <= r; i++) sum += (ker[i + r] = Math.exp(-i * i / (2 * sigma * sigma)));
+    for (let i = 0; i < ker.length; i++) ker[i] /= sum;
+    const src = a.slice(), n = across ? W : H, lines = across ? H : W, step = (across ? 1 : W) * ch, line = (across ? W : 1) * ch;
+    for (let l = 0; l < lines; l++) for (let i = 0; i < n; i++) {
+      const lo = Math.max(-r, -i), hi = Math.min(r, n - 1 - i), at = l * line + i * step;
+      for (let c = 0; c < ch; c++) {
+        let v = 0;
+        for (let j = lo; j <= hi; j++) v += ker[j + r] * src[at + j * step + c];
+        a[at + c] = v;
+      }
+    }
+  }
+  return a;
+}
+
 // Draw into the box (x, y, w, h: CSS pixels). `f` is the factor to work at reduced size (a wide
 // blur has no detail to keep).
 export function drawScene(g, x, y, w, h, dpr, f, spots, narrow) {
@@ -58,13 +83,14 @@ export function drawScene(g, x, y, w, h, dpr, f, spots, narrow) {
     s.fillStyle = '#000'; s.fillRect(x0, y0, ww, hh);
   }
   const out = new Float32Array(W * H * 3), one = new Float32Array(W * H);
-  for (const { rgb, taps } of spots) {
+  for (const { rgb, taps, sigma } of spots) {
     one.fill(0);
     for (let k = 0; k < taps.length; k += 3) {
       const dx = taps[k], dy = taps[k + 1], wt = taps[k + 2];
       const x0 = Math.max(0, -dx), x1 = Math.min(W, W - dx), y0 = Math.max(0, -dy), y1 = Math.min(H, H - dy);
       for (let yy = y0; yy < y1; yy++) { let o = yy * W + x0, i = (yy + dy) * W + x0 + dx; for (let n = x1 - x0; n > 0; n--) one[o++] += wt * lum[i++]; }
     }
+    if (sigma) gauss(one, W, H, 1, sigma[0], sigma[1]);
     for (let i = 0, j = 0; i < one.length; i++) { out[j++] += one[i] * rgb[0]; out[j++] += one[i] * rgb[1]; out[j++] += one[i] * rgb[2]; }
   }
   if (scratch.width !== W || scratch.height !== H) { scratch.width = W; scratch.height = H; }

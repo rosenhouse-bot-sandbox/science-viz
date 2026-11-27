@@ -62,6 +62,8 @@ html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family
 .cap,.controls,.readout{transition:opacity .4s}
 .panel.swap :is(.cap,.controls,.readout){opacity:0}
 .eyebrow{font-family:var(--mono);font-size:0.6562rem;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3)}
+/* a unit keeps its case: upper-cased, µm would read as MM */
+#stageScale{text-transform:none}
 .cap h2{font-family:var(--display);font-weight:600;font-size:1.1875rem;letter-spacing:-.015em;line-height:1.15;margin:0;text-wrap:balance}
 .cap p{margin:0;font-size:0.875rem;line-height:1.42;color:var(--ink2);max-width:62ch}
 

@@ -8,8 +8,8 @@
 //   rot    turning the arm about its own length: + turns out (the forearm swings out), - turns in
 //   elbow  elbow bend, in degrees (0 straight, 90 the forearm level)
 //   up     how far the ball of the arm bone has moved up toward the acromion, in mm (a large cuff tear)
-import { V, K, bandMesh, binU } from './geom.js?v=c69aaabe';
-import { solid } from './solid.js?v=c69aaabe';
+import { V, K, bandMesh, binU } from './geom.js?v=b2a1f60e';
+import { solid } from './solid.js?v=b2a1f60e';
 
 // ---- reading the packed meshes -------------------------------------------------------------------
 export function unpack(json, buf) {
@@ -79,7 +79,18 @@ const BODY = { scapula: 'scapula', clavicle: 'clavicle', humerus: 'humerus', rad
 
 // the bursa: from how far along the supraspinatus it starts (0 origin, 1 insertion), and how much wider than the tendon
 export const BURSA = { from: 0.7, wide: 1.15 };
+// With the arm above shoulder height the deltoid's three lines run nearly side by side to the arm bone, and moving a
+// part aside or squeezing it there draws it as a tube with a lobe beside it, which no deltoid looks like. So the ties
+// act fully up to TIE_FADE[0] degrees of lift and not at all from TIE_FADE[1], where the parts overlap as the lines have them. Lifting
+// the deltoid off the cuff (overCuff) fades with them: alone it would stand the back part off the middle one.
+export const TIE_FADE = [90, 120];
+// A part drawn narrower is drawn thicker by as much, but with what shortening adds (frames, k) never more than THICK
+// times its thickness at rest: more than that stands up as a lobe. (Past that it is drawn with less than its volume.)
+export const THICK = 1.3;
+const BEND = 18 * Math.PI / 180;   // the sharpest bend of a muscle's middle line from one slice to the next (see frames)
 export const CLEAR = 2;       // mm kept between the arm bone and the acromion as the arm lifts (see glide)
+export const ROOM = 0.8;      // mm kept between the acromion and the top of the tendon's end with its healthy bursa on it (see room)
+export const BURSA_MM = 0.8;  // the healthy bursa's thickness (main.js draws a swollen one thicker)
 export const ROTS = [-90, -75, -60, -45, -30, -15, 0, 15, 30, 45, 60, 75, 90];   // the arm's turns the glide is worked out for
 export function makeModel(bones, musclesJson, table = null) {
   const mk = musclesJson.marks, HC = mk.HC, AC = mk.AC, EL = mk.EL, headR = mk.headR;
@@ -126,14 +137,20 @@ export function makeModel(bones, musclesJson, table = null) {
     // the ball slides down to keep its room (unless told not to), and a large tear lets it ride up
     let glide = P.auto === false ? 0 : glideAt(fit, rot);
     const dir = turn(scap, [0, 1, 0]), moved = (g) => ({ R: hum.R, t: V.add(hum.t, V.mul(dir, up - g)) });
-    // the stored glide is worked out on a grid of lifts and turns; between them, slide a little further if needed
-    // (with a large tear the ball rides up where there is room, but never nearer the acromion than CLEAR, which
-    // leaves room for the tendon and bursa drawn between them)
-    const keep = CLEAR;
-    if (P.auto !== false && !P.quick) for (let k = 0; k < 3; k++) { const g = gap({ scapula: scap, humerus: moved(glide) }).mm; if (g >= keep - 0.01) break; glide += keep - g + 0.03; }
+    // the stored glide is worked out on a grid of lifts and turns; between them, slide a little further if needed.
+    // First with the ball where the cuff holds it (up 0): CLEAR between the bones, and ROOM over the tendon's end and
+    // its bursa. Then with the ball ridden up (a large tear, a weak cuff, the deltoid pulling alone): it rides up where
+    // there is room, into the tendon's room but never nearer the acromion than CLEAR.
+    if (P.auto !== false && !P.quick) {
+      const at = (g, u) => ({ scapula: scap, clavicle: clav, humerus: { R: hum.R, t: V.add(hum.t, V.mul(dir, u - g)) } });
+      // (the least slide to within 0.05 mm: the last slide that was too little and the first that was enough are halved)
+      const least = (need) => { let lo = null; for (let k = 0; k < 8; k++) { const n = need(glide); if (n <= 0.01) break; lo = glide; glide += n + 0.03; } if (lo !== null) for (let k = 0; k < 3 && glide - lo > 0.05; k++) { const m = (lo + glide) / 2; if (need(m) <= 0.01) glide = m; else lo = m; } };
+      least((g) => { const T0 = at(g, Math.min(up, 0)); return Math.max(CLEAR - gap(T0).mm, ROOM - room(T0)); });
+      if (up > 0) least((g) => CLEAR - gap(at(g, up)).mm);
+    }
     if (glide || up) hum = moved(glide);
     const fore = compose(hum, about(EL, ELB, rad(P.elbow ?? 0)));
-    return { scapula: scap, clavicle: clav, humerus: hum, forearm: fore, rest: I3(), fit, glide };
+    return { scapula: scap, clavicle: clav, humerus: hum, forearm: fore, rest: I3(), fit, glide, elev: P.elev ?? 0 };
   }
   const bodyOf = (b) => BODY[b] || 'rest';
 
@@ -141,7 +158,7 @@ export function makeModel(bones, musclesJson, table = null) {
   // Worked out in the shoulder blade's own frame, where the acromion's triangles never move.
   const AT = []; {
     const p = bones.scapula.pos, P3 = (k) => [p[3 * k], p[3 * k + 1], p[3 * k + 2]];
-    for (let i = 0; i < acro.length; i += 3) { const a = P3(acro[i]), b = P3(acro[i + 1]), c = P3(acro[i + 2]), m = V.mean([a, b, c]); AT.push({ a, b, c, m, r: Math.max(...[a, b, c].map((q) => V.len(V.sub(q, m)))) }); }
+    for (let i = 0; i < acro.length; i += 3) { const a = P3(acro[i]), b = P3(acro[i + 1]), c = P3(acro[i + 2]), m = V.mean([a, b, c]); AT.push({ a, b, c, m, n: V.norm(V.cross(V.sub(b, a), V.sub(c, a))), r: Math.max(...[a, b, c].map((q) => V.len(V.sub(q, m)))) }); }
   }
   // the acromion's triangles grouped in 10 mm cells, each with a ball round it, so that most can be skipped at once
   const cells = new Map();
@@ -161,6 +178,33 @@ export function makeModel(bones, musclesJson, table = null) {
       }
     }
     return { mm: best, from: apply(T.scapula, at), to: apply(T.scapula, on) };
+  }
+
+  // The room over the tendon. The last part of the supraspinatus tendon is fixed to the top of the arm bone and goes
+  // with it under the acromion in the middle of a lift. TOP is the top face of that part with the healthy bursa on it,
+  // as points fixed to the arm bone. room() is how far the nearest of them is from the acromion's surface (less than
+  // nothing when one is inside the bone: the side is told by the way the nearest triangle faces). A healthy shoulder
+  // keeps ROOM there: the tendon passes at its full thickness.
+  // The depth muscle() pushes a point out by (solid.js) is blended between cells, so it fades to nothing over a
+  // cell's width outside the bone. That depth is taken off the distance, so that a point with ROOM is also a point
+  // muscle() leaves alone. Both parts change smoothly as the ball slides, so the slide does too.
+  let TOP = null;
+  const ROOF = HC[1] + 0.8 * headR;           // the acromion is the part of the shoulder blade above this height (in the blade's own terms)
+  function room(T) {
+    if (!TOP) {
+      const su = built[0], ib = (su.path ||= pathOf(su)).ib; TOP = [];
+      for (let i = ib; i < su.S; i++) { const q = su.sl[i]; for (let j = 1; j < K - 1; j++) TOP.push(V.add(q.c, V.add(V.mul(q.U, q.lo + binU(j) * (q.hi - q.lo)), V.mul(q.W, q.top[j] + 0.15 + BURSA_MM)))); }
+    }
+    const inv = { R: tr(T.scapula.R) }; inv.t = V.mul(mv(inv.R, T.scapula.t), -1);
+    const rel = compose(inv, T.humerus); let best = 1e9;
+    for (const p of TOP) {
+      const q = apply(rel, p), dp = q[1] > ROOF ? SOL.scapula.depth(q) : 0;
+      // a point clear of the blended depth is outside, and only matters if it is nearer than the nearest so far
+      let d = dp > 0 ? 1e9 : best, side = 1, lean = 0;
+      for (const g of groups) { if (V.len(V.sub(q, g.c)) - g.r >= d) continue; for (const t of g.ts) { if (V.len(V.sub(q, t.m)) - t.r >= d + 1e-6) continue; const off = V.sub(q, closest(q, t.a, t.b, t.c)), dd = V.len(off), l = V.dot(off, t.n); if (dd < d - 1e-6 || (dd < d + 1e-6 && Math.abs(l) > Math.abs(lean))) { d = Math.min(d, dd); lean = l; side = l < 0 ? -1 : 1; } } }
+      if (d < 1e9) best = Math.min(best, (dp > 0 ? side : 1) * d - dp);
+    }
+    return best;
   }
 
   // ---- fitting the pose: off the ribs, and room under the acromion ----
@@ -189,18 +233,27 @@ export function makeModel(bones, musclesJson, table = null) {
       }
       back = best.back; ir = best.ir;
       const at = { back, ir, glide: ROTS.map(() => 0) }, slid = ROTS.map((rot) => {
-        const ok = (d) => gap(pose({ elev, plane, rot, auto: false, up: -d, fit: at })).mm >= CLEAR;
+        const ok = (d) => { const T = pose({ elev, plane, rot, auto: false, up: -d, fit: at }); return gap(T).mm >= CLEAR && room(T) >= ROOM; };
         if (ok(0)) return 0;
         let lo = 0, hi = 1; while (!ok(hi) && hi < 20) { lo = hi; hi += 1; } for (let n = 0; n < 6; n++) { const m = (lo + hi) / 2; if (ok(m)) hi = m; else lo = m; }
         return +hi.toFixed(2);
       });
       out.push({ back: +back.toFixed(2), ir: +ir.toFixed(2), glide: slid, ribs: best.n });
     }
+    // The ball does not lurch. The least slide that keeps the room can come on all at once: the top of the tendon
+    // meets the edge of the acromion at one lift and clears it only some millimeters lower. More slide than the
+    // least still keeps the room, so either side of such a step the slide is raised until it changes by no more
+    // than EASE mm for a degree of lift and EASE_TURN mm for a degree of turn.
+    for (let pass = 0; pass < 3; pass++) {
+      for (let k = 0; k < ROTS.length; k++) for (const dir of [1, -1]) for (let n = 1; n < out.length; n++) { const i = dir > 0 ? n : out.length - 1 - n; out[i].glide[k] = Math.max(out[i].glide[k], out[i - dir].glide[k] - EASE * STEP); }
+      for (const row of out) for (const dir of [1, -1]) for (let n = 1; n < ROTS.length; n++) { const k = dir > 0 ? n : ROTS.length - 1 - n; row.glide[k] = Math.max(row.glide[k], row.glide[k - dir] - EASE_TURN * Math.abs(ROTS[k] - ROTS[k - dir])); }
+    }
+    for (const row of out) row.glide = row.glide.map((g) => +g.toFixed(2));
     return out;
   }
   // kept in shoulder/data/pose.json (tests/shoulder/build-pose.mjs), so that the page need not work it out
-  const STEP = 5, PLANES = [0, 30, 90], memo = {};
-  const rows = (plane) => (table && table.clear === CLEAR && table.step === STEP && String(table.rots) === String(ROTS) && table.planes[plane]) || (memo[plane] ||= fitPlane(plane));
+  const STEP = 5, PLANES = [0, 30, 90], memo = {}, EASE = 0.12, EASE_TURN = 0.1;
+  const rows = (plane) => (table && table.clear === CLEAR && table.room === ROOM && table.ease === EASE && table.step === STEP && String(table.rots) === String(ROTS) && table.planes[plane]) || (memo[plane] ||= fitPlane(plane));
   function storedIn(elev, plane) {
     const R = rows(plane), e = clamp(elev, 0, 150) / STEP, i = Math.min(R.length - 2, Math.floor(e)), f = e - i, a = R[i], b = R[i + 1];
     return { back: a.back + (b.back - a.back) * f, ir: a.ir + (b.ir - a.ir) * f, glide: a.glide.map((g, k) => g + (b.glide[k] - g) * f) };
@@ -220,7 +273,7 @@ export function makeModel(bones, musclesJson, table = null) {
     const r = clamp(rot, ROTS[0], ROTS[ROTS.length - 1]), k = Math.min(ROTS.length - 2, Math.floor((r - ROTS[0]) / (ROTS[1] - ROTS[0]))), f = (r - ROTS[k]) / (ROTS[k + 1] - ROTS[k]);
     return fit.glide[k] + (fit.glide[k + 1] - fit.glide[k]) * f;
   }
-  const makeTable = () => ({ clear: CLEAR, step: STEP, rots: ROTS, planes: Object.fromEntries(PLANES.map((pl) => [pl, fitPlane(pl)])) });
+  const makeTable = () => ({ clear: CLEAR, room: ROOM, ease: EASE, step: STEP, rots: ROTS, planes: Object.fromEntries(PLANES.map((pl) => [pl, fitPlane(pl)])) });
 
   // ---- the muscles at a pose ----
   // The bones a moving muscle can be pushed into, as solids (solid.js): the top of the arm bone, the shoulder
@@ -249,9 +302,11 @@ export function makeModel(bones, musclesJson, table = null) {
     // how close the muscle comes to the middle of the ball at rest: it is never pushed in closer than that
     const near = Math.min(...rest.map((p) => V.len(V.sub(p, HC))));
     // The scans overlap the bones where a muscle attaches, and a little elsewhere. A point already inside a bone
-    // at rest is left there; any other point is never let into a bone.
-    const restIn = Object.fromEntries(Object.entries(SOL).map(([k, f]) => [k, rest.map((p) => f.depth(p) > 0)]));
-    return { ...m, sl, mesh, rest, t, at: corners(sl, mesh), L0, S, wrap: Math.min(headR + 1.2, near), restIn };
+    // at rest may be as deep in that bone as it is at rest (restDeep), and no deeper; any other point is never let
+    // into a bone.
+    const restDeep = Object.fromEntries(Object.entries(SOL).map(([k, f]) => [k, rest.map((p) => Math.max(0, f.depth(p)))]));
+    const restIn = Object.fromEntries(Object.entries(restDeep).map(([k, d]) => [k, d.map((x) => x > 0)]));
+    return { ...m, sl, mesh, rest, t, at: corners(sl, mesh), L0, S, wrap: Math.min(headR + 1.2, near), restIn, restDeep };
   }
   // Each slice's W axis is turned, if need be, to point away from the ball, so that a muscle's "top" face is the
   // one away from the joint (for the supraspinatus, the side the bursa lies on). Turning U and W together by half
@@ -296,21 +351,45 @@ export function makeModel(bones, musclesJson, table = null) {
   }
 
   // The bursa at a pose, laid on the supraspinatus as it is drawn (tPos: the posed tendon, from muscle()), so that it
-  // lies on the tendon's top face whatever the pose or condition: a worn tendon's thickened face, the dip of a hole.
-  // Each corner of the sac sits over the point of the tendon's top face at the same place across it (the sac is a
-  // little wider than the tendon: past the tendon's edges it carries on in the same direction), lifted along the
-  // tendon's thickness there by 0.15 mm, and its top face by the sac's thickness.
-  function bursaOn(bu, tPos) {
-    const S = supra.S, M = 2 * K, i0 = Math.floor(BURSA.from * (S - 1)), P = (i, j) => [tPos[3 * (i * M + j)], tPos[3 * (i * M + j) + 1], tPos[3 * (i * M + j) + 2]];
+  // lies on the tendon's top face whatever the pose or condition (a worn tendon's thickened face). Over a tear the
+  // caller gives the tendon as it would be untorn, and the sac closes over the hole.
+  // The sac's floor is the tendon's top face, evened out (a sac of fluid does not copy a sharp step in what it lies
+  // on) but never under that face. The sac stands off it along the face's own direction, found from the face and not
+  // from the tendon's thickness, which is nothing where the tendon ends. Each corner of the sac sits over the point of
+  // the floor at the same place across it (the sac is a little wider than the tendon: past the tendon's edges it
+  // carries on in the same direction), 0.15 mm off it, and its top face by the sac's thickness more.
+  // With the pose T given, the sac is never in bone: where the acromion leaves less room than the sac's thickness, the
+  // sac is drawn as thin as the room (its fluid moves aside), down to a film.
+  function bursaOn(bu, tPos, T = null) {
+    const S = supra.S, M = 2 * K, i0 = Math.floor(BURSA.from * (S - 1)), N = S - i0, P = (i, j) => [tPos[3 * (i * M + j)], tPos[3 * (i * M + j) + 1], tPos[3 * (i * M + j) + 2]];
+    const G = [], Nr = [];
+    for (let r = 0; r < N; r++) { G.push([]); for (let k = 0; k < K; k++) G[r].push(P(i0 + r, k)); }
+    const at = (A, r, k) => A[clamp(r, 0, N - 1)][clamp(k, 0, K - 1)];
+    for (let r = 0; r < N; r++) { Nr.push([]); for (let k = 0; k < K; k++) {
+      let n = V.cross(V.sub(at(G, r + 1, k), at(G, r - 1, k)), V.sub(at(G, r, k + 1), at(G, r, k - 1)));
+      const through = V.sub(P(i0 + r, k), P(i0 + r, M - 1 - k)), ref = V.len(through) > 0.5 ? through : (r > 0 ? Nr[r - 1][k] : through);
+      if (V.dot(n, ref) < 0) n = V.mul(n, -1);
+      Nr[r].push(V.len(n) > 1e-9 ? V.norm(n) : V.norm(ref));
+    } }
+    const blur = (A, unit) => A.map((row, r) => row.map((_, k) => { let m = V.mul(A[r][k], 4); for (const [a, c] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) m = V.add(m, at(A, r + a, k + c)); m = V.mul(m, 1 / 8); return unit ? V.norm(m) : m; }));
+    let Ns = Nr; for (let pass = 0; pass < 3; pass++) Ns = blur(Ns, true);
+    let Gs = G; for (let pass = 0; pass < 2; pass++) Gs = blur(Gs, false);
+    const bones = T ? [[SOL.scapula, T.scapula, invT(T.scapula)], [SOL.humerus, T.humerus, invT(T.humerus)]] : [];
+    const inBone = (q) => bones.some(([f, , Ik]) => f.depth(apply(Ik, q)) > 0);
+    // (the evened face only where that keeps the floor out of bone: under the acromion the tendon's own face is the floor)
+    const F = G.map((row, r) => row.map((g, k) => { const up = V.add(g, V.mul(Ns[r][k], Math.max(0, V.dot(V.sub(Gs[r][k], g), Ns[r][k])))); return inBone(up) ? g : up; }));
     const out = new Float32Array(bu.rest.length * 3), ends = [[], []], caps = [];
     bu.at.forEach((c, n) => {
       if (c.cap !== undefined) { caps.push(n); return; }
-      const i = i0 + c.i, s = supra.sl[i], bs = bu.sl[c.i];
+      const r = c.i, s = supra.sl[i0 + r], bs = bu.sl[r];
       const x = ((c.u - s.lo) / (s.hi - s.lo) - 0.01) / 0.98 * (K - 1), k = Math.min(K - 2, Math.max(0, Math.floor(x)));
-      const top = V.add(P(i, k), V.mul(V.sub(P(i, k + 1), P(i, k)), x - k));            // on the top face, or past its edge
-      const kk = clamp(Math.round(x), 0, K - 1), nrm = V.norm(V.sub(P(i, kk), P(i, M - 1 - kk)));   // through the tendon there
-      const jj = clamp(Math.round((c.s - 0.01) / 0.98 * (K - 1)), 0, K - 1), h = c.top ? bs.top[jj] - bs.bot[jj] : 0;
-      const q = V.add(top, V.mul(nrm, 0.15 + h));
+      const floor = V.add(F[r][k], V.mul(V.sub(F[r][k + 1], F[r][k]), x - k));          // on the floor, or past its edge
+      const nrm = Ns[r][clamp(Math.round(x), 0, K - 1)];
+      const jj = clamp(Math.round((c.s - 0.01) / 0.98 * (K - 1)), 0, K - 1), hT = bs.top[jj] - bs.bot[jj], h = c.top ? hT : 0;
+      let off = 0.15 + h, q = V.add(floor, V.mul(nrm, off));
+      if (c.top && inBone(q)) { let lo = 0.2, hi = off; for (let it = 0; it < 6; it++) { const m = (lo + hi) / 2; if (inBone(V.add(floor, V.mul(nrm, m)))) hi = m; else lo = m; } off = lo; q = V.add(floor, V.mul(nrm, off)); }
+      // (past the tendon's edge there is no tendon under the sac to keep it out of bone: there it draws back to the edge)
+      if ((x < 0 || x > K - 1) && (inBone(q) || inBone(V.add(floor, V.mul(nrm, 0.15 + hT))))) q = V.add(F[r][x < 0 ? 0 : K - 1], V.mul(nrm, c.top ? 0.2 : 0.15));
       out.set(q, 3 * n);
       if (c.i === 0) ends[0].push(q); else if (c.i === bu.S - 1) ends[1].push(q);
     });
@@ -382,6 +461,24 @@ export function makeModel(bones, musclesJson, table = null) {
   const azim = (k, a, b) => { const ap = V.sub(a, V.mul(k, V.dot(a, k))), bp = V.sub(b, V.mul(k, V.dot(b, k))); return Math.atan2(V.dot(k, V.cross(ap, bp)), V.dot(ap, bp)); };
   // the way from the ball's middle to the middle of the socket: toward the part of the shoulder blade nearest the ball
   const SOCKET = (() => { const p = bones.scapula.pos, near = []; for (let i = 0; i < p.length; i += 3) { const q = [p[i], p[i + 1], p[i + 2]]; if (V.len(V.sub(q, HC)) < headR + 5) near.push(q); } return V.norm(V.sub(V.mean(near), HC)); })();
+  // the direction of a line of points at each point (from the point before to the point after), and how far it bends there
+  // (for the deltoid, a sheet whose line bends sharply where it leaves the shoulder, over two slices each way and evened
+  // out along the line, so that a bend shared by a few slices turns them gradually and does not leave a step)
+  const tangents = (c, wide = false) => { const n = c.length, at = (i) => c[clamp(i, 0, n - 1)], w = wide ? 2 : 1; let t = c.map((_, i) => V.norm(V.sub(at(i + w), at(i - w))));
+    if (wide) for (let pass = 0; pass < 2; pass++) t = t.map((_, i) => V.norm(V.add(V.add(t[Math.max(0, i - 1)], t[Math.min(n - 1, i + 1)]), V.mul(t[i], 2)))); return t; };
+  const bendAt = (c, i) => { const a = V.sub(c[i], c[i - 1]), d = V.sub(c[i + 1], c[i]), la = V.len(a), ld = V.len(d); return la < 1e-6 || ld < 1e-6 ? 0 : Math.acos(clamp(V.dot(a, d) / (la * ld), -1, 1)); };
+  const bends = (c) => c.map((_, i) => (i < 1 || i > c.length - 2 ? 0 : bendAt(c, i)));
+  // shares out any bend of a line of slice middles that is sharper than BEND (or than the bend there at rest)
+  function unbend(g, bend0, i0, i1) {
+    for (let pass = 0; pass < 24; pass++) {
+      const h = g.slice(); let moved = false;
+      for (let i = i0; i <= i1; i++) {
+        const th = bendAt(h, i), ok = Math.max(BEND, bend0[i] + rad(4)); if (th <= ok) continue;
+        g[i] = V.add(h[i], V.mul(V.sub(V.mul(V.add(h[i - 1], h[i + 1]), 0.5), h[i]), 0.6 * (1 - ok / th))); moved = true;
+      }
+      if (!moved) break;
+    }
+  }
   // What a muscle's line needs that does not change with the pose: the slices' middles (cs) and the length along them
   // (s), the slices where the line leaves its bone (ia) and joins the arm bone (ib), the taut line at rest (W0), and
   // for each slice between them its share of the way along (u), the line's frame there (F0) and how far the slice's
@@ -400,7 +497,9 @@ export function makeModel(bones, musclesJson, table = null) {
     const om = []; for (let i = 0; i + 1 < S; i++) om.push(wOf((i + 0.5) / (S - 1)));
     // how far round the arm bone's long axis the line's end is from its start, at rest, and which way round
     const phi0 = azim(DOWN, V.sub(cs[ia], HC), V.sub(cs[ib], HC)), cap = ln.cap ? rad(ln.cap) : 0;
-    return { S, cs, s, ia, ib, rho, hint, u, F0, D, E, om, W0, fixed: s[ia] + s[S - 1] - s[ib], on: ln.on || b.from, hand: ln.hand,
+    // the way the middle line runs at each slice at rest (tau), and how sharply it bends there (bend0, radians)
+    const tau = tangents(cs, b.cuff === false), bend0 = bends(cs);
+    return { S, cs, s, ia, ib, rho, hint, u, F0, D, E, om, W0, tau, bend0, fixed: s[ia] + s[S - 1] - s[ib], on: ln.on || b.from, hand: ln.hand,
       cap, sense: Math.sign(phi0), gate: cap - Math.abs(phi0), ie: ln.peel ? Math.round(ln.peel * (S - 1)) : ib, pw: ln.pw };
   }
   // The taut line at a pose, in the terms of the bone its first end rides on (O). Two things are added to the plain
@@ -445,7 +544,76 @@ export function makeModel(bones, musclesJson, table = null) {
   function lineOf(b, T, n = 40) { const ln = lineAt(b, T), out = []; for (let i = 0; i <= n; i++) { const u = i / n, S = spinAt(ln, u); let p = ln.W.at(u).p; if (S) p = V.add(ln.C, mv(S, V.sub(p, ln.C))); out.push(apply(ln.O, p)); } return out; }
   // where each slice's middle and frame go at a pose (muscle() places the outline round them), and how much its
   // outline grows or shrinks (k)
+  // The layers keep their order: the deltoid lies over the cuff muscles, never in them. Its line is drawn taut over a
+  // ball, which stands for the joint but not for the cuff muscles on the shoulder blade, so with the arm forward or
+  // across the body the back of the deltoid's line runs through them. Where the under side of a slice of the deltoid
+  // would be inside a cuff muscle, the slice is lifted outward until it lies on that muscle (the line, and so the
+  // length and the leverage, are not changed).
+  function depthIn(q, y, fy) {
+    let j0 = 0, d0 = 1e9; for (let j = 0; j < y.S; j++) { const d = V.len(V.sub(q, fy[j].c)); if (d < d0) { d0 = d; j0 = j; } }
+    let deep = 0;
+    for (let j = Math.max(0, j0 - 1); j <= Math.min(y.S - 1, j0 + 1); j++) {
+      const sl = y.sl[j], f = fy[j], loc = V.mul(mv(tr(f.R), V.sub(q, f.c)), 1 / f.k), a = V.dot(loc, sl.U), v = V.dot(loc, sl.W), n = V.dot(loc, V.cross(sl.U, sl.W));
+      if (Math.abs(n) > 6 || a < sl.lo || a > sl.hi) continue;
+      const x = clamp((a - sl.lo) / (sl.hi - sl.lo)) * (K - 1), k = Math.min(K - 2, Math.floor(x)), g = x - k, top = sl.top[k] + (sl.top[k + 1] - sl.top[k]) * g, bot = sl.bot[k] + (sl.bot[k + 1] - sl.bot[k]) * g;
+      if (top - bot < 1.5 || v < bot || v > top) continue;
+      deep = Math.max(deep, (top - v) * f.k);
+    }
+    return deep;
+  }
+  // slices that have been moved off the line lie along a longer or shorter way than before (c0: where they were): each
+  // is drawn thinner or thicker by as much, so that the part keeps its volume
+  function thinned(fr, c0) {
+    const S = fr.length, sp = (c, i) => V.len(V.sub(c[Math.min(S - 1, i + 1)], c[Math.max(0, i - 1)])), c1 = fr.map((f) => f.c);
+    for (let i = 0; i < S; i++) { const a = sp(c0, i), d = sp(c1, i); if (a > 1e-6 && d > 1e-6) fr[i].k *= Math.sqrt(clamp(a / d, 0.6, 1.5)); }
+  }
+  // slices that have been moved: no bend of their middle line sharper than a muscle can make (see unbend); the two
+  // slices at each end stay where the bone has them
+  function settle(b, fr) { const g = fr.map((f) => f.c); unbend(g, b.path.bend0, 2, b.S - 3); fr.forEach((f, i) => { f.c = g[i]; }); }
+  const CUFF = built.filter((y) => y.cuff);
+  // (the scans overlap a little where one muscle lies on another: only what is deeper than at rest is lifted out)
+  const OVER = [1, 4, 8, 11, 14], REST = (y) => (y.fr0 ||= y.sl.map((q) => ({ c: q.c, R: I3R, k: 1 })));
+  function overCuff(b, T, out) {
+    const S = b.S, fys = CUFF.map((y) => [y, frames(y, T)]), lift = new Array(S).fill(0);
+    const under = (i, f, j) => { const sl = b.sl[i], u = sl.lo + binU(j) * (sl.hi - sl.lo); return V.add(f.c, mv(f.R, V.mul(V.add(V.mul(sl.U, u), V.mul(sl.W, sl.bot[j])), f.k))); };
+    b.over0 ||= b.sl.map((_, i) => OVER.map((j) => CUFF.map((y) => depthIn(under(i, REST(b)[i], j), y, REST(y)))));
+    for (let i = 0; i < S; i++) {
+      const e = sstep(0.06, 0.2, i / (S - 1)) * (1 - sstep(0.9, 0.98, i / (S - 1))); if (e <= 0) continue;
+      OVER.forEach((j, n) => { const q = under(i, out[i], j); fys.forEach(([y, fy], m) => { lift[i] = Math.max(lift[i], e * (depthIn(q, y, fy) - b.over0[i][n][m])); }); });
+    }
+    if (!lift.some((x) => x > 0.05)) return;
+    // no slice is lifted much more than the next: the rise is spread along the part
+    for (const dir of [1, -1]) for (let n = 1; n < S; n++) { const i = dir > 0 ? n : S - 1 - n, j = i - dir; lift[i] = Math.max(lift[i], lift[j] - 0.3 * V.len(V.sub(out[i].c, out[j].c))); }
+    for (let pass = 0; pass < 2; pass++) { const h = lift.slice(); for (let i = 1; i < S - 1; i++) lift[i] = Math.max(h[i], (h[i - 1] + 2 * h[i] + h[i + 1]) / 4); }
+    const fade = 1 - sstep(TIE_FADE[0], TIE_FADE[1], T.elev ?? 0);
+    for (let i = 0; i < S; i++) if (lift[i] > 0) out[i].c = V.add(out[i].c, V.mul(mv(out[i].R, b.sl[i].W), fade * (lift[i] + 0.3 * sstep(0.05, 0.5, lift[i]))));
+  }
+  // A cuff muscle lies on the bone under it. Its line is drawn over a ball about the joint's middle, and when the ball
+  // slides down in its socket the line goes down with it, onto the rim of the socket. Where the under side of a slice
+  // would be inside a bone (deeper than the scan has it at rest), the slice is lifted whole until it lies on the bone:
+  // pushing only its under side out would draw the tendon thinner, and a tendon keeps its thickness.
+  function onBone(b, T, out) {
+    const S = b.S, into = Object.values(SOL).map((f, n) => [f, invT(T[Object.keys(SOL)[n]])]), lift = new Array(S).fill(0);
+    const under = (i, f, j) => { const sl = b.sl[i], u = sl.lo + binU(j) * (sl.hi - sl.lo); return V.add(f.c, mv(f.R, V.mul(V.add(V.mul(sl.U, u), V.mul(sl.W, sl.bot[j])), f.k))); };
+    const deep = (q, fs) => Math.max(...fs.map(([f, Ik]) => f.depth(Ik ? apply(Ik, q) : q)));
+    b.bone0 ||= b.sl.map((_, i) => OVER.map((j) => deep(under(i, REST(b)[i], j), Object.values(SOL).map((f) => [f, null]))));
+    for (let i = 0; i < S; i++) {
+      const e = sstep(0.1, 0.3, i / (S - 1)) * (1 - sstep(0.9, 0.98, i / (S - 1))); if (e <= 0) continue;
+      OVER.forEach((j, n) => { lift[i] = Math.max(lift[i], e * (deep(under(i, out[i], j), into) - b.bone0[i][n])); });
+    }
+    if (!lift.some((x) => x > 0.05)) return;
+    for (const dir of [1, -1]) for (let n = 1; n < S; n++) { const i = dir > 0 ? n : S - 1 - n, j = i - dir; lift[i] = Math.max(lift[i], lift[j] - 0.3 * V.len(V.sub(out[i].c, out[j].c))); }
+    for (let pass = 0; pass < 2; pass++) { const h = lift.slice(); for (let i = 1; i < S - 1; i++) lift[i] = Math.max(h[i], (h[i - 1] + 2 * h[i] + h[i + 1]) / 4); }
+    for (let i = 0; i < S; i++) if (lift[i] > 0) out[i].c = V.add(out[i].c, V.mul(mv(out[i].R, b.sl[i].W), lift[i] + 0.3 * sstep(0.05, 0.5, lift[i])));
+  }
+  // (worked out once for each muscle at a pose: the parts that lie edge to edge ask for each other's)
+  const framesOf = new WeakMap();
   function frames(b, T) {
+    let m = framesOf.get(T); if (!m) framesOf.set(T, m = new Map());
+    if (!m.has(b)) m.set(b, frames0(b, T));
+    return m.get(b);
+  }
+  function frames0(b, T) {
     if (b.id === 'bursa') {                                              // the bursa goes with the supraspinatus under it
       const S = supra.S, i0 = Math.floor(BURSA.from * (S - 1)), fs = frames(supra, T);
       return b.sl.map((q, i) => { const f = fs[i0 + i]; return { c: V.add(f.c, mv(f.R, V.sub(q.c, supra.sl[i0 + i].c))), R: f.R, k: f.k }; });
@@ -475,12 +643,16 @@ export function makeModel(bones, musclesJson, table = null) {
         for (let pass = 0; w > 0 && pass < span + 1; pass++) { const h = g.slice(); for (let i = Math.max(1, j - span); i <= Math.min(S - 2, j + span); i++) g[i] = V.add(h[i], V.mul(V.sub(V.mul(V.add(h[i - 1], h[i + 1]), 0.5), h[i]), 0.5 * w)); }
       }
     }
+    // A muscle has thickness all along it, so its middle line cannot bend more sharply than its slices leave room for:
+    // between one slice and the next it bends no more than BEND (or than it does at rest, where the scan has a sharper
+    // bend). A sharper bend is shared out among the slices beside it.
+    unbend(g, P.bend0, Math.max(1, ia - 4), Math.min(S - 2, jq + 4));
     // then the slices slide along that line, so that the change of length is shared out (om)
     const sg = [0]; for (let i = 1; i < S; i++) sg.push(sg[i - 1] + V.len(V.sub(g[i], g[i - 1])));
     const L0 = s[S - 1], L1 = sg[S - 1]; let sum = 0; for (let i = 0; i + 1 < S; i++) sum += (s[i + 1] - s[i]) * P.om[i];
     const eps = (L1 - L0) / sum, fac = P.om.map((w) => Math.max(0.3, 1 + eps * w)); let tot = 0; for (let i = 0; i + 1 < S; i++) tot += (s[i + 1] - s[i]) * fac[i];
     const rel0 = P.hand ? compose(invT(O), T[b.from]) : null;       // the front deltoid's own bone, seen from the bone its line rides on
-    const out = []; let st = 0, j = 0;
+    const out = [], cL = [], RL = []; let st = 0, j = 0;
     for (let i = 0; i < S; i++) {
       if (i > 0) st += (s[i] - s[i - 1]) * fac[i - 1] * L1 / tot;
       while (j < S - 2 && sg[j + 1] < st) j++;
@@ -490,10 +662,120 @@ export function makeModel(bones, musclesJson, table = null) {
       if (rel0) { const w = 1 - sstep(...P.hand, i / (S - 1)); if (w > 0) { c = V.add(c, V.mul(V.sub(apply(rel0, c), c), w)); R = mm(rotMix(I3R, rel0.R, w), R); } }
       // a muscle keeps its volume: where it shortens, its cross-section grows
       const stretch = ((fac[Math.max(0, i - 1)] + fac[Math.min(S - 2, i)]) / 2) * L1 / tot;
-      out.push({ c: apply(O, c), R: mm(O.R, R), k: 1 / Math.sqrt(stretch) });
+      cL.push(c); RL.push(R); out.push({ k: 1 / Math.sqrt(stretch) });
     }
+    // A slice is a cross-section of the muscle: it stays as square to the middle line as it is at rest. Each slice is
+    // turned, by the least turn, so that the line passes through it the way it does at rest. Without this a slice near
+    // a bend leans over, the muscle is drawn sheared, and it loses volume.
+    for (let i = 0; i < S; i++) { out[i].c = apply(O, cL[i]); out[i].R = mm(O.R, RL[i]); }
+    { const c0 = out.map((o) => o.c); if (b.cuff === false) overCuff(b, T, out); else onBone(b, T, out); settle(b, out); thinned(out, c0); }
+    const tq = tangents(out.map((o) => o.c), b.cuff === false);
+    // (for the deltoid this fades out above shoulder height with the ties, TIE_FADE: turned square there, its wide flat
+    // parts swing their edges away from each other)
+    const sq = b.cuff === false ? 1 - sstep(TIE_FADE[0], TIE_FADE[1], T.elev ?? 0) : 1;
+    for (let i = 0; i < S; i++) out[i].R = mm(sq < 1 ? rotMix(I3R, between(mv(out[i].R, P.tau[i]), tq[i]), sq) : between(mv(out[i].R, P.tau[i]), tq[i]), out[i].R);
     return out;
   }
+  // ---- parts that lie edge to edge ----
+  // The deltoid is one sheet of muscle with one attachment on the arm bone, built here as three parts side by side.
+  // The infraspinatus and the teres minor lie side by side in the same way. Each part is carried by its own line,
+  // and nothing in the lines keeps one part's edge on its neighbor's: the lines are drawn over one ball, not over the
+  // arm bone and the muscles a real part wraps round, so as the arm lifts they close on each other, and with each
+  // part at its full width the parts would run through each other. So where two parts lie edge to edge at rest
+  // (TIES), their facing edges are kept together. Of the distance one edge has gone from the other, the first part of
+  // a tie takes the share given: a part marked `shift` moves aside whole, as a muscle pushed by its neighbor does; the
+  // other is drawn narrower or wider between its edges and thicker or thinner by as much, so that its cross-section
+  // keeps its area. The lines, and so the lengths and the leverage, are as they were.
+  const TIES = [['deltA', 'deltM', 0.7, 'shift', 'squeeze'], ['deltP', 'deltM', 0.7, 'shift', 'squeeze'], ['tminor', 'infra', 0.7, 'shift', 'squeeze']], TIE_NEAR = 14, TIE_FAR = 24;
+  const edge0 = (b, side) => b.sl.map((q) => { const j = side ? K - 1 : 0, u = side ? q.hi : q.lo, v = (q.top[j] + q.bot[j]) / 2; return { u, v, p: V.add(q.c, V.add(V.mul(q.U, u), V.mul(q.W, v))) }; });
+  const nearOn = (p, poly) => { let d = 1e9, at = 0; for (let i = 0; i + 1 < poly.length; i++) { const a = poly[i], e = V.sub(poly[i + 1], a), l2 = V.dot(e, e), f = l2 > 1e-9 ? clamp(V.dot(V.sub(p, a), e) / l2) : 0, dd = V.len(V.sub(p, V.add(a, V.mul(e, f)))); if (dd < d) { d = dd; at = i + f; } } return { d, at }; };
+  const onPoly = (poly, at) => { const i = Math.min(poly.length - 2, Math.floor(at)), f = at - i; return V.add(poly[i], V.mul(V.sub(poly[i + 1], poly[i]), f)); };
+  const tiesOf = new Map(built.map((b) => [b.id, []]));
+  for (const [x, y, share, hx, hy] of TIES) {
+    const X = built.find((b) => b.id === x), Y = built.find((b) => b.id === y);
+    // which edge of each faces the other: the two that are nearest along most of their length
+    let best = null;
+    for (const sx of [0, 1]) for (const sy of [0, 1]) { const ex = edge0(X, sx), ey = edge0(Y, sy).map((e) => e.p), ds = ex.map((e) => nearOn(e.p, ey).d).sort((a, c) => a - c), med = ds[ds.length >> 1]; if (!best || med < best.med) best = { med, sx, sy }; }
+    for (const [A, sa, B, sb, sh, how] of [[X, best.sx, Y, best.sy, share, hx], [Y, best.sy, X, best.sx, 1 - share, hy]]) {
+      const ea = edge0(A, sa), eb = edge0(B, sb).map((e) => e.p);
+      const rows = ea.map((e) => { const n = nearOn(e.p, eb); return { at: n.at, d0: V.sub(onPoly(eb, n.at), e.p), w: 1 - sstep(TIE_NEAR, TIE_FAR, n.d) }; });
+      // no tie at a part's two ends, where it is fixed to bone
+      rows.forEach((r, i) => { r.w *= sstep(0, 0.12, i / (A.S - 1)) * (1 - sstep(0.9, 1, i / (A.S - 1))); r.w1 = r.w; r.w *= sh; });
+      tiesOf.get(A.id).push({ side: sa, other: B, oside: sb, rows, shift: how === 'shift' });
+    }
+  }
+  const edgeAt = (b, fr, side) => { const e0 = edge0(b, side); return fr.map((f, i) => V.add(f.c, mv(f.R, V.mul(V.add(V.mul(b.sl[i].U, e0[i].u), V.mul(b.sl[i].W, e0[i].v)), f.k)))); };
+  // A tied part at a pose: its slices' frames once it has moved aside (fr), and for each slice how far its two edges
+  // then move (lo, hi) and how much thicker it is drawn (lam). null for a part with no tie.
+  const tiedOf = new WeakMap();
+  function tied(b, T) {
+    const ts = tiesOf.get(b.id); if (!ts || !ts.length) return null;
+    let m = tiedOf.get(T); if (!m) tiedOf.set(T, m = new Map());
+    if (m.has(b)) return m.get(b);
+    const f0 = frames(b, T), S = b.S, Z0 = [0, 0, 0], tq = tangents(f0.map((f) => f.c), b.cuff === false), sq = f0.map(() => ({ lo: Z0, hi: Z0, lam: 1 })), sh = f0.map(() => Z0);
+    for (const t of ts) {
+      const mine = edgeAt(b, f0, t.side), theirs = edgeAt(t.other, frames(t.other, T), t.oside);
+      t.rows.forEach((r, i) => {
+        if (r.w <= 0) return;
+        // (only across the part and through it: a slice stays square to the part's length)
+        let d = V.mul(V.sub(V.sub(onPoly(theirs, r.at), mine[i]), mv(f0[i].R, r.d0)), r.w); d = V.sub(d, V.mul(tq[i], V.dot(d, tq[i])));
+        if (t.shift) sh[i] = V.add(sh[i], d); else if (t.side) sq[i].hi = d; else sq[i].lo = d;
+      });
+    }
+    // (evened out along the part: where the neighbor's edge has a step, this part does not copy it)
+    const even = (get, set) => { for (let pass = 0; pass < 3; pass++) { const h = f0.map((_, i) => get(i)); for (let i = 1; i < S - 1; i++) set(i, V.mul(V.add(V.add(h[i - 1], h[i + 1]), V.mul(h[i], 2)), 0.25)); } };
+    even((i) => sh[i], (i, v) => { sh[i] = v; }); even((i) => sq[i].lo, (i, v) => { sq[i].lo = v; }); even((i) => sq[i].hi, (i, v) => { sq[i].hi = v; });
+    // what both edges of a slice do alike moves the slice whole; only the rest makes it narrower or wider
+    for (let i = 0; i < S; i++) { const mid = V.mul(V.add(sq[i].lo, sq[i].hi), 0.5); sh[i] = V.add(sh[i], mid); sq[i].lo = V.sub(sq[i].lo, mid); sq[i].hi = V.sub(sq[i].hi, mid); }
+    // a part moves aside smoothly: no slice moves more than 0.8 of its distance from the slice before it (and an edge
+    // no more than 0.35 of it, since the slices are turned to follow the first and not the second)
+    const slope = (get, set, k) => { for (const dir of [1, -1]) for (let n = 1; n < S; n++) {
+      const i = dir > 0 ? n : S - 1 - n, j = i - dir, lim = k * V.len(V.sub(f0[i].c, f0[j].c)), e = V.sub(get(i), get(j)), l = V.len(e);
+      if (l > lim) set(i, V.add(get(j), V.mul(e, lim / l)));
+    } };
+    slope((i) => sh[i], (i, v) => { sh[i] = v; }, 0.8); slope((i) => sq[i].lo, (i, v) => { sq[i].lo = v; }, 0.35); slope((i) => sq[i].hi, (i, v) => { sq[i].hi = v; }, 0.35);
+    const moved = sh.some((d) => V.len(d) > 1e-6);
+    let fr = f0;
+    if (moved) {
+      fr = f0.map((f, i) => ({ c: V.add(f.c, sh[i]), R: f.R, k: f.k }));
+      if (b.cuff === false) overCuff(b, T, fr);                      // moved aside, it still lies on the cuff
+      settle(b, fr); thinned(fr, f0.map((f) => f.c));
+      const tn = tangents(fr.map((f) => f.c), b.cuff === false); fr.forEach((f, i) => { f.R = mm(between(tq[i], tn[i]), f.R); });
+    }
+    const lo = edgeAt(b, fr, 0), hi = edgeAt(b, fr, 1);
+    sq.forEach((o, i) => { const w0 = V.len(V.sub(hi[i], lo[i])), w1 = V.len(V.sub(V.add(hi[i], o.hi), V.add(lo[i], o.lo))); o.lam = w0 > 0.5 ? clamp(w0 / Math.max(w1, 1e-3), 0.7, 1.6) : 1; });
+    // (evened out along the part, so that one slice is not drawn much thicker than the next)
+    const lam = sq.map((o) => o.lam); for (let i = 0; i < S; i++) sq[i].lam = (lam[Math.max(0, i - 1)] + 2 * lam[i] + lam[Math.min(S - 1, i + 1)]) / 4;
+    const out = { fr, sq }; m.set(b, out); return out;
+  }
+
+  // The deltoid is one sheet, and a sheet has one edge where two of its parts meet. Moving a part aside and drawing its neighbor wider (tied) does
+  // not bring the two edges all the way together: a part that is moved is then kept on the cuff under it and free of
+  // sharp bends. So what is left between the two edges is closed from both sides: each edge goes half way to the other,
+  // and the part's surface follows, most at that edge and not at all from its middle on. For each slice, how far its
+  // lo and hi edges go.
+  const seamOf = new WeakMap(), SEAM = 8;
+  function seam(b, T) {
+    const ts = tiesOf.get(b.id); if (!ts || !ts.length || b.cuff !== false) return null;
+    let m = seamOf.get(T); if (!m) seamOf.set(T, m = new Map());
+    if (m.has(b)) return m.get(b);
+    const me = tied(b, T), Z0 = [0, 0, 0], out = me.fr.map(() => ({ lo: Z0, hi: Z0, lam: 1 })), tq = tangents(me.fr.map((f) => f.c), b.cuff === false);
+    const final = (x, tx, side) => edgeAt(x, tx.fr, side).map((p, i) => V.add(p, side ? tx.sq[i].hi : tx.sq[i].lo));
+    for (const t of ts) {
+      const mine = final(b, me, t.side), theirs = final(t.other, tied(t.other, T), t.oside), d = t.rows.map((r, i) => {
+        if (r.w1 <= 0) return Z0;
+        const e = V.mul(V.sub(V.sub(onPoly(theirs, r.at), mine[i]), mv(me.fr[i].R, r.d0)), 0.5 * r.w1); return V.sub(e, V.mul(tq[i], V.dot(e, tq[i])));
+      });
+      for (let pass = 0; pass < 2; pass++) { const h = d.slice(); for (let i = 1; i < b.S - 1; i++) d[i] = V.mul(V.add(V.add(h[i - 1], h[i + 1]), V.mul(h[i], 2)), 0.25); }
+      // (no edge goes more than SEAM mm: further than that the part would be drawn out of shape)
+      d.forEach((e, i) => { const l = V.len(e), k = l > 1e-6 ? SEAM * Math.tanh(l / SEAM) / l : 1; if (t.side) out[i].hi = V.mul(e, k); else out[i].lo = V.mul(e, k); });
+    }
+    // (drawn thicker where it is then narrower, and thinner where wider, so that its cross-section keeps its area)
+    const L = final(b, me, 0), H = final(b, me, 1), lam = out.map((o, i) => { const w0 = V.len(V.sub(H[i], L[i])), w1 = V.len(V.sub(V.add(H[i], o.hi), V.add(L[i], o.lo))); return w0 > 0.5 ? clamp(w0 / Math.max(w1, 1e-3), 0.75, 1.4) : 1; });
+    out.forEach((o, i) => { o.lam = (lam[Math.max(0, i - 1)] + 2 * lam[i] + lam[Math.min(b.S - 1, i + 1)]) / 4; });
+    m.set(b, out); return out;
+  }
+
   // A muscle's length at a pose, as a share of its length at rest: the parts of its line that lie on a bone, the taut
   // line between them, and what is wound on. (The mesh's own middle line is a little longer: it keeps the scan's bends.)
   const length = (b, T) => { const { P, W, extra, fixed } = lineAt(b, T); return (fixed + W.len + extra) / (P.fixed + P.W0.len); };
@@ -501,9 +783,12 @@ export function makeModel(bones, musclesJson, table = null) {
   const lineMm = (b, T) => { const { W, extra, fixed } = lineAt(b, T); return fixed + W.len + extra; };
   // A built mesh at a pose. opts.shape(t, s, top) may return { thick, lift }: the outline's half thickness is
   // multiplied by thick, and lift (a share of the full thickness) raises the bottom face (a tear from below).
-  function muscle(b, T, opts = {}) {
+  function draw(b, T, opts = {}) {
     const H = T.humerus, ball = apply(H, HC), into = Object.keys(SOL).map((k) => [k, SOL[k], T[k], invT(T[k])]);
-    const fr = frames(b, T);
+    // (the ties fade out as the arm goes up past TIE_FADE: see there)
+    const tw = b.id === 'bursa' ? 0 : b.cuff ? 1 : 1 - sstep(TIE_FADE[0], TIE_FADE[1], T.elev ?? 0), t1 = tw > 0 ? tied(b, T) : null, tie = t1 && tw > 0 ? t1 : null;
+    const f0 = frames(b, T), fr = !tie ? f0 : tw >= 1 ? tie.fr : tie.fr.map((f, i) => ({ c: V.add(f0[i].c, V.mul(V.sub(f.c, f0[i].c), tw)), R: rotMix(f0[i].R, f.R, tw), k: f0[i].k + (f.k - f0[i].k) * tw }));
+    const sm = tie ? seam(b, T) : null;
     const L = (b.id === 'bursa' ? 1 : length(b, T)) * b.L0;
     const out = new Float32Array(b.rest.length * 3), pressed = new Float32Array(b.rest.length);
     b.rest.forEach((p0, i) => {
@@ -516,18 +801,79 @@ export function makeModel(bones, musclesJson, table = null) {
         p = V.add(s.c, V.add(V.mul(s.U, c.u), V.mul(s.W, v)));
       }
       const si = c.cap !== undefined ? c.cap : c.i, s = b.sl[si], f = fr[si];
+      const mid = f.c;
       let q = V.add(f.c, mv(f.R, V.mul(V.sub(p, s.c), f.k)));
+      if (tie) {                                                   // its edges go with its neighbors' (see TIES)
+        const e = tie.sq[si], a = c.cap !== undefined ? 0.5 : clamp((c.s - 0.01) / 0.98);
+        q = V.add(q, V.mul(V.add(V.mul(e.lo, 1 - a), V.mul(e.hi, a)), tw));
+        // thicker or thinner from its under side, which stays on what it lies on
+        if (c.cap === undefined && c.top) q = V.add(q, mv(f.R, V.mul(s.W, (Math.min(e.lam * (sm ? sm[si].lam : 1), THICK / f.k) - 1) * tw * f.k * 2 * c.h)));
+        // its edges meet its neighbors' (see seam)
+        if (sm && c.cap === undefined) q = V.add(q, V.mul(V.add(V.mul(sm[si].lo, 1 - sstep(0, 0.5, a)), V.mul(sm[si].hi, sstep(0.5, 1, a))), tw));
+      }
       // wrapped over the ball: never closer to its middle than at rest
       const d = V.sub(q, ball), l = V.len(d); if (l < b.wrap) q = V.add(ball, V.mul(d, b.wrap / l));
-      for (let pass = 0; pass < 2; pass++) for (const [kk, f, Tk, Ik] of into) {     // twice: one push can lead into another bone
-        if (b.restIn[kk][i]) continue;
-        const loc = apply(Ik, q), dp = f.depth(loc); if (dp <= 0) continue;
-        const o = f.out(loc); if (o) q = apply(Tk, V.add(loc, V.mul(o, dp + 0.4)));
-        if (kk === 'scapula' && loc[1] > HC[1] + 0.8 * headR) pressed[i] = Math.max(pressed[i], dp);   // how far the acromion had to push this corner
-      }
+      // (more than once: one push can lead into another bone, and from deep in a bone one push may not reach its surface)
+      for (let pass = 0, moved = true; pass < (b.cuff === false ? 2 : 4) && moved; pass++) { moved = false; for (const [kk, f, Tk, Ik] of into) {
+        // (the deltoid, which starts on the bone it is in at rest, is left where the scan has it there)
+        const base = b.restDeep[kk][i]; if (base > 0 && b.cuff === false) continue;
+        const loc = apply(Ik, q), dp = f.depth(loc) - (base > 0 ? base + 0.5 : 0); if (dp <= 0) continue;
+        // (out by the side it came in, which is the side its slice's middle is on, unless that is in the bone too: the nearest way out of a thin bone can be through it)
+        const o = f.out(loc); if (o) { const ow = mv(Tk.R, o), back = V.sub(mid, q); q = V.add(q, V.mul(b.cuff === false || V.dot(ow, back) >= 0 || f.depth(apply(Ik, mid)) > 0 ? ow : V.norm(back), dp + 0.4)); moved = true; }
+        if (kk === 'scapula' && loc[1] > ROOF && pass < 2) pressed[i] = Math.max(pressed[i], dp);   // how far the acromion had to push this corner
+      } }
       out[3 * i] = q[0]; out[3 * i + 1] = q[1]; out[3 * i + 2] = q[2];
     });
     return { pos: out, length: L, rest: b.L0, pressed };
+  }
+  // The deltoid is one sheet: nothing lies between its parts. What the steps above still leave between two of them,
+  // once each is drawn, is closed at the end: where an edge stands further from the part beside it than it does at
+  // rest, it goes half the extra way to that part (and that part's edge comes the other half), and the part's surface
+  // follows, most at that edge and not at all from its middle on. (No edge goes more than CLOSE mm.)
+  const drawnOf = new WeakMap(), gap0Of = new Map(), CLOSE = 12, Z3 = [0, 0, 0];
+  const drawn = (b, T) => { let m = drawnOf.get(T); if (!m) drawnOf.set(T, m = new Map()); if (!m.has(b)) m.set(b, draw(b, T)); return m.get(b); };
+  // the middle of a slice's edge: its top and bottom corners there
+  const edgeLine = (b, at, side) => Array.from({ length: b.S }, (_, i) => { const j = i * 2 * K, a = at(j + (side ? K - 1 : 0)), c = at(j + (side ? K : 2 * K - 1)); return V.mul(V.add(a, c), 0.5); });
+  const fromPos = (pos) => (k) => [pos[3 * k], pos[3 * k + 1], pos[3 * k + 2]];
+  // the nearest corner of a mesh to a point
+  const nearest = (p, pos) => { let d = 1e18, k = 0; for (let n = 0; n < pos.length; n += 3) { const x = pos[n] - p[0], y = pos[n + 1] - p[1], z = pos[n + 2] - p[2], dd = x * x + y * y + z * z; if (dd < d) { d = dd; k = n; } } return { d: Math.sqrt(d), q: [pos[k], pos[k + 1], pos[k + 2]] }; };
+  // (a corner moved into a bone it was not in at rest is put back out of it, as in draw)
+  function outOfBone(b, T, k, q) {
+    for (let pass = 0, moved = true; pass < 2 && moved; pass++) { moved = false; for (const kk of Object.keys(SOL)) {
+      if (b.restDeep[kk][k] > 0) continue;
+      const f = SOL[kk], Tk = T[kk], loc = apply(invT(Tk), q), dp = f.depth(loc); if (dp <= 0) continue;
+      const o = f.out(loc); if (o) { q = V.add(q, V.mul(mv(Tk.R, o), dp + 0.4)); moved = true; }
+    } }
+    return q;
+  }
+  // (twice: the second time from where the first left both parts)
+  const closedOf = new WeakMap(), ROUNDS = 2;
+  function closed(b, T, round = ROUNDS) {
+    if (round === 0) return drawn(b, T);
+    let m = closedOf.get(T); if (!m) closedOf.set(T, m = new Map());
+    const id = `${b.id} ${round}`; if (m.has(id)) return m.get(id);
+    const r = closed(b, T, round - 1), ts = tiesOf.get(b.id), pos = r.pos.slice(), S = b.S;
+    for (const t of ts) {
+      const key = `${b.id} ${t.side}`;
+      if (!gap0Of.has(key)) { const p0 = new Float32Array(t.other.rest.flat()); gap0Of.set(key, edgeLine(b, (k) => b.rest[k], t.side).map((p) => nearest(p, p0).d)); }
+      const g0 = gap0Of.get(key), mine = edgeLine(b, fromPos(r.pos), t.side), theirs = closed(t.other, T, round - 1).pos;
+      // (only out from the edge: where the nearest of the other part is over or under this one, the two overlap there, and
+      // that is not a gap)
+      const mids = Array.from({ length: S }, (_, i) => { let c = [0, 0, 0]; for (let j = 0; j < 2 * K; j++) c = V.add(c, fromPos(r.pos)(i * 2 * K + j)); return V.mul(c, 1 / (2 * K)); });
+      const d = mine.map((p, i) => { const w = t.rows[i].w1; if (w <= 0) return Z3; const n = nearest(p, theirs), e = n.d - g0[i], go = V.sub(n.q, p), out = V.norm(V.sub(p, mids[i]));
+        return e > 0 && n.d > 1e-6 && V.dot(go, out) > -0.5 * n.d ? V.mul(go, 0.5 * w * e / n.d) : Z3; });
+      // (spread to the slices beside, so that the edge has no step, but each slice goes at least its own way)
+      const d1 = d.slice(); for (let pass = 0; pass < 2; pass++) { const h = d.slice(); for (let i = 1; i < S - 1; i++) d[i] = V.mul(V.add(V.add(h[i - 1], h[i + 1]), V.mul(h[i], 2)), 0.25); }
+      d.forEach((e, i) => { if (V.len(d1[i]) > V.len(e)) d[i] = d1[i]; });
+      d.forEach((e, i) => { const l = V.len(e); if (l > 1e-6) d[i] = V.mul(e, CLOSE * Math.tanh(l / CLOSE) / l); });
+      b.at.forEach((c, k) => { if (c.cap !== undefined) return; const a = clamp((c.s - 0.01) / 0.98), w = t.side ? sstep(0.5, 1, a) : 1 - sstep(0, 0.5, a), e = d[c.i];
+        if (w > 0 && V.len(e) > 0.05) { const q = outOfBone(b, T, k, V.add(fromPos(pos)(k), V.mul(e, w))); for (let x = 0; x < 3; x++) pos[3 * k + x] = q[x]; } });
+    }
+    const out = { ...r, pos }; m.set(id, out); return out;
+  }
+  function muscle(b, T, opts = {}) {
+    if (b.cuff !== false || opts.shape || !tiesOf.get(b.id)?.length) return draw(b, T, opts);
+    return closed(b, T);
   }
 
   // ---- one muscle pulling alone ----
@@ -603,7 +949,7 @@ export function makeModel(bones, musclesJson, table = null) {
     return out;
   }
 
-  return { marks: mk, headR, NS, DOWN, pose, length, contract, orient, poseOf, LIMIT, bodyOf, gap, bodyOf, gap, stored, glideAt, makeTable, PLANES, built, muscle, bursa, bursaOn, bones, SOL, invT, ribPen, lineOf, lineMm };
+  return { marks: mk, headR, NS, DOWN, pose, length, contract, orient, poseOf, LIMIT, bodyOf, gap, bodyOf, gap, stored, glideAt, makeTable, PLANES, built, muscle, bursa, bursaOn, bones, SOL, invT, ribPen, lineOf, lineMm, frames, tied, seam, room };
 }
 
 export function arc(cs) { let L = 0; for (let i = 1; i < cs.length; i++) L += V.len(V.sub(cs[i], cs[i - 1])); return L; }

@@ -36,8 +36,8 @@ A page at `rainbows/`, in three dimensions at every scale, from the whole Earth 
   you nothing, falls straight down, and is drawn as a streak with its head down; a drop near enough
   to have a size on screen is drawn round, because drops are spheres. The streak is a drawing of
   motion, not the drop's shape. The panel carries a key.
-- Time is slowed so the fall can be followed: the rain about 15 times, and the four marked drops
-  about 116 times, so that one can be watched crossing the bow (a real drop would cross it in a few
+- Time is slowed so the fall can be followed: the rain about 12 times, and the four marked drops
+  about 95 times (against the 6.5 m/s of a 2 mm drop), each falling the whole height of the rain, so that one can be watched crossing the bow (a real drop would cross it in a few
   hundredths of a second). The readout gives both, computed from the speeds in `rain.js`.
 - The near drops are coloured by what each sends to the standing figure, not to the camera, while
   the bow on the far rain is painted for the camera. From behind the figure the two nearly coincide;
@@ -53,8 +53,8 @@ The physics, all in `js/rainbows/optics.js`:
   indices: `n² = 1 + Aλ²/(λ² − λ0²)`. It gives 1.3327 at 589 nm against a measured 1.3330. The same
   model sets the bending in the drop, the colours in the sky and the energy stored in the molecules.
 - Rays through the drop carry Fresnel reflection and transmission for both polarisations. Of the
-  sunlight on a typical rainbow ray, about 6% reflects off the front, 89% leaves through the back,
-  4.6% makes the primary bow (96% polarised) and 0.5% the secondary.
+  sunlight on the whole face of the drop, about 7% reflects off the front, 88% leaves through the back,
+  4% comes out after one reflection (96% of it vibrating along the bow) and 0.6% after two.
 - The sky's brightness against angle is computed, not painted: rays over the whole face of the drop,
   for the outside reflection and one and two internal reflections, summed over the spectrum with
   CIE colour matching and blurred by the Sun's half-degree disc. The dark band and the brighter sky
@@ -96,8 +96,8 @@ The physics, all in `js/rainbows/optics.js`:
   what one real layer does; reflection is left out.
 - The last scale is the Surface scale's own patch of the drop seen from the same camera, closer:
   the flight between the two never turns, the drop's skin and blue water are drawn by the same
-  shader code in both, and the water stays on the side it was on. The light drawn is polarised with
-  its electric field across the plane of the bend, so from that direction it swings mostly toward
+  shader code in both, and the water stays on the side it was on. The light drawn keeps the polarization set at the Surface scale; with its electric field across the
+  plane of the bend (s), from that direction it swings mostly toward
   and away from you; drag to look along the surface and see it from the side. The last scale shows
   light going from air into water, which happens where the ray enters the drop: zooming in from the
   back wall or the way out flies round to the entering crossing first.
@@ -113,8 +113,8 @@ The physics, all in `js/rainbows/optics.js`:
 Simplifications: with Waves at Orbit, Rain and Drop, the crests are drawn far further apart than real
 ones (6,690 km, 2.4 m and 0.4 mm against 550 nm), which the readout says; only the Surface and
 Molecules scales draw them at their true spacing. Drops are spheres, air's index is taken as 1, and brightness is compressed so that
-the 5% of light in the bow can be seen beside the 89% that escapes. A toggle spreads the colours 5×
-for visibility; it is off by default.
+the 4% of light in the bow can be seen beside the 88% that escapes. A toggle spreads the colours 5×
+for visibility; the angles and wavelengths shown stay real. It is off by default.
 
 Code: `js/rainbows/gl.js` is a small WebGL2 engine (HDR targets, bloom, glowing lines and points,
 full-screen ray shaders), `js/rainbows/main.js` holds state, cameras and controls, and each scale is a
@@ -126,28 +126,28 @@ fewer pixels to keep the frame rate.
 A second experience, at `vesicle/`: a real-time 3D model of a synaptic vesicle fusing with the
 presynaptic membrane, drawn lipid by lipid and to scale in nanometres.
 
-- **Fusion progress** starts with the vesicle's arrival: it wanders the last 120 nm by Brownian
-  motion until tethers on the active zone (Munc13 and RIM, drawn as rods) catch it about 42 nm up
-  and reel it in, with synaptobrevin free until syntaxin and SNAP-25 can reach it. The wander is a
-  fixed path, so the slider is repeatable. It goes as far sideways as up and down (up to 20 nm either
-  way before the tethers catch it, 4 nm after), and it tumbles, with everything it carries: the same
-  knocks turn a sphere this size about 40° for each 16 nm it wanders, so it turns through a few
-  radians on the way. Once tethered it keeps one side down and only shivers, and it docks in the
-  place and the turn the later stages start from. The reflection camera does not see the sideways
-  part: it is a fifth of one of its pixels. Inside, the glutamate moves about the whole lumen, and which
-  molecule leaves through the pore next is a matter of chance, so the vesicle empties evenly: a molecule
-  crosses the lumen about a thousand times faster than it can leave. It then scrubs
-  from a docked vesicle through SNARE zippering, the hemifusion stalk,
-  the opening and widening of the fusion pore, to full collapse into the membrane.
-- The vesicle carries more than its fusion machinery: about 30 synaptophysins, 10 glutamate
-  transporters, 10 Rab3 and a proton pump, in the numbers counted on an average vesicle (Takamori
-  et al., 2006). They ride into the cell membrane with its lipids, but each only once it fits: around
-  a narrow neck the cytoplasm is a wedge a few nanometres high, so the small proteins leave soon
-  after the pore opens, Rab3 later, and the proton pump, whose head stands 13 nm tall, only when the
-  neck has opened to the vesicle's full width. A tagged synaptobrevin waits until the pore's lumen
-  is wide enough for its tag. The fit is tested against the membrane shape in code (`gates` in
-  `scene.js`); that the pump stays whole is a simplification. Shapes are schematic, and they
-  are not counted as scatterers by the reflection camera.
+- **Fusion progress** starts with the vesicle's arrival: one fixed random walk, the same on every visit, with steps of
+  the same size up, down and sideways, and the vesicle tumbles with everything it carries. Tethers on the active zone
+  (Munc13 and RIM, drawn as rods with a flexible link, under 40 nm in all) bind it when it comes within reach, about
+  16 nm above its docked place for a 42 nm vesicle, and the SNAREs pull it the last 12 nm. It then scrubs from a docked
+  vesicle through SNARE zippering, which waits until calcium has bound, the hemifusion stalk, the opening and widening
+  of the fusion pore, to full collapse into the membrane.
+- **One clock.** The stages differ a thousand times in length, so the slider runs each at its own pace, and
+  `js/vesicle/kinetics.js` gives the real time at each point: 60 µs from calcium to the pore (Sabatini and Regehr
+  1996), 0.3 ms to the omega shape (the page's choice), 40 ms to flat. In that time glutamate (0.33 µm²/ms in the
+  cleft), lipids (5.4 µm²/s) and the vesicle's proteins (0.2 µm²/s) each spread as far as their diffusion coefficient
+  allows. Glutamate leaves through the pore no faster than the pore's width lets it, each molecule at its own random
+  moment, so the lumen thins evenly. It spreads from the pore as a round cloud and has left the drawn patch before the
+  vesicle flattens. A receptor lights only when the drawn molecules that bind it arrive (two each), and they come out
+  of the cloud.
+- The vesicle carries more than its fusion machinery: about 70 synaptobrevins, 15 synaptotagmins, 30 synaptophysins,
+  10 glutamate transporters, 10 Rab3 and a proton pump, in the numbers counted on an average vesicle (Takamori et al.,
+  2006), the same in both settings. They spread into the cell membrane by their own random motion, far more slowly than
+  its lipids, but each only once it fits: around a narrow neck the cytoplasm is a wedge a few nanometers high, so the
+  small proteins leave soon after the pore opens, Rab3 later, and the proton pump, whose head stands 13 nm tall, only
+  when the neck has opened to the vesicle's full width. A tagged synaptobrevin waits until the pore's lumen is wide
+  enough for its tag. The fit is tested against the membrane shape in code (`gates` in `scene.js`); that the pump stays
+  whole is a simplification. Shapes are schematic, and they are not counted as scatterers by the reflection camera.
 - **Vesicle diameter** resizes the vesicle (and its glutamate load, at 150 mM).
 - **Cutaway, orbit, tilt, distance** fly the camera; drag, pinch and scroll work too.
 - Lipids keep the colour of the membrane they started in, so you can watch the two mix: the
@@ -240,8 +240,7 @@ of one fusion event from hidden parameters, then infers them back with Bayes' ru
 - Six unknowns: the moment of arrival, the moment of fusion, vesicle diameter, number of tag
   copies, collapse time and the tags' diffusion coefficient, each with a prior (log-normal; flat
   for the fusion time; for the arrival, any time before the fusion).
-- Until it arrives the vesicle hangs about 120 nm above its docked height, where the page's
-  Arrival stage begins, and then it is docked: one step, not the wander and reeling-in of the
+- Until it arrives the vesicle hangs about 95 nm above its docked height, where the page's Arrival stage begins (for a 42 nm vesicle), and then it is docked: one step, not the wander and reeling-in of the
   3D view.
 - The forward model gives the expected photons in every pixel of every frame of each band. The
   bands share every unknown and the evanescent field, and differ only in how much the acid dims
@@ -263,7 +262,7 @@ of one fusion event from hidden parameters, then infers them back with Bayes' ru
   range and the bits learned), a fan chart that turns into a forecast past the last frame seen,
   and in the 3D scene a gold band around the best-estimate vesicle that holds 90% of the plausible
   membrane shapes (brighter core: 50%). Everything shown is a running summary, eased over time,
-  so it moves when the evidence changes and not with each step of the sampler.
+  so it moves when the evidence changes and not with each step of the sampler. When a setting changes, the walkers start from the last belief; a new event starts them from the prior. Nothing they visit on the way in is kept, and until they arrive the numbers read "not ready yet".
 - Laser power, frame time, laser angle and prior width are adjustable; "New event" draws a new
   hidden truth and "Show the true values" reveals it.
 
@@ -444,7 +443,7 @@ text under the bar becomes a note about what you just built and why it works. No
   slider in the panel, so the whole game can be played from the keyboard. The iris and the mirrors
   move by a fixed small amount for each pixel of drag, so a thumb can set them finely.
 - A bar that fills is named for what the player gains: "Sharpness" fills as the blur (the number
-  beside it) shrinks, "Brightness" as more light gets through. A value that has to land in a band,
+  beside it) shrinks, "Light on the screen" or "Brightness" as more light gets through. A value that has to land in a band,
   such as a focal length, is a marker on a scale with the band marked, not a bar. A slider moves the
   same way as the thing it moves in the picture.
 - On a phone the bench is given only the height its shape needs and the panel takes the rest, so
@@ -453,7 +452,7 @@ text under the bar becomes a note about what you just built and why it works. No
 - Nothing moves unless you move it, with one exception: when the match lights it flares, with
   sparks, for four seconds and then the flame holds still. With reduced motion switched on it is
   simply alight. The flame is a drawing, not a model of combustion.
-- The solar tower's boiler glows by the share of the mirrors' light that lands on it, from dull red
+- The solar tower's boiler glows by the light that lands on it, against the most the three mirrors can send it, from dull red
   to white-hot, so each mirror that finds it makes it visibly brighter. The colours are a drawing,
   not a temperature.
 - Beside the eye is an eye chart as that eye sees it. The chart is laid out at its true size on the
@@ -468,15 +467,17 @@ challenges (their text, their scenes and their scoring), `chart.js` the eye char
 stylesheet. `node tests/optics/run.mjs` plays every challenge in a real browser with a mouse, a
 finger and the keyboard. `node tests/optics/layout.mjs` moves every slider through every value, on a
 desktop and two phone sizes, and fails if anything in the panel or the bench changes place or size.
+`node tests/optics/model.mjs` (no browser) checks the model against `optics/REALISM.md`;
+`tests/optics/plays.mjs` holds the known solutions.
 
 The physics:
 
-- The tracer is exact in the plane: each ray meets each spherical face where it really is and bends
+- The tracer is exact in the plane: each ray meets each face (spherical, or the eye's conic) where it really is and bends
   by Snell's law. No thin-lens or small-angle approximation is made, so spherical aberration appears
   because it is in the geometry. Focal lengths shown are the thick-lens (lensmaker's) values.
 - Glass indices come from the makers' Sellmeier fits, and Malitson's for fluorite. They give the
   catalogue values at 587.6 nm and the catalogue Abbe numbers: N-BK7 1.5168 and 64.2, F2 1.6200 and
-  36.4, SF10 1.7283 and 28.5, CaF2 1.4338 and 95.0.
+  36.4, N-SF10 1.7283 and 28.5, CaF2 1.4338 and 95.0.
 - The text keeps wavelength and colour apart: wavelength is a property of the light, colour is what
   we see. White light is a mix of many wavelengths; it is traced as three of them, 486 nm, 546 nm
   and 656 nm, each drawn in the colour we see it as (blue, green, red). In the two chromatic challenges the blur behind "Sharpness" is
@@ -484,6 +485,7 @@ The physics:
   rendering of what an eye would see of a full spectrum.
 - The insets show a small night scene (white stars, a close pair, a lit window) as the sensor records
   it: each point is spread into the traced spot, per wavelength in white light. Brightness is compressed.
+  The spot includes the wave width (below). The Camera's inset dims with the iris, compressed in the same way.
 - In the Wide view challenge the second bundle arrives 20° off the axis, so its spot is not round.
   Only the slice of that bundle in the plane of the picture is traced, each ray weighted equally,
   and its blur is measured about its own middle. That catches coma and field curvature; the error
@@ -492,15 +494,16 @@ The physics:
   plastic is a two-term fit through CR-39's index and Abbe number. Air is taken as 1.
 - For the lens challenges the light comes from a point on the axis, so the spot on the target is
   round. Each traced ray stands for a ring of light, and is weighted by its height in the beam.
-  "Blur" is twice the root-mean-square radius of the spot. The camera's sensor is placed where that
+  "Blur" is twice the root-mean-square radius of the spot. The traced spot and the diffraction width,
+  1.24 × the wavelength × the f-number by the same measure, add as squares. The camera's sensor is placed where that
   is smallest.
-- The eye is the textbook "reduced eye": one spherical surface of radius 5.55 mm into a fluid of
-  index 4/3, with a 3 mm pupil, made 23.45 mm long so that it is nearsighted.
+- The eye is the textbook "reduced eye": one surface of radius 5.55 mm into a fluid of
+  index 4/3, with a 3 mm pupil, made 23.45 mm long so that it is nearsighted. The surface flattens toward
+  its edge (conic constant −0.49), which gives the average spherical aberration measured in real eyes.
 
 Simplifications, which the panel also states where they matter: one wavelength (550 nm) outside the
 two chromatic challenges; light on the axis only outside Wide view; no reflection losses at the
-glass; the Sun is a point, not a half-degree disc; the spectacle lens (40 mm across, 1.5 mm at its thinnest) is equally curved on both
-faces, where a real one is a meniscus; the solar field is a flat slice with three mirrors. The
+glass; the Sun is a point, not a half-degree disc; the spectacle lens (40 mm across, 1.5 mm at its thinnest) is a meniscus whose front curve is the page's choice; the solar field is a flat slice with three mirrors. The
 inset that magnifies the spot compresses brightness (a square root) so that a wide blur can still be
 seen.
 
@@ -515,8 +518,8 @@ load the real engines and show what they give for the same graph:
 
 - ELK is [elkjs](https://github.com/kieler/elkjs) 0.12.1 (ELK compiled to JavaScript, 1.6 MB).
   Groups become nested nodes with `hierarchyHandling: INCLUDE_CHILDREN`. The settings map onto
-  ELK's own options (`js/dag/real.js`); "Sorting passes" sets `elk.layered.thoroughness`, which is
-  related but not the same thing.
+  ELK's own options (`js/dag/real.js`); with Real ELK the slider is named "Sorting effort" and sets
+  `elk.layered.thoroughness`. "Seconds" is the layout alone, without the download or the engine's start.
 - TALA is inside D2's WebAssembly build, [@d2lang/d2](https://www.npmjs.com/package/@d2lang/d2)
   0.1.34 (11 MB). The graph is written out as D2 text with each group as a container. Seed and
   Tries become `tala-seeds`. It runs in a worker; on the 55-node file it takes about 7 s for each
@@ -532,11 +535,11 @@ steps, the input and the result. The nodes and edges are still drawn by this pag
 
 | Step | What happens | Settings |
 | --- | --- | --- |
-| Turn | Edges are turned round until no cycle is left | Greedy (Eades, Lin and Smyth), depth first, or every edge that points to an earlier node in the file |
+| Turn | Edges are turned round until no cycle is left | Greedy (Eades, Lin and Smyth), depth first, or every edge that points to an earlier node in the file. Greedy leaves an edge that is on no cycle alone. With Boxes, an edge between boxes is turned when the boxes form a cycle |
 | Layers | Each node gets a layer after every node that points to it | Longest path; short edges; at most a set number of nodes in a layer |
 | Sort | Each layer is sorted by the average place of its neighbours, back and forth | Number of passes, 0 to 10 |
 | Align | Nodes slide along their layer until joined nodes line up | Space between nodes and between layers |
-| Route | Edges are drawn through the points that hold their place in each layer | Right angles, straight, or curved |
+| Route | Edges are drawn through the points that hold their place in each layer. A straight edge crosses a layer upright at its dot | Right angles, straight, or curved |
 
 - "Short edges" is a local search that moves a node towards the side where it has more edges. ELK
   finds the true shortest total with the network simplex method; this can stop short of it.
@@ -575,7 +578,8 @@ places labels, and scores the finished layout; the lowest penalty wins, then the
 None of the structure discovery, symmetry, label placement or per-container direction is here.
 
 The numbers in the panel are measured from the lines as drawn (`measure` in `js/dag/common.js`):
-crossings are counted where two drawn edges cross, and edge length is in node widths.
+two edges cross once where one passes from one side of the other to the other side, and edge length is in
+node widths, border to border, at every step. Before Route, a straight edge that passes a node is drawn over it.
 
 The first sample is `dag/graphs/anonymous-topology.yaml`, copied from the `lg` repository: 55 nodes
 in 9 groups. Of its 65 edges, 2 repeat an earlier one and 1 joins a node to itself; those are left
@@ -590,8 +594,7 @@ turns that position into coordinates the way D2's `lib/label` does. The page's o
 layouts do not place labels: each is put at the middle of its finished edge and left there. The
 panel counts "Labels covered", the labels that lie over a node or over another label
 (`labelsCovered` in `js/dag/common.js`). On the 55-node file that is 0 for both real engines and
-24 and 38 for the page's own two layouts. A label's text is drawn only when it is large enough on
-screen to read; its plate is always drawn.
+23 and 39 for the page's own two layouts. A label's text and a node's name are drawn at every size.
 
 Under each method the panel links to its background and source:
 [layered graph drawing](https://en.wikipedia.org/wiki/Layered_graph_drawing),
@@ -633,21 +636,23 @@ day it falls, at every scale from the whole tree down to its pigment molecules. 
   on the picture: spreading them zooms in, about one scale for a full spread, and the Zoom slider
   moves with them. An arrow key moves
   the Zoom slider a twentieth of a scale and the Season slider five thousandths of the year.
-- **Season** runs from 25 March to 20 December, with a Play button. The date and the zoom never
+- **Season** runs from 25 March to 31 December, with a Play button. The date and the zoom never
   move together: while the zoom is moving the year waits, then goes on. Summer, when little changes,
   takes less of the slider than autumn. The date is shown, and the day length for it at 35° N
-  (sunrise to sunset by geometry, without the bending of light by the air).
+  (sunrise to sunset as an almanac gives them: the top of the Sun's disc at the horizon, with the
+  bending of light by the air).
 - At Cells and Molecules, **Zoom into** chooses between a chloroplast and the vacuole of the same
   cell, because the pigments live in different places: chlorophyll and carotenoids in the
   chloroplast's membranes, anthocyanin dissolved in the vacuole's water.
 
 What the page shows, and where each part comes from (`js/maple/model.js` unless noted):
 
-- **Each leaf has its own timetable.** It stops renewing chlorophyll on a day between late October
-  and mid November, earlier the more sun it gets; it makes anthocyanin in proportion to the sun it
-  gets (a leaf needs light and sugar to make it); it falls 22 to 38 days later. So the crown turns
+- **Each leaf has its own timetable.** It stops renewing chlorophyll on a day between 18 November
+  and 1 December, earlier the more sun it gets; it makes anthocyanin in proportion to the sun it
+  gets (a leaf needs light and sugar to make it); it falls 17 to 25 days later. So the crown turns
   from the outside in, red outside and yellow or orange within. The followed leaf is in full sun and
-  is the last to fall.
+  is the last to fall. The dates follow the Japan Meteorological Agency's normals for *Acer palmatum*
+  at Kyoto (1991 to 2020): the crown is about 90% turned on 5 to 6 December and 80% bare on 18 December.
 - **Four curves per leaf**: chlorophyll (built up over about six weeks in spring, gone within 23
   days in autumn), carotenoids (55% remain at leaf fall), anthocyanin, and how far the separation
   layer has cut through the foot of the stalk. The panel's bars show them for the followed leaf.
@@ -667,25 +672,35 @@ What the page shows, and where each part comes from (`js/maple/model.js` unless 
   cells within 75 µm of the vein run up to 7.5 days behind the rest, so green lasts longest there.
   Both numbers are illustrative.
 - **Sunlight in the leaf** (Tissue and Cells, with **Light arriving** switched on): dots of light
-  of single wavelengths fall down through the cut leaf. Whether a dot is taken in, how deep, and
-  by which pigment is drawn by lot when it sets out, with the chances the model gives that
-  wavelength in a leaf holding the day's pigments (`thickness` in `model.js`, the same numbers
-  the leaf's colour is computed from): chlorophyll and carotenoids take it at a chloroplast,
-  anthocyanin in a vacuole, each with a flash. So in summer the dots we see as blue and red stop
+    of single wavelengths fall down through the cut leaf (`light.js`). Each dot sets out with a lot
+  drawn for how far it gets. As it reaches the tall cells and then the loose cells, the pigments of
+  the date shown decide whether it is taken in there and by which pigment, with the chances the
+  model gives that wavelength (`thickness` in `model.js`, the same numbers the leaf's colour is
+  computed from): chlorophyll and carotenoids take it at a chloroplast, anthocyanin in a vacuole,
+  each with a flash. So when the date changes, a dot keeps an old fate for at most the time it
+  takes to cross one layer. How many dots fall goes with the light on the leaf (`lightAt`): in
+  December about a seventh as many as in June. So in summer the dots we see as blue and red stop
   in the tall cells and many of those we see as green go on and out underneath; in a red leaf the
   dots we see as green stop in the vacuoles and those we see as red pass. The panel prints the model's shares at 450, 550 and 675 nm.
-- **The Sun** stands where it does at five in the afternoon, solar time, at 35° N on each date
-  (`sunAt` in `model.js`): 25° up at midsummer, within a degree of the horizon in mid November, just set by
-  late December. The sky, the brightness of the lawn, hills and leaves, and the tree's shadow
-  follow its height, so summer is the bright part of the year. The panel prints its height. The sky
-  stays day-blue until the Sun is near the horizon (yellowed near a low Sun) and darkens through twilight, which
-  ends 8° below it; the Sun on this page never gets lower than about 2° below, so the sky is never night-dark.
-  The sunlight on the tree weakens much sooner, as its path through the air lengthens: with the Sun 4°
-  up the tree is lit about half as brightly as in summer. Low sunlight is also yellower; that is not
-  drawn on the tree, so that each leaf's color stays the one its pigments give. The shadow is as dark
-  as the crown is full of leaf (bare twigs stop about an eighth as much light), and the trunk casts a line.
-- **Cells**: tall cells seen from the side, chloroplasts along their walls and the vacuole down
-  the middle of each. In autumn the stacks of membrane inside each chloroplast go and drops of fat
+- **The Sun** stands where it does at 4 PM Japan Standard Time at Kyoto (35° N, 135.75° E) on each
+  date (`sunAt` in `model.js`, the NOAA solar position formulas, with the equation of time): about
+  37° up at midsummer and about 7.5° up on 18 December. 4 PM is the latest whole hour at which the
+  Sun is still up through the leaf fall, so it never sets on this page. The light on a level leaf
+  (`lightAt`) is the direct beam, 1.353 kW/m² × 0.7^(AM^0.678) (Meinel and Meinel 1976, as given by
+  PVEducation) with the air mass AM of Kasten and Young (1989), plus the sky's light: about a tenth
+  of the beam, and never less than twilight gives (about 400 lux at sunset, 3.4 lux at the end of
+  civil twilight). After sunset only the sky's light would be left: no lit side, no glint, no shadow.
+  The brightness of the lawn, hills and leaves (on a scale of that light against the year's most)
+  and the number of dots of light follow it, so summer is the bright part of the year. The panel
+  prints the Sun's height. The sky stays day-blue until the Sun is near the horizon, yellowed near a
+  low Sun. Low sunlight is also yellower; that is not drawn on the tree, so that each leaf's color
+  stays the one its pigments give. A shadow takes away only the direct light, so the low December
+  Sun gives pale shadows. The crown's is as dark as the crown is full of leaf (bare twigs stop about
+  an eighth as much light), and the trunk and the thicker limbs cast their own. The air is clear
+  (20 km visibility), so the lawn keeps its color out to the hills.
+- **Cells**: tall cells seen from the side. The vacuole fills about three quarters of each (in
+  grown leaf cells it is about four fifths: Winter, Robinson and Heldt 1994) and presses the
+  chloroplasts into a thin layer along the wall. In autumn the stacks of membrane inside each chloroplast go and drops of fat
   take their place (in the followed cell they are drawn one by one), the chloroplasts shrink and
   turn yellow, and the vacuole turns crimson.
 - **Molecules** are built atom by atom to scale (a carbon to carbon bond is 0.14 nm): chlorophyll
@@ -712,7 +727,7 @@ What the page shows, and where each part comes from (`js/maple/model.js` unless 
 
 Simplified or exaggerated, and said so on the page:
 
-- Dates are typical for Kyoto; pigment amounts are smooth curves with the right order and rough
+- Dates follow the normals for Kyoto; pigment amounts are smooth curves with the right order and rough
   durations, shown as shares of the leaf's own summer amount (anthocyanin: of its peak), not
   measurements. Absorption bands are illustrative fits.
 - The tree has about 7,600 leaves; a real one this size carries several times more. Leaves near
@@ -720,8 +735,8 @@ Simplified or exaggerated, and said so on the page:
 - From Cells to Molecules the falling light is drawn at three more sizes of dot, each a tenth of the
   one before, so that some are in view at every zoom; these fall straight through without being
   taken in.
-- The dots of sunlight in the leaf fall straight down, far slower than light, and as many are
-  drawn on every date and at every wavelength from 400 to 700 nm (not the mix in real sunlight). A real leaf also scatters light about inside itself, which lets it take in
+- The dots of sunlight in the leaf fall straight down, far slower than light, as many at every
+  wavelength from 400 to 700 nm (not the mix in real sunlight). A real leaf also scatters light about inside itself, which lets it take in
   more of the light we see as green than is drawn (about three quarters of it in summer) and sends some back out
   of its upper side; neither is drawn. The split of each pigment between the tall and the loose
   cells (70% of the chloroplast pigments and 83% of the anthocyanin in the tall cells) is illustrative.
@@ -732,8 +747,9 @@ Simplified or exaggerated, and said so on the page:
 - A young leaf's cells are drawn smaller: the cut face and its cells are sized by the square root of
   the leaf's size, and the Tissue and Cells views close in by as much (the scale bar stays true).
   Chloroplasts and molecules inside are not resized.
-- Inside the vacuole the water's colour hides the cell round it within a few micrometres, and
-  molecules beyond a hundred or so nanometres. Real cell sap is far clearer; without this the view
+- Inside the vacuole the sap is drawn hazy, grey while it is clear and red once it holds
+  anthocyanin. The haze hides the cell round it within a few micrometres, and molecules beyond a
+  hundred or so nanometres. Real cell sap is far clearer; without this the view
   would not change as the zoom goes from micrometres to nanometres.
 - Fallen leaves rest on the tips of their lobes, level; real ones lie anyhow.
 - A leaf comes out of its bud folded like a fan (the middle lobe flat, every other lobe creased along its middle vein with its
@@ -760,7 +776,7 @@ Simplified or exaggerated, and said so on the page:
   proteins are plain mounds 10 to 15 nm across (real ones are of several kinds and far more
   crowded), and the pigments are lifted onto the membrane's face and spread evenly over it so that
   they can be seen. The mounds go as the chlorophyll goes. The membrane's fat molecules have no colour of their own;
-  they are tinted with a little of the colour the pigments give the whole membrane. Water is left out. The membrane stays to the end of the year at this scale, though in a
+    they are tinted with a little of the colour the pigments give the whole membrane. Water, and the sugars and salts dissolved in the vacuole's water, are left out. The membrane stays to the end of the year at this scale, though in a
   real cell it is taken apart and the remaining carotenoids end up in drops of fat. In the chain
   slider's drawing, double bonds outside the row are not drawn. Only the 63 molecules nearest the middle are built
   atom by atom; those further off are flat outlines. One molecule has no colour: each is drawn in
@@ -796,12 +812,12 @@ flame. Two controls drive it, as on the maple page.
 
 - **Zoom** is continuous, with five named stops: Car (the view is about 5 m wide), Engine (0.7 m),
   Cylinder (0.3 m), Flame (0.13 m) and Molecules (8 nm). The page is one 3D model. Between stops the
-  camera moves, and no picture is swapped for another. Three cuts open the model as the zoom goes in,
+  camera moves, and no picture is swapped for another. Four cuts open the model as the zoom goes in,
   each a straight plane whose face is drawn pale and hatched. A cut piece does not move: it fades away
   where it is, so that the only things that move on the page are the things that move in an engine. The
   pieces are the hood and near fender (with the near front wheel); the near half of the engine block
   and its cover; and the end slice of the engine at cylinder 4, cut through the middle of its nearer
-  pair of valves. Moving parts (pistons, rods, crankshaft, camshafts, valves, spark plug, injector) are
+  pair of valves; and, between Cylinder and Flame, the slab from there to just in front of cylinder 4's spark plug. Each cut takes the gas with the metal, in every cylinder. Moving parts (pistons, rods, crankshaft, camshafts, valves, spark plug, injector) are
   never cut.
 - **One cycle** is the crank angle of cylinder 4, from 0° to 720° (two turns of the crankshaft, four
   strokes), with a Play button. Time is slower the further in the zoom is: slowed 60, 60, 600,
@@ -833,41 +849,38 @@ What is computed, not typed:
   the camshafts' bumps are drawn from the same lift curve, at half the crankshaft's speed.
 - Pressure and temperature, in half-degree steps: intake at half an atmosphere (a light load, with the
   throttle mostly shut), compression of the trapped gas without heat exchange, a burn that releases the
-  fuel's heat along an S-shaped curve from the spark over about 60°, expansion, and the fall to exhaust
-  pressure once the exhaust valve opens. The peak is about 21 atmospheres, 14° after the top. The air comes in at 385 K, warmed by the hot
-  port and valve.
+  fuel's heat along an S-shaped curve from the spark over about 60°, expansion, and, while a valve is open, flow through the ring between its head and its seat, from the higher pressure to the lower and no faster than sound, with the pressure following from the gas that is left. At the top, with both valves a little open, some burned gas goes back into the intake port and comes in again. The peak is about 24 atmospheres, 14° after the top. The air in the intake pipe is at 320 K; mixed with the burned gas left from the last cycle (6% of the charge), the charge is at 383 K when the intake valve shuts.
   Seventy-two percent of the fuel's heat is kept in the gas; the rest is taken as lost to the walls.
 - How the gas moves (`js/engine/flow.js`). Each dot of gas is followed the whole way: in along the
   intake pipe (air) or out of the injector's tip (fuel), past the intake valves, through compression and the burn, out past the exhaust valves
   and down the exhaust pipe. No dot is made or lost on the way, so the number of dots in the cylinder
-  at each crank angle is the mass of gas the model has there, to within a few percent: about a third
+  at each crank angle is the mass of gas the model has there, to within a few percent: about a quarter
   of the burned gas rushes out by its own pressure when the exhaust valve opens, before the piston
   starts back up, and the rising piston pushes out most of the rest. While a valve is open the gas under
   the cylinder head moves as a flow without swirl (a potential flow), worked out on a grid of
   1.75 mm cells when the page loads; below the head it moves with the piston; with both valves shut it
   is squeezed evenly. A dot of fuel leaves the injector's tip at its moment in the spray (70° to 95°) and flies out
   along the cone, slowing as it drags air along (from about 100 m/s, 62 mm at most); 30° later it goes where the gas
-  goes, and drifts to its own place in the evenly spread gas by the time the intake valve shuts, which stands for
-  the turbulent mixing that is not modeled. While the flame spreads, the burned gas is as many times thinner than
+  goes, and drifts its own way through the evenly spread gas until 310°, which stands for
+  the turbulent mixing that is not modeled. So the fuel and the burned gas left from the last cycle end up all through the charge, the fuel reaches the spot the Molecules stop looks at only at 268°, and every dot leaves by the exhaust pipe in the end. While the flame spreads, the burned gas is as many times thinner than
   the gas ahead of it as it is hotter (about 2.7 times, from the model's two temperatures, at the same pressure).
   The dots are moved sideways out from the cylinder's axis, where the plug is: along each line out from the axis
   at one height, the burned gas fills the stretch inside the flame's sphere and the unburned gas is squeezed into
   the rest. The burned gas glows faintly, so the dots in it can be seen. The dots' paths are worked out once, in a few seconds after the page opens,
   and the picture at any angle is read from them, so it is the same however that angle was reached.
-- The flame front's distance from the plug, which sets where the glow is drawn and when the spot the
-  Molecules stop looks at burns. That spot is 13 mm from the plug, so it burns about 6° before the
+- The flame front's distance from the plug: the ball about the plug that holds the burned share of the mass, in the chamber's own shape, so that the pressure, the front and the dots agree. It sets where the glow is drawn and when the spot the
+  Molecules stop looks at burns. That spot is 13 mm from the plug, so it burns about 8° before the
   piston reaches the top, while the cycle dial is still in Compression. The captions and the line
   above them say so, and a pale arc on the cycle dial marks the burn, from the spark (25° before
-  the top) until the front has crossed the cylinder (19° after it).
+  the top) until the front has crossed the cylinder (34° after it).
 - The cycle is a dial, because it repeats. Its hand goes around once for the four strokes: two turns
   of the crankshaft, one of a camshaft. Intake starts at 12 o'clock, so the piston is at the top of its
   travel at 12 and at 6. A real range input lies in the dial, unseen, for
   the keyboard, a screen reader and a controller; a mouse or a finger turns the hand.
 - At Molecules, a group of 121 molecules (2 fuel, 25 oxygen, 94 nitrogen) in a cube whose edge
-  follows the pressure and temperature at that spot (about 23 nm during intake, 13 nm at the spark).
+  follows the pressure and temperature at that spot (about 24 nm during intake, 12 nm at the spark).
   Every atom is followed through the reaction into 16 carbon dioxide and 18 water molecules; the
-  nitrogen is unchanged. As the exhaust stroke ends the burned molecules leave the view one after
-  another and fresh air arrives the same way, so the count goes from 128 back to 121 without a jump.
+  nitrogen is unchanged. Early in the intake stroke (about 35°), when the dots bring fresh air to the spot, the burned group and the fresh one cross the view together, so the count goes from 128 back to 121 and the view never empties.
 
 Where the picture simplifies, which the page also says:
 
@@ -880,7 +893,7 @@ Where the picture simplifies, which the page also says:
   something is in view at every zoom; past them, the space between molecules is drawn dark. These dots are scattered
   at random (each cell of a lattice holds none to three, one on average), wander on the molecules' clock while the
   page plays, and are squeezed together with the gas: their spacing goes with the cube root of its density, so a
-  view holds about six times as many at the top of compression as during intake, as it holds molecules.
+  view holds about seven times as many at the spark as during intake, as it holds molecules.
 - Burned gas is drawn glowing orange. A real gasoline flame gives off only faint light, at short
   visible wavelengths, which we see as blue.
 - Iso-octane stands for the hundreds of hydrocarbons in gasoline. The burn is drawn as one step; the
@@ -891,8 +904,7 @@ Where the picture simplifies, which the page also says:
 - The injector is drawn 12 mm to one side of the middle of the cylinder so that the cut shows it.
   The engine is drawn set lengthwise with its belt end toward the driver; in a car that end faces the
   front, or the side when the engine is set crosswise, as in most cars. Burned gas left from the last
-  cycle is drawn as a tan layer on the piston; really it mixes through the fresh air, and at
-  Molecules it is not drawn. Real molecules fly straight between collisions; here each drifts about
+  cycle is drawn tan, mixed through the charge; at Molecules it is not drawn. Real molecules fly straight between collisions; here each drifts about
   one place so that it stays in view. Atoms are drawn a little smaller than their real size so that
   each molecule's shape can be seen. The group of molecules is repeated side by side, each copy
   turned a different way, to fill the view.
@@ -933,14 +945,13 @@ wrong with it, and what the common physical therapy exercises do to it.
   muscle has its own color, which is only the picture's; tendon is drawn white.
 - **Conditions**: healthy, tendinopathy (the tendon drawn half as thick again near its end), partial tear
   (half the thickness gone from the underside), full tear (a hole through, and the ball up to 3 mm higher, never nearer the acromion than 2 mm),
-  bursitis (the bursa 3 mm thick instead of 0.8 mm) and impingement (the tendon is lit in red where the
+  bursitis (the bursa 3 mm thick instead of 0.8 mm, drawn thinner where the acromion leaves less room) and impingement (a weak cuff lets the ball ride up 3 mm as the arm lifts to 60°; the tendon is lit in red where the
   acromion presses on it: where the model has to push it out of the bone's way). The sizes are drawn,
   not measured, and the page says so under each.
 - **Lift the arm** (0 to 150°, in the plane of the shoulder blade) and **Turn the arm** (60° in or out).
   The shoulder blade turns a third of the lift (Inman's 2 to 1 rhythm), and a little about the vertical
   where that is needed to keep it off the ribs (worked out ahead, `shoulder/data/pose.json`). In this
-  scan the acromion sits low, so the ball slides down in its socket just enough to keep 2 mm between the
-  bones (up to about 5 mm); real shoulders slide less, and the page says so.
+  scan the acromion sits low, so the ball slides down in its socket just enough to keep 2 mm between the bones and 0.8 mm over the supraspinatus tendon's end with a healthy bursa on it (up to about 7 mm); real shoulders slide less, and the page says so.
 - **Exercises**: five from the AAOS conditioning program (pendulum, sleeper stretch, turning out and in with
   a band, and turning out with the arm up), and nine more from a physical therapy program (windshield wiper,
   the PNF D2 diagonal lift, bent-over raise, arm back with a band, high row, arms out on a ball, foam roll
@@ -1019,19 +1030,17 @@ object. A saccade is a quick jump. An overshoot saccade starts behind a moving t
 it (the definition used in Sanz, Aivar and Tejedor, IOVS 2026). Overshoot can also mean hypermetria:
 jumps to a still target that go too far. A tap on the screen makes the target jump, to show that.
 
-Studies have not shown that poor pursuit by itself makes saccades go too far. With saccades sized as
-measured, the model's saccades land on the target or a little short of it, even with poor pursuit. So the
+Studies have not shown that poor pursuit by itself makes saccades go too far. With saccades sized as measured, once the eyes have learned the swing the model's saccades land on the target or a little short of it, even with poor pursuit. So the
 page has two separate settings: healthy or poor pursuit, and accurate or overshoot saccades. Poor pursuit
 needs many more saccades, so when saccades go too far, many more land ahead of the target. The page says
 this in "What the clinic's note may mean". It opens on poor pursuit with overshoot saccades.
 
 - **One world, three stops**: Screen (the eyes and the screen 60 cm away, with a line of sight from each
-  eye), Eyes (seen from in front) and Muscles (the right eye's six muscles from above). The eyes,
+  eye), Eyes (seen from in front) and Muscles (both eyes and their muscles from above). The eyes,
   muscles and screen are to scale; muscle widths and thicknesses are the page's estimates. The skull,
   eyelids and fat are left out. Between Screen and Eyes the camera swings around the side and stands
   back, so that both stay in view. Time stands still while the view zooms.
-- **The screen** shows a grid (1° and 5°), the target in gold, orange ticks where overshoot saccades
-  landed in the last second, and in light blue a ring and a 0.4 s trail where the eyes look, as an eye
+- **The screen** shows a grid (1° and 5°), the target in gold, orange ticks where overshoot saccades landed in the last 2 s, and in light blue a ring wider than the target and a 0.4 s trail where the eyes look, as an eye
   tracker would. A box in the corner shows what the right eye sees, 5° across, with a ring for the central
   2°. The page says that during a saccade the brain turns vision down.
 - **Controls**: healthy or poor pursuit, accurate or overshoot saccades, Play, the speed of time (1/100 of
@@ -1040,30 +1049,25 @@ this in "What the clinic's note may mean". It opens on poor pursuit with oversho
 - **The model** (`js/saccade/model.js`, stepped 1 ms at a time, the same every run):
   - Pursuit: eye speed moves toward gain × target speed, with the gain 0.95 (healthy) or 0.5 (poor, an
     example value) at every speed, and a 100 ms latency. A target that swings regularly is predictable
-    (Barnes 2008), so after one full swing (the page's choice) the latency is no longer applied.
+    (Barnes 2008), so after one full swing the eyes' speed no longer lags the target's (one swing, and no lag at all, are the page's choices). A new speed is learned again.
   - A saccade starts when the eyes, at present speeds, would reach the target in under 40 ms, over
     180 ms, or never (de Brouwer et al. 2002), and not within 0.5° of it (the page's choice). It begins
     125 ms later (200 ms for a still target).
   - Size, as measured by de Brouwer et al. (2002): 0.9 × the position error plus 0.109 s × the retinal
-    slip, with slip above 15°/s counting at 0.09 s, both as seen 90 ms before the saccade. The
+    slip, with slip above 15°/s counting at 0.09 s, both as seen 90 ms before the saccade. For a learned swing the slip is the mean slip from then to the end of the saccade (the page's choice), so a saccade made as the target slows for a turn does not go too far. The
     "overshoot" setting makes each saccade 4/3 of that size. The 4/3 is the page's example, and the page
     says so. The page counts every saccade; studies count only those of 1° or more, and the page says so.
   - Duration 23 ms + 2.7 ms per degree (Collewijn et al. 1988), with a smooth minimum-jerk speed
     profile, so a 10° saccade takes 50 ms and peaks at 375°/s.
-  - Each saccade is sorted as catch-up, overshoot, anticipatory or back-up (Sanz et al.), with "on the
-    target" meaning within the drawn target's radius, 0.4°. A saccade to a still target is past, short
+  - Each saccade is sorted as catch-up, overshoot, anticipatory or back-up (Sanz et al.), with "on the target" meaning within 6.8% of the saccade's own size from the target's middle. That is how much measured saccades to a still target varied (de Brouwer et al. 2002, Table 1); using it this way is the page's choice. A saccade to a still target is past, short
     or on it.
-  - The eyes obey Listing's law and both aim at the same point on the screen. Muscle paths run straight
-    from their origins to the eye and around it (no pulleys; the page says so). Rectus insertions follow
+  - The eyes obey Listing's law and both aim at the same point on the screen. Muscle paths run straight from their origins to the eye and around it (no pulleys; the page says so). Where two muscles cross, one lies on the eye and the other rides over it: the superior rectus over the superior oblique's tendon, the inferior oblique over the inferior rectus. Rectus insertions follow
     Apt and Call (1982). Nerve signals are 100 + 4 × position + 0.95 × speed spikes/s along each
-    muscle's pull (Robinson 1970, monkeys), never below zero, so the opposing muscle falls silent
-    during a saccade. Muscles are drawn brighter red with a higher signal.
-- **Panel**: a trace of how far the eyes are ahead of the target or behind it over the last 2 s (orange
-  dots where overshoot saccades landed), where the last saccade landed, the measured gain, how many of the
+    muscle's pull (Robinson 1970, monkeys), never below zero, so the opposing muscle falls silent in a saccade faster than about 105°/s. One rule for all six muscles is the page's choice. Muscles are drawn brighter red with a higher signal, and their outlines do not change with it.
+- **Panel**: a trace of how far the eyes are ahead of the target or behind it over the last 2 s (orange dots where overshoot saccades landed; the line is broken at each turn of the target, with a thin line drawn in gold there), where the last saccade landed, the measured gain, how many of the
   last 5 s's saccades overshot, and the last saccade's size, duration and top speed. "Each muscle" lists
   all six with their nerve signals; pointing at one lights it in gold.
-- **Tests**: `node tests/saccade/model.mjs` (no browser) checks the main sequence, gains, how often each
-  kind of saccade happens with each setting, the definitions, a jump to a still target, each muscle's pull and length
+- **Tests**: `node tests/saccade/model.mjs` (no browser) checks the main sequence, gains, how often each kind of saccade happens with each setting at every target speed from 5 to 40°/s, that learned pursuit does not lag, that the trace steps only at saccades, that no two muscles share space, the definitions, a jump to a still target, each muscle's pull and length
   change, Listing's law, Hering's law and the nerve burst and pause. `node tests/saccade/page.mjs`
   (`--quick` for the desktop only) presses every control at a desktop and a phone size. After changing
   any file under `js/saccade/` or `css/saccade.css`, run `node tests/stamp.mjs saccade`.
@@ -1086,42 +1090,51 @@ the rest turn with it. A Take apart slider spreads the parts out along each gear
   half-angle is half that: 45° and 35.26°. All gears are the same size, so all turn at the same speed.
 - **The teeth** are cut as bevel-gear machines cut them: the blank is rolled against a flat crown gear with straight
   20° tooth sides, computed when the page loads. Two gears cut by the same crown gear mesh at any angle between
-  their axes. Each tooth is thinned by 5% of the tooth spacing. The cube's gears have 14 teeth and the
-  octahedron's 13. Each gear is turned so that a tooth faces a gap at each of its contacts. Around every corner
+    their axes. Each tooth is thinned by the middle of the range JIS B 1705 (bevel gears, grade 0) gives for its
+  module and size: 0.054 mm on the cube and 0.050 mm on the octahedron, so a pair has 0.11 and 0.10 mm of
+  backlash. The gear the visitor turns drives. Each driven tooth rests on its driver's flank, and when the turn
+  changes way the driven gears stand still until the driver has crossed the backlash. The cube's gears have 14
+  teeth and the octahedron's 13. Each gear is turned so that a tooth faces a gap at each of its contacts. Around every corner
   these turns agree for any tooth count; the test tries counts from 9 to 23. With 14 teeth (any count of 2 more
   than a multiple of 4, with the ring set as here) all six gears on a cube would also sit together at rest.
 - **The parts** (`parts()` in model.js, drawn by `js/gears/scene.js`), as in the toy: a brass core, and on each face
-  a washer, a gear with a ball bearing pressed into it, and a flanged screw through the bearing into the core. The
+  a washer, a gear with a ball bearing fitted into it, and a flanged screw through the bearing into the core. The
   teeth's inner ends reach below the gear's flat back, so the core's faces sit lower and the washer is thick; the
   core's edges are cut back. The test checks that the core touches no gear. The toy's own gears are flat; these are
-  bevel gears so that they also mesh at 70.5°. The bearings' balls go round at 0.62 of the gear's speed, as balls
-  do with the outer ring turning and the inner ring held. Taking the parts apart is a slider the visitor moves; it
-  never plays by itself, and the gears cannot be turned while the parts are apart.
+  bevel gears so that they also mesh at 70.5°. The bearings' balls go round at 0.61 of the gear's speed, as balls
+    do with the outer ring turning and the inner ring held. Taking the parts apart is a slider the visitor moves; it
+  never plays by itself, and the gears cannot be turned while the parts are apart. Each screw turns as it comes
+  out, one turn for each 0.3 mm thread pitch, until its thread has left the hole.
 - **How it looks** (`js/gears/look.js`, shared with the workshop page): the metal reflects a lit room (pale walls
-  with shelves, tube lights overhead, a window), and each part carries the marks of how it is made: fine turning
-  grooves round a gear's axis, fly cutter arcs on the core. The tube lights cast a soft shadow from a shadow map,
+    with shelves, tube lights overhead, a window), and each part carries the marks of how it is made: fine turning
+  grooves round a gear's axis (not on the tooth flanks and gap floors, which the form cutter makes), fly cutter
+  arcs on the core. The tube lights cast a soft shadow from a shadow map,
   and gaps that little light reaches are darkened from the depth picture. The set sits on a walnut desk; taken
-  apart, it is held up so that its lowest part just touches the desk, and from below the desk is not drawn. The
+    apart, it is held up so that its lowest part just touches the desk, and the view cannot go below the desk. The
   room, the desk and the marks are the page's own choice, not measured. A browser that cannot draw into a
-  floating-point picture gets the plain lighting the page had before. In the workshop, steel is a satin mid gray,
+    floating-point picture gets the plain lighting the page had before; its lights stay in the room as the view
+  turns. In the workshop, steel is a satin mid gray,
   black oxide a dark gray and the machines' cast iron lumpy under its paint, as in photos of real shops.
 - **Controls**: the shape, Play (off with reduced motion), a Spin slider, Take apart, and a tick box that colors
-  the gears by the way they spin (gold and blue). Dragging off the gears, or the arrow keys on the picture, turns
+    the gears by the way they spin, seen from outside (gold and blue). Dragging off the gears, or the arrow keys on the picture, turns
   the view; a double click puts it back. A controller's right stick turns the view, the triggers turn the gears,
   and the bumpers change the shape.
 - **Tests**: `node tests/gears/model.mjs` (no browser) checks which sets can turn against an independent search for
   a loop with an odd count, turns every meshing pair through two tooth spacings and fails if a tooth enters
-  another, checks that a gear held still lets its neighbor turn no more than the backlash, and checks the core and
-  the gears that do not mesh. `node tests/gears/page.mjs` (`--quick` for the desktop only) presses every control at
-  a desktop and a phone size, drags a gear, and sweeps Spin and Take apart. After changing any file under
+    another, checks that a gear held still lets its neighbor turn by the backlash and no more, that the backlash is
+  within JIS B 1705 grade 0, that each driven tooth rests on its driver's flank, that the driven gears wait while a
+  driver turned back crosses the backlash, and that a screw turns once for each thread pitch it comes out, and
+  checks the core and the gears that do not mesh. `node tests/gears/page.mjs` (`--quick` for the desktop only) presses every control at
+    a desktop and a phone size, drags a gear, sweeps Spin and Take apart, and checks that the lit view stays above
+  the desk. After changing any file under
   `js/gears/` or `css/gears.css`, run `node tests/stamp.mjs gears`.
 - **Making it** (`gears/make.html`, linked from the gears page as "How to make the parts"): for each toy and each
   part, a dimensioned drawing and the part being machined from brass, step by step.
   - Sizes (`js/gears/spec.js`, from `MM` and `blank()` in model.js): the gears are module 1 (cube, 14 teeth, Ø15.42
-    over the teeth) and module 0.9 (octahedron, 13 teeth, Ø13.17), so both toys come out about 2 cm across. A 681X
-    ball bearing (1.5 × 4 × 2 mm, bought) is pressed into each gear, flush with its outer face. A shoulder screw
-    (M1.4 × 0.3) clamps a spacer (the washer, Ø2.2 × Ø1.6) to the core; the bearing turns on the screw's Ø1.5
-    shoulder. The cube's core is 9.00 mm across; the octahedron's is 11.00 across faces, with 1.20 mm flats on its
+    over the teeth) and module 0.9 (octahedron, 13 teeth, Ø13.17), so both toys come out about 2 cm across. A 681XZZ (shielded)
+    ball bearing (1.5 × 4 × 2 mm, seven 0.6 mm balls, bought) is held in each gear with retaining compound, flush
+    with its outer face. A shoulder screw (M1.4 × 0.3) clamps the bearing's inner ring and a spacer (the washer,
+    Ø2.2 × Ø1.6) to the core; the inner ring sits on the screw's Ø1.5 shoulder. The cube's core is 9.00 mm across; the octahedron's is 11.00 across faces, with 1.20 mm flats on its
     edges and corner flats 14.00 apart.
   - Drawings (`js/gears/drawing.js`, SVG built from numbers): third-angle views, hatched sections, a gear data
     table and a title block. Pinch, scroll or use + and − to zoom. These are the page's own engineering choices,
@@ -1129,16 +1142,23 @@ the rest turn with it. A Take apart slider spreads the parts out along each gear
   - Machining (`js/gears/plan.js` for the steps, `js/gears/cut.js` to replay them, `js/gears/shop.js` and
     `js/gears/make.js` to draw them): gears are turned in a 3-jaw chuck, finished on an expanding mandrel, then
     their teeth are cut one gap at a time with an involute form cutter, the blank on a dividing head tilted to the
-    root angle. The cube's core is milled in a vise; the octahedron's is squared in the vise, then held in a 5C
-    square collet in an indexer tilted 35.26° for its eight faces. Spacers and screws are turned from rod in
+    root angle. The cube's core is milled in a vise; the octahedron's is squared in the vise and four of
+    its edges chamfered there; in an indexer a 5C square collet then holds it for four faces, four edges and their
+    holes (head at 35.26° for a face, 45° for an edge), and for the other end it is screwed by two finished faces to
+    a V block in the same collet. Spacers and screws are turned from rod in
     collets; the screw's thread is cut with a die and its slot with a slitting saw. Times are real machine
-    times; the animation plays them faster (the page says the total). Spindle speeds suit HSS tools in
-    free-cutting brass. A single-point form cutter on a tilted head is how a home shop makes a bevel gear; the
+    times: each pass is its drawn travel over its feed. The animation plays them faster (the page says the total)
+    and draws the spindle 60 times slower than its stated speed (the tool line says so). On the mill the table
+    carries the work under a still spindle. Setting a part up again by hand is not shown. Spindle speeds suit HSS tools in
+    free-cutting brass. A form cutter on a tilted head is how a home shop makes a bevel gear; the
     tooth is then an approximation, which is why the drawing says to check the mesh in pairs.
   - Tests: `node tests/gears/make.mjs` (no browser) plays every plan and fails if the finished part differs from
     its drawing (diameters, lengths, faces, holes, every gap, the slot), a tool comes within 0.4 mm of the jaws,
-    or a speed is out of range. `node tests/gears/collide.mjs` (about 5 minutes) plays every step in the 3D
+    a speed is out of range, a holder touches under 15 mm² of the part, a pass takes no metal or its time is not its
+    travel over its feed, a tap or die is not backed out, or the center drill or gear cutter is off its drawn shape.
+    `node tests/gears/collide.mjs` (about 5 minutes) plays every step in the 3D
     shop and fails if anything runs into anything: tool, post or tailstock into the chuck, jaws, collet or mandrel;
     a tool's body into the part; a mill cutter into the vise or fixture. `node tests/gears/makepage.mjs` (`--quick` for the desktop only) checks that no
     text on a drawing overlaps other text or leaves the frame, steps through every machining step, and fails on a
-    control that moved or a blank picture.
+    control that moved, a blank picture, a tool line that names the wrong tool, words from another setup, a spindle
+    that turns while paused, or a spindle axis that moves on the mill.

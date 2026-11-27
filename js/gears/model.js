@@ -15,7 +15,16 @@
 const D = Math.PI / 180;
 export const PRESSURE = 20 * D;         // the angle of the crown gear's straight tooth sides
 export const R_OUT = 1, R_IN = 0.74;    // the teeth run along the pitch cone from 0.74 to 1 of the distance from the center
-const BACKLASH = 0.05;                  // each tooth is thinned by this share of the tooth spacing, so meshing teeth do not bind
+// The gears' modules (the pitch diameter at the teeth's outer end, divided by the tooth count), in mm: see MM below.
+export const MODULE = { cube: 1, octa: 0.9 };
+// Backlash. Each tooth is thinner than half the tooth spacing, so that meshing teeth do not bind. JIS B 1705:1973 (bevel
+// gears) gives each gear's share of a pair's backlash at the outer pitch circle from W = cbrt(d) + 0.65 m micrometers
+// (d the pitch diameter, m the module, both in mm): at least 10W, and at most 25W for grade 0 (the KHK Gear Guide,
+// Technical Data, p. 725, "Backlash Standard for Bevel Gears", khkgears.us). A pair's backlash is the sum of its two
+// gears' shares. Each tooth here is thinned by the middle of grade 0's range, 17.5W: 0.054 mm on the cube, 0.050 mm on the
+// octahedron, so a pair has 0.107 mm and 0.100 mm.
+export const BACKLASH_W = 17.5;
+export const thinningMM = (m, N) => BACKLASH_W * (Math.cbrt(m * N) + 0.65 * m) / 1000;
 
 // ---- small vector helpers ----
 export const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -70,7 +79,8 @@ export function makeShape(sh) {
     const x = norm(add(toward, scale(z, -dot(toward, z)))), y = cross(z, x);
     return { x, y, z };
   });
-  const N = sh.teeth, profile = teethOf(alpha, N);
+  // each tooth's thinning as a share of the tooth spacing (a shape made for a test, with no solid, is taken at module 1)
+  const N = sh.teeth, m = MODULE[sh.solid] ?? 1, thin = thinningMM(m, N) / (Math.PI * m), profile = teethOf(alpha, N, thin);
   // where each gear's teeth sit when the turn is 0 (the angle of a tooth's middle in the gear's frame). At each
   // contact, a tooth of one gear must face a gap of the other. Measured from the contact, in tooth spacings, the
   // tooth offsets of two meshing gears add to one half, and turning keeps that sum, since they turn opposite ways.
@@ -85,21 +95,54 @@ export function makeShape(sh) {
   }
   const phase = off.map((p) => (((p % 1) + 1) % 1) * pitch);
   const per = n.map((_, i) => meshes.filter((e) => e.i === i || e.j === i).length);
+  // each gear's neighbors, and how many meshes lie between any two gears
+  const nbr = n.map((_, i) => meshes.filter((e) => e.i === i || e.j === i).map((e) => (e.i === i ? e.j : e.i)));
+  const hops = n.map((_, d) => { const h = n.map(() => -1), q = [d]; h[d] = 0; for (let k = 0; k < q.length; k++) for (const j of nbr[q[k]]) if (h[j] < 0) { h[j] = h[q[k]] + 1; q.push(j); } return h; });
   return { ...sh, normals: n, plainNormals: sh.plain.map(norm), meshes, shaft, alpha, sign, jammed, frames, phase, per, profile,
-    pitch: 2 * Math.PI / N, conflicted: sign.map((s) => s === 0) };
+    pitch: 2 * Math.PI / N, conflicted: sign.map((s) => s === 0), thin, slack: thin * 2 * Math.PI / N, nbr, hops };
 }
 
 // How far each gear has turned about its own axis (radians, right hand about the outward axis) when the set has
 // turned by t. Meshing gears turn at equal speed in opposite directions, because their pitch cones are the same
 // size. A gear that would have to turn both ways does not turn, and neither does any other.
-export function angles(sh, t) { return sh.sign.map((s, i) => (sh.jammed ? 0 : s * t) + sh.phase[i]); }
+// t is one number (every tooth in the middle of its gap) or one per gear, from rest() and drive().
+export function angles(sh, t) { return sh.sign.map((s, i) => (sh.jammed ? 0 : s * (Array.isArray(t) ? t[i] : t)) + sh.phase[i]); }
+
+// Driving through the backlash. Each gear's turn p[i] is counted like the set's turn t: two meshing gears with equal p
+// have each tooth in the middle of its gap, and their teeth touch when the two differ by sh.slack (the free turn
+// either way). The visitor turns one gear, d. The others move only when a tooth pushes them, so a driven gear's
+// teeth rest on its driver's flanks, and each mesh further from d lags by one more slack. When the turn changes
+// way, the driven gears stand still while the driver crosses the backlash.
+// rest: the gears as they are after d has turned some way (way: +1 or -1) and come to t.
+export function rest(sh, d, t, way = 1) { return sh.hops[d].map((h) => t - way * h * sh.slack); }
+// drive: d turned to t; every other gear moves as little as it must to keep each mesh within the slack. Changes p.
+// Gears are moved outward from d. A gear keeps within the slack of the gears nearer d first (they push it), then of
+// the others where it can (one of them may push it too); a gear further out that is in the way is pushed in its turn.
+export function drive(sh, p, d, t) {
+  p[d] = t;
+  if (sh.jammed) return p;
+  const f = sh.slack, h = sh.hops[d], order = sh.normals.map((_, i) => i).filter((i) => i !== d).sort((a, b) => h[a] - h[b]);
+  const within = (ks) => { if (!ks.length) return [-Infinity, Infinity]; const v = ks.map((k) => p[k]); return [Math.max(...v) - f, Math.min(...v) + f]; };
+  for (let it = 0; it < 12; it++) {
+    let moved = 0;
+    for (const j of order) {
+      const [lo, hi] = within(sh.nbr[j].filter((k) => h[k] < h[j]));
+      let q = lo > hi ? (lo + hi) / 2 : Math.min(hi, Math.max(lo, p[j]));
+      const [lo2, hi2] = within(sh.nbr[j].filter((k) => h[k] >= h[j])), a = Math.max(lo, lo2), b = Math.min(hi, hi2);
+      if (a <= b) q = Math.min(b, Math.max(a, q));
+      moved = Math.max(moved, Math.abs(q - p[j])); p[j] = q;
+    }
+    if (moved < 1e-12) break;
+  }
+  return p;
+}
 
 // ---- the teeth ----
 // A tooth is described on a sphere about the center, since every surface of a bevel gear runs straight toward the
 // center. At polar angle th (from the gear's axis), the tooth covers azimuths within ±half(th) of its middle.
 // The tooth runs from the root (alpha - 1.25 m) to the tip (alpha + m), where m is the tooth spacing along the
 // pitch circle divided by pi, measured as an angle on the sphere.
-export function teethOf(alpha, N) {
+export function teethOf(alpha, N, thin) {
   const pc = 2 * Math.PI * Math.sin(alpha) / N;  // tooth spacing along the pitch circle, as an arc on the unit sphere
   const m = pc / Math.PI, add = m, ded = 1.25 * m;
   const root = alpha - ded, tip = alpha + add, tanP = Math.tan(PRESSURE);
@@ -107,7 +150,7 @@ export function teethOf(alpha, N) {
   // far side, so the angle between the axes is 90° + alpha. Rolling the gear by f about z rolls the crown by
   // -f sin(alpha) about C, so that the pitch point moves at the same speed on both.
   const P = [Math.sin(alpha), 0, Math.cos(alpha)], C = [Math.cos(alpha), 0, -Math.sin(alpha)], Y = [0, 1, 0];
-  const half = Math.PI / N, b = BACKLASH * pc;
+  const half = Math.PI / N, b = thin * pc;          // the crown's teeth are wider by b, so the gear's are thinner by b
   // is a point of the blank (polar th, azimuth ps) cut away by the crown gear at some roll f?
   const F = [];
   for (let k = -160; k <= 160; k++) F.push(k / 160 * 3 * half * 2);
@@ -134,7 +177,7 @@ export function teethOf(alpha, N) {
   }
   // a tooth never widens toward its tip
   for (let r = 1; r < hw.length; r++) hw[r] = Math.min(hw[r], hw[r - 1]);
-  return { N, alpha, root, tip, m, pc, th, hw, half };
+  return { N, alpha, root, tip, m, pc, th, hw, half, thin };
 }
 
 // the tooth's half-width (radians of azimuth) at polar angle th, or -1 past the tip
@@ -160,14 +203,14 @@ export function inside(sh, i, t, d, ang = angles(sh, t)) {
 // The real sizes. The gears are measured by their module (the pitch diameter at the teeth's outer end, divided by
 // the tooth count): 1 mm on the cube, 0.9 mm on the octahedron, both standard sizes. That sets how many
 // millimeters one unit of the picture is, a little under 10 for the cube and a little over 10 for the octahedron.
-// Each gear turns on a 681X ball bearing (1.5 mm bore, 4 mm across, 2 mm wide), bought, not made.
-export const MODULE = { cube: 1, octa: 0.9 };
+// Each gear turns on a 681XZZ ball bearing (shielded; 1.5 mm bore, 4 mm across, 2 mm wide, seven 0.6 mm balls: the
+// maker's catalog, nsk.com, 681XZZMC3P6), bought, not made.
 export const unitMM = (sh) => MODULE[sh.solid] * sh.teeth / (2 * Math.sin(sh.alpha));
 export const MM = {
-  bearing: { d: 1.5, D: 4, B: 2, innerOD: 2.3, outerID: 3.25, balls: 7, ball: 0.8, pitch: 2.75 },
+  bearing: { d: 1.5, D: 4, B: 2, innerOD: 2.3, outerID: 3.25, balls: 7, ball: 0.6, pitch: 2.75 },
   spacer: { od: 2.2, id: 1.6 },
   // a shoulder screw: slotted flange, a boss that bears on the bearing's inner ring (so the flange clears the gear),
-  // a shoulder the bearing turns on, and an M1.4 thread into the core
+  // a shoulder the bearing's inner ring sits on, and an M1.4 thread into the core
   screw: { flange: 6, thick: 0.8, boss: 2.2, bossH: 0.3, shoulder: 1.5, thread: 1.4, pitch: 0.3, threadL: 2.5, slot: 0.4, slotD: 0.35, clamp: 0.05 },
   tap: { drill: 1.1, depth: 3, drillDepth: 3.6 },
   // the core: center to a gear's face; each edge cut back by a 45° chamfer (cube, its leg) or to a flat this wide
@@ -176,6 +219,10 @@ export const MM = {
   chamfer: { cube: 0.6, octa: 1.2 },
   corner: { octa: 7 },
 };
+// A screw moves along its axis only by turning: one turn for each pitch. Backing out (a right-hand thread) it turns
+// counterclockwise seen from its head, until its thread has left the hole. out: how far it has come out, in mm. Radians,
+// right hand about the outward axis.
+export const screwTurn = (out) => 2 * Math.PI * Math.min(Math.max(0, out), MM.screw.threadL) / MM.screw.pitch;
 // a gear blank's outline in its own frame (r out from the axis, z along it, from the solid's center), in units.
 // The teeth's outer ends lie on the back cone and their inner ends on the front cone: both square to the pitch
 // cone, as on any bevel gear. Tip: the teeth's tops; root: the bottom of the gaps.
@@ -188,7 +235,7 @@ export function blank(sh) {
 // distance from the center along a tooth's line at polar angle th, at the back (R_OUT) or front (R_IN) cone
 export const endAt = (pr, th, R) => R / Math.cos(th - pr.alpha);
 
-// Each gear is a thin brass disc with its teeth on the rim, turning on a ball bearing pressed into its middle
+// Each gear is a thin brass disc with its teeth on the rim, turning on a ball bearing fitted into its middle
 // (flush with the outer face). A shoulder screw through the bearing holds it to the brass core, with a spacer
 // between the bearing's inner ring and the core. The core is the solid itself, its edges cut back so that they
 // clear the teeth. Sizes here are in units of the teeth's outer end; MM above has them in millimeters.

@@ -148,13 +148,17 @@ function loadElk() {
   return elk;
 }
 function loadD2() {
-  if (!d2) d2 = import(D2_URL).then((m) => new m.D2(), (e) => { d2 = null; throw e; });
+  // D2 starts its worker and its WebAssembly on the first diagram it is given. A two-node diagram with
+  // D2's default layout is laid out here, so that the start is not counted in the time of the first real one.
+  if (!d2) d2 = import(D2_URL).then(async (m) => { const x = new m.D2(); try { await x.compile('a -> b'); } catch { /* the real run will say what is wrong */ } return x; }, (e) => { d2 = null; throw e; });
   return d2;
 }
 // Stop a TALA run that is no longer wanted: its worker is shut down and a new one starts next time.
 export function cancelD2() { const old = d2; d2 = null; if (old) old.then((x) => x.dispose && x.dispose(), () => {}); }
+// The result carries `took`: the seconds the engine spent on this layout. The download and the
+// engine's start come before the clock does.
 export async function runReal(g, o) {
-  if (o.m === 'layered') return realLayout(g, o, elkPicture(g, o, await (await loadElk()).layout(elkInput(g, o))));
-  const out = await (await loadD2()).compile(d2Source(g, o), { layout: 'tala' });
-  return realLayout(g, o, d2Picture(g, o, out.diagram));
+  const engine = await (o.m === 'layered' ? loadElk() : loadD2()), input = o.m === 'layered' ? elkInput(g, o) : d2Source(g, o);
+  const t0 = performance.now(), out = await (o.m === 'layered' ? engine.layout(input) : engine.compile(input, { layout: 'tala' })), took = (performance.now() - t0) / 1000;
+  return { ...realLayout(g, o, o.m === 'layered' ? elkPicture(g, o, out) : d2Picture(g, o, out.diagram)), took };
 }

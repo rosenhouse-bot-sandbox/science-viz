@@ -25,7 +25,8 @@ export const BK7 = { name: 'Crown glass (N-BK7)',
   n: sellmeier([1.03961212, 0.231792344, 1.01046945], [0.00600069867, 0.0200179144, 103.560653]) };
 export const F2 = { name: 'Flint glass (F2)',
   n: sellmeier([1.34533359, 0.209073176, 0.937357162], [0.00997743871, 0.0470450767, 111.886764]) };
-export const SF10 = { name: 'Dense flint (SF10)',
+// N-SF10, the lead-free glass, not the older leaded SF10: their curves differ a little.
+export const NSF10 = { name: 'Dense flint (N-SF10)',
   n: sellmeier([1.62153902, 0.256287842, 1.64447552], [0.0122241457, 0.0595736775, 147.468793]) };
 // Calcium fluoride crystal (Malitson 1963): very low dispersion, the "fluorite" of telephoto lenses.
 export const CAF2 = { name: 'Fluorite (CaF2)',

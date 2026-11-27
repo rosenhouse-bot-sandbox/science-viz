@@ -3,7 +3,7 @@ import { createEngine, makeView, project, slerp, V, DEG, clamp, lerp, sstep } fr
 import * as O from './optics.js';
 import orbit from './stages/orbit.js';
 import rain from './stages/rain.js';
-import drop, { eyeAngle, bowTrack, crossAngle, CROSSINGS } from './stages/drop.js';
+import drop, { trueEyeAngle, bowTrack, crossAngle, CROSSINGS, BOW_REACH } from './stages/drop.js';
 import surface, { presetAngle, maxAngle } from './stages/surface.js';
 import atoms from './stages/atoms.js';
 import { gamepad } from '../gamepad/gamepad.js';
@@ -42,10 +42,10 @@ function readHash() {
   if (['sun', 'both', 'eye'].includes(q.get('f'))) S.focus = q.get('f');
   if (CROSSINGS.includes(q.get('x'))) { S.cross = q.get('x'); }
   const num = (k, a, b, d) => { const v = parseFloat(q.get(k)); return Number.isFinite(v) ? clamp(v, a, b) : d; };
-  S.sun = num('sun', 0, 50, S.sun); S.lambda = num('nm', 250, 700, S.lambda); S.bowpos = num('bow', -0.8, 1.6, S.bowpos);
+  S.sun = num('sun', 0, 50, S.sun); S.lambda = num('nm', 250, 700, S.lambda); S.bowpos = num('bow', ...BOW_REACH, S.bowpos);
   S.tilt = num('tilt', 0, 75, S.tilt);
   S.theta = q.has('a') ? num('a', 0, maxAngle(S), presetAngle(S)) : presetAngle(S);
-  if (q.get('p') === 'p') S.pol = 'p';
+  if (['s', 'p'].includes(q.get('p'))) S.pol = q.get('p');
   S.exag = q.get('wide') === '1'; S.second = q.get('two') === '1'; S.bfield = q.get('b') === '1';
 }
 let hashTimer = 0;
@@ -200,7 +200,7 @@ function go(to, thru = false, rate = 0) {      // thru: the camera is passing th
   if (thru && rate && tr.t0 !== undefined && !RM.matches) tr.v *= clamp(rate / Math.max(1e-3, span * endSlope(tr) / tr.dur), 0.6, 1.6);
   if (wasLambda !== null) tr.wasLambda = wasLambda;
   // the marked drop keeps falling during the flight: set the Drop scene to where it will be on arrival
-  if (to === DROP && S.stage === RAIN) { tr.was = { bowpos: S.bowpos, exag: S.exag }; const th = STAGES[RAIN].embed(S, paused ? 0 : tr.dur).theta, a0 = O.bowAngle(O.nWater(400)), a1 = O.bowAngle(O.nWater(700)); S.bowpos = clamp((th - a0) / (a1 - a0), -0.8, 1.6); S.exag = false; tr.fromRain = true; }
+  if (to === DROP && S.stage === RAIN) { tr.was = { bowpos: S.bowpos, exag: S.exag }; const th = STAGES[RAIN].embed(S, paused ? 0 : tr.dur).theta, a0 = O.bowAngle(O.nWater(400)), a1 = O.bowAngle(O.nWater(700)); S.bowpos = clamp((th - a0) / (a1 - a0), ...BOW_REACH); S.exag = false; tr.fromRain = true; }
   $('labels').classList.add('off');
   syncNav();
 }
@@ -229,7 +229,7 @@ for (const key in segs) document.querySelectorAll(`[data-${key}]`).forEach(b => 
 }));
 const sliders = {
   sun: v => `${v.toFixed(1)}°`,
-  bowpos: () => `${(eyeAngle(S) / DEG).toFixed(1)}°`,
+  bowpos: () => `${(trueEyeAngle(S) / DEG).toFixed(1)}°`,
   theta: v => `${v.toFixed(1)}°`,
   tilt: v => `${v.toFixed(1)}°`,
   lambda: v => `${Math.round(v)} nm`,
@@ -407,6 +407,7 @@ function drawLabels(list, view) {
 // replaces the clock: each frame then advances by dbg.dt seconds while dbg.steps lasts, and not at all after.
 const dbg = {};
 let last = 0, time = 0, scale = 1, slow = 0, fast = 0, readoutClock = 0;
+const lambdaEase = {};      // the colour's last step along its path, so that it rests a frame before turning (see O.easeWavelength)
 const dprCap = () => Math.min(window.devicePixelRatio || 1, 2);
 function frame(now) {
   requestAnimationFrame(frame);
@@ -441,9 +442,9 @@ function frame(now) {
     if (at === S.cross) { D.cross = at; D.theta = S.theta; }
     else if (at !== D.cross) { D.cross = at; D.theta = presetAngle(D); }
   }
-  // (The colour drawn eases to the slider's, and the last few nanometres are covered at a steady rate so
-  // that it arrives: an ease alone creeps for a second, and the place on the drop moves with the colour.)
-  { const gap = S.lambda - D.lambda, go = Math.abs(gap) * (1 - Math.exp(-dt * 9)) + 15 * dt; D.lambda = RM.matches || Math.abs(gap) <= go ? S.lambda : D.lambda + Math.sign(gap) * go; }
+  // (The colour drawn eases to the slider's along the path the colour takes on screen, so that it changes
+  // steadily, turns without a jump, and arrives: see O.easeWavelength. The place on the drop moves with the colour.)
+  D.lambda = RM.matches ? S.lambda : O.easeWavelength(D.lambda, S.lambda, dt, lambdaEase);
   if (offXg !== null) { const k = 1 - Math.exp(-dt * 5); offX += (offXg - offX) * k; offY += (offYg - offY) * k; }
   for (const c of cams) { const k = 1 - Math.exp(-dt * 9); c.yaw += (c.gy - c.yaw) * k; c.pitch += (c.gp - c.pitch) * k; c.dist += (c.gd - c.dist) * k; }
 
@@ -474,7 +475,7 @@ function frame(now) {
     // ease the Drop scene to where it will now be on arrival.
     if (tr.fromRain && tr.rev && deeper && !still) {      // (or after a press that changed how long the flight will take)
       const th = STAGES[RAIN].embed(S, paused ? 0 : (1 - tr.q) * tr.dur).theta, a0 = O.bowAngle(O.nWater(400)), a1 = O.bowAngle(O.nWater(700));
-      S.bowpos += (clamp((th - a0) / (a1 - a0), -0.8, 1.6) - S.bowpos) * (1 - Math.exp(-dt * 6));
+      S.bowpos += (clamp((th - a0) / (a1 - a0), ...BOW_REACH) - S.bowpos) * (1 - Math.exp(-dt * 6));
     }
     const vA = viewFor(hi, time), vB = viewFor(lo, time);
     let hole, vHi = vA, vLo = vB;

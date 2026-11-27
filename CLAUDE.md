@@ -131,6 +131,11 @@ A new page is not done until it does.
 Before pushing:
 
 - `node --check` every changed module.
+- For Rainbows, first run `node tests/rainbows/model.mjs` (no browser, a few seconds): it fails if a beam at
+  Surface is drawn with more light than arrived or s and p differ at 0°, a ray to the eye comes or goes at full
+  strength, the second bow's rays leave away from 51°, a caption share or slowdown is not the model's, a marked drop
+  fades in mid-fall or is named a color it is not drawn in, Molecules loses the polarization, or the color drawn lags
+  or jumps as the wavelength moves.
 - For Rainbows, run the smooth-interaction tests: `node tests/smooth/run.mjs --quick` after any change,
   and the full `node tests/smooth/run.mjs` after changing a slider, a flight between scales, the
   particles or the panel's layout. They drag every slider and press every button one frame at a
@@ -138,19 +143,26 @@ Before pushing:
   depends on the route taken. Read `tests/smooth/out/report.md` and look at `contact.png`. A new
   finding is yours to fix, or to record in `tests/smooth/accepted.json` with the reason it is
   meant. `tests/smooth/README.md` says what the tests can and cannot see.
-- For the Optics workshop, run `node tests/optics/run.mjs`. It plays every challenge with a mouse, a
+- For the Optics workshop, first run `node tests/optics/model.mjs` (no browser, about 15 s): it fails if a ray
+  breaks Snell's law or passes a solid, a blur or goal is under the wave width, a meter rises without more light, a
+  typed number disagrees with the model, or a known solution stops winning. Then run `node tests/optics/run.mjs`. It plays every challenge with a mouse, a
   finger and the keyboard, and fails if one cannot be won. A new challenge needs a known solution
-  added to `PLAYS` there. Numbers in a challenge's text must match what the trace gives.
+  added to `PLAYS` in `tests/optics/plays.mjs`. Numbers in a challenge's text must match what the trace gives.
   Also run `node tests/optics/layout.mjs`: it steps every slider through every value and fails if
   anything in the panel or the bench moves or changes size (a number that gains a digit and wraps).
 - For Vesicle fusion, run `node tests/vesicle/placement.mjs` after changing the membrane shape or
   where a protein sits. It steps through the whole event without a GPU and fails if any protein is
-  on the wrong side of a membrane or pushed into one. It cannot judge what only looks wrong, so
-  also step through the stages by eye.
+  on the wrong side of a membrane or pushed into one. After changing the clock, the glutamate path, the tethers, the
+  arrival, the lipids' placement, the camera or the sampler, run `node tests/vesicle/model.mjs` (no browser, about
+  three minutes): it fails if glutamate, lipids and proteins are not on one clock, glutamate is made or lost or reaches
+  a receptor it has not, anything moves before calcium has bound, a tether changes length, the two settings carry
+  different proteins, the trace and the picture differ, a sheet has a hole, or a range is shown before the sampler has
+  walked in. Neither test can judge what only looks wrong, so also step through the stages by eye.
 - For Graph layout, run `node tests/dag/run.mjs` (no browser needed): it lays out every sample graph
-  with both methods over a spread of settings and fails if nodes overlap, an edge misses its node, a
-  cycle is left, or two runs differ. Then `node tests/dag/page.mjs` presses every control at a desktop
-  and a phone size and fails on a console error or a panel wider than the screen. A new sample graph
+  with both methods over a spread of settings and fails if nodes overlap, an edge misses or runs through a node, two unrelated
+  edges share a line, a cycle is left, a crossing count, length, score or turn reason disagrees with a second count,
+  or two runs differ (about a minute). Then `node tests/dag/page.mjs` presses every control at a desktop
+  and a phone size and fails on a console error, a panel wider than the screen, or words that change while nodes glide. A new sample graph
   goes in `SAMPLES` in `js/dag/graphs.js` and is picked up by both. The page must keep saying which
   pictures come from its own step-by-step code and which from the real ELK and TALA.
 - For Japanese maple, run `node tests/maple/model.mjs` (no browser needed) after changing the
@@ -191,7 +203,7 @@ Before pushing:
   `js/shoulder/`, `css/shoulder.css` or `shoulder/data/`, run `node tests/stamp.mjs shoulder`.
 - For Overshoot saccades, run `node tests/saccade/model.mjs` (no browser needed) after changing the model: it fails if
   saccade timing leaves the measured main sequence, a measured gain is not the gain set, a saccade's kind does not fit
-  its definition, a muscle pulls or shortens the wrong way, a muscle enters the eye, or the eyes twist. Then
+  its definition, a muscle pulls or shortens the wrong way, a muscle enters the eye or another muscle, the trace steps where there is no saccade, a caption is untrue at some target speed, or the eyes twist. Then
   `node tests/saccade/page.mjs` (`--quick` for the desktop only). Numbers on screen come from `js/saccade/model.js`;
   anything that is the page's own choice, not a measured value, says so in `js/saccade/facts.js`. After changing any
   file under `js/saccade/` or `css/saccade.css`, run `node tests/stamp.mjs saccade`.
