@@ -1,7 +1,8 @@
 // Vesicle fusion: page state, camera, input and the frame loop.
 import { perspective, lookAt, sstep } from './glx.js';
 import { Scene } from './scene.js';
-import { PH, ARRIVE, APPROACH, REACH } from './profile.js';
+import { PH, ARRIVE } from './profile.js';
+import { other, T_CA } from './kinetics.js';
 import { INFO } from './info.js';
 import { Experiment, Sampler, PARAMS, NP, T_TOTAL, FAR_P, DOCKED_P, quantiles, progressOf } from './infer.js';
 import { IrmCamera, irmOptics, orangeBlur, orangeDefocus, moment, contrastCurve, hue, css, IRM, APO, SPAN, SPAN_DIFF, WELL, N_MEDIUM, N_LIPID } from './irm.js';
@@ -18,8 +19,8 @@ const phone = matchMedia('(max-width: 899px)');
 
 const STAGES = [
   { at: -ARRIVE, name: 'Arrival', title: 'A vesicle arrives',
-    body: `A synaptic vesicle packed with glutamate wanders the last ${APPROACH} nanometers by Brownian motion. About ${REACH} nanometers up, tethers on the active zone catch it and reel it in. The synaptobrevin strands hang free until syntaxin and SNAP-25 can reach them.`,
-    vitro: `A vesicle wanders toward the membrane on the glass until tethers catch it about ${REACH} nanometers up. The pHluorin is quenched, but the orange protein beside it is still half lit. So the vesicle shows in orange, and it brightens as it sinks into the field. A reflection camera needs no dye. Its spot flickers as the height of the vesicle changes, then settles.` },
+    body: 'A synaptic vesicle packed with glutamate wanders by Brownian motion. Tethers on the active zone bind it when it comes within reach, and hold it close to the membrane. The synaptobrevin strands hang free until syntaxin and SNAP-25 can reach them.',
+    vitro: 'A vesicle wanders near the membrane on the glass until tethers bind it. The pHluorin is quenched, but the orange protein beside it is still half lit. So the vesicle shows in orange, and it is brighter the lower it is in the field. A reflection camera needs no dye. Its spot flickers as the height of the vesicle changes, then settles.' },
   { at: 0, name: 'Docked', title: 'Docked and loaded',
     body: 'A synaptic vesicle packed with glutamate waits a few nanometers above the cell membrane. Half-zipped SNARE proteins hold it there, ready to fire.',
     vitro: 'The vesicle waits just above the membrane, about 50 nanometers over the glass. The acid inside keeps pHluorin dark, so the camera sees a steady orange spot and almost nothing at 510 nanometers.' },
@@ -35,10 +36,10 @@ const STAGES = [
     body: 'The neck dilates and glutamate spreads out into the 20-nanometer cleft. Inside, the glutamate keeps moving about the whole vesicle, so it thins out evenly as it leaves. It reaches receptors on the next cell in microseconds, and the receptor channels open.',
     vitro: 'The neck dilates and glutamate spreads out into the thin layer of medium over the glass. The glowing tags slide down toward the glass, where the laser field is strongest.' },
   { at: PH.OMEGA, name: 'Collapse', title: 'The vesicle flattens',
-    body: 'Membrane tension pulls the vesicle flat. Its lipids spread into the cell membrane, and the spent SNARE complexes, now in one membrane, drift away.',
-    vitro: 'The vesicle flattens into the cell membrane. Tagged synaptobrevin drifts outward with the lipids, and the spot on the camera spreads and dims.' },
+    body: 'Membrane tension pulls the vesicle flat. The lipids of the two membranes have mixed before it is flat. The proteins of the vesicle and the spent SNARE complexes spread out far more slowly.',
+    vitro: 'The vesicle flattens into the cell membrane. Tagged synaptobrevin spreads outward, far more slowly than the lipids, and the spot on the camera spreads and dims.' },
   { at: PH.MERGED, name: 'Merged', title: 'One membrane',
-    body: 'The vesicle has flattened and disappeared into the membrane. All the lipids are mixed together, and keep mixing. The cell will pull SNAREs apart for reuse and pinch off new vesicles nearby.',
+    body: 'The vesicle has flattened and disappeared into the membrane. Its lipids have spread far beyond the patch drawn here, and the proteins are still spreading. The cell will pull SNAREs apart for reuse and pinch off new vesicles nearby.',
     vitro: 'The vesicle is gone. The tags keep spreading until the spot fades into the background. That is how a fusion event is told apart from a vesicle that has only arrived.' },
 ];
 const LABELS = Object.fromEntries(Object.entries(INFO).map(([id, v]) => [id, v.label]));
@@ -176,9 +177,9 @@ function syncUI() {
         // contrast at the centre of its spot, and how far out of focus each camera is.
         const io = irmNow(), c = 100 * io.spot(moment(io, 0, st.diam / 2 - 2.4, [0, 0]), 0), nm = (v) => Math.round(Math.abs(v)) + ' nm';
         $('wlNote').textContent = `Brightness repeats every ${Math.round(io.fringe)} nm of height. Blur ${Math.round(io.fwhm)} nm in focus. The center of a docked ${st.diam} nm vesicle's spot is ${Math.abs(c).toFixed(2)}% ${c < 0 ? 'darker' : 'brighter'} than the background.`;
-        $('focusNote').textContent = Math.abs(io.apart) < 15
-          ? `One objective serves both cameras. At ${st.lambda} nm it focuses within ${nm(io.apart).replace(/^0 nm$/, '1 nm')} of where it focuses the ${LAMBDA_EM} nm fluorescence, so both pictures are sharp.`
-          : `One objective serves both cameras, and at ${st.lambda} nm it focuses ${nm(io.apart)} ${io.apart > 0 ? 'deeper' : 'shallower'} than at ${LAMBDA_EM} nm. The reflection camera is ${Math.abs(io.dz) < 1 ? 'in focus' : nm(io.dz) + ' out of focus'}. The fluorescence camera is ${Math.abs(io.dzF) < 1 ? 'in focus' : nm(io.dzF) + ' out, which widens its blur from ' + Math.round(CAM.fwhm) + ' to ' + Math.round(CAM.fwhm * io.blurF) + ' nm'}.`;
+        // Each of the three pictures has its own distance from focus, and each fluorescence band its own blur.
+        const od = orangeDefocus(st.lambda, st.focus), out = (v) => (Math.abs(v) < 1 ? 'in focus' : nm(v) + ' out of focus');
+        $('focusNote').textContent = `One objective serves all three pictures, and each wavelength focuses at its own depth. The reflection picture is ${out(io.dz)}. The ${LAMBDA_EM} nm picture is ${out(io.dzF)}, with a blur of ${Math.round(CAM.fwhm * io.blurF)} nm. The ${LAMBDA_EM_O} nm picture is ${out(od)}, with a blur of ${Math.round(CAM.fwhmO * orangeBlur(st.lambda, st.focus))} nm.`;
         for (const b of document.querySelectorAll('.seg button')) b.setAttribute('aria-pressed', +b.dataset.focus === st.focus);
         const col = css(hue(st.lambda));
         $('wl').style.setProperty('--irm', col); $('keyIrmDot').style.setProperty('--c', col);
@@ -229,7 +230,7 @@ function applyIrm() {
   $('pipNote').textContent = on
     ? `Left: fluorescence, ${LAMBDA_EM} nm drawn in green and ${LAMBDA_EM_O} nm in orange. Right: ${st.lambda} nm light reflected by the glass, mixed with the far weaker light scattered back by the membranes above it. ` + (st.sub
       ? `A frame taken before our vesicle arrived has been subtracted, so mid-gray means no change since then, and black and white are ${+(SPAN_DIFF * 100).toFixed(1)}% of the background darker and brighter. Vesicles that were already docked cancel out. Ours shows alone, and fades to nothing as it merges into the flat membrane.`
-      : `Mid-gray is the bare background; black and white are ${+(SPAN * 100).toFixed(1)}% below and above it. Each spot is a vesicle seen through the flat membrane, not a dent in it, and it shows whether its tags are lit or not. A real cell would add a static mottle of its own, left out here.`)
+      : `Mid-gray is the bare background; black and white are ${+(SPAN * 100).toFixed(1)}% below and above it. Each spot is a vesicle seen through the flat membrane, not a dent in it. The spot is there with or without tags. A real cell would add a static mottle of its own, left out here.`)
     : `Two pictures laid over each other: ${LAMBDA_EM} nm light from pHluorin, drawn in green, and ${LAMBDA_EM_O} nm light from the orange protein, drawn in orange. Orange alone is a vesicle that has not fused; yellow is one whose pore has opened. Each square is one ${CAM.nm} nm pixel, and the grain is shot noise.`;
 }
 $('irm').addEventListener('change', (e) => { st.irm = e.target.checked; applyIrm(); stageIdx = -1; delete shown.wl; syncUI(); resize(); pipRect = $(st.infer ? 'inf' : 'pip').getBoundingClientRect(); });
@@ -256,7 +257,7 @@ for (const [id, m] of [['modeVivo', 'vivo'], ['modeVitro', 'vitro'], ['modeInfer
   if (m === 'infer' && !reduced) { st.t = 0; st.play = true; syncUI(); }     // start the video from the top
 });
 $('energy').textContent = `One ${LAMBDA_EX} nm laser excites both proteins, ${EV(LAMBDA_EX).toFixed(2)} eV per photon. pHluorin gives back ${LAMBDA_EM} nm, ${EV(LAMBDA_EM).toFixed(2)} eV; the orange protein ${LAMBDA_EM_O} nm, ${EV(LAMBDA_EM_O).toFixed(2)} eV. The difference is lost as heat in the protein. In the vesicle's acid pHluorin keeps ${Math.round(QUENCH * 100)}% of its brightness and the orange protein ${Math.round(QUENCH_O * 100)}%.`;
-for (const el of document.querySelectorAll('[data-fill]')) el.textContent = { em: LAMBDA_EM, emO: LAMBDA_EM_O, q: QUENCH, qO: QUENCH_O.toFixed(2), pKa: PKA_O, pH: PH_IN, ratio: Math.round(QUENCH_O / QUENCH) }[el.dataset.fill];
+for (const el of document.querySelectorAll('[data-fill]')) el.textContent = { em: LAMBDA_EM, emO: LAMBDA_EM_O, q: QUENCH, qO: QUENCH_O.toFixed(2), pKa: PKA_O, pH: PH_IN, ratio: Math.round(QUENCH_O / QUENCH), tca: Math.round(T_CA * 1000) }[el.dataset.fill];
 $('spin').addEventListener('change', (e) => { st.spin = e.target.checked; });
 $('lab').addEventListener('change', (e) => { st.labels = e.target.checked; $('labels').classList.toggle('off', !st.labels); writeHash(); });
 $('share').addEventListener('click', async () => {
@@ -431,12 +432,12 @@ function drawCamera(now) {
   if (reshuffle) camTick = now;
   // Other docked vesicles are in the field too, tags quenched; deeper light means more haze.
   // Brightness is scaled so a fully lit vesicle resting on the glass would just saturate.
-  const W = 5.5 / 36, emit = scene.emit.map((e) => [e[0], e[1], e[2] * W, 0, e[4] * W]);
+  const W = 5.5 / 36, emit = scene.emit.map((e) => [e[0], e[1], e[2] * W, 0, e[4] * W]), own = emit.length;
   for (const [x, z, rad] of scene.docked) { const b = 36 * W * o.at(GAP + rad + 6); emit.push([x, z, QUENCH * b, 0, QUENCH_O * b]); }
   for (const e of scene.emitN) emit.push([e[0], e[1], e[2] * W, e[3], e[4] * W]);
   const bg = 0.035 + 0.05 * (o.I0 / 4) * Math.min(o.depth, 2600) / 100;
-  camera.render(emit, bg, reshuffle, st.irm ? irmNow().blurF : 1, st.irm ? orangeBlur(st.lambda, st.focus) : orangeBlur());
-  if (reshuffle) { $('pipPeak').textContent = camera.peak; $('pipPeakO').textContent = camera.peakO; }
+  camera.render(emit, bg, reshuffle, st.irm ? irmNow().blurF : 1, st.irm ? orangeBlur(st.lambda, st.focus) : orangeBlur(), own);
+  if (reshuffle) { $('pipPeak').textContent = camera.site; $('pipPeakO').textContent = camera.siteO; }
   const key = st.diam + '|' + st.angle;
   if (key !== curveKey && now - curveAt > 160) { curveKey = key; curveAt = now; curve = scene.fluorCurve(st.diam / 2 - 2.4); }
   if (curve) camera.drawTrace(curve, whole(st.p));
@@ -455,20 +456,20 @@ function drawIrm(reshuffle) {
     irmFor = irmO; irmKey = ''; irmCam.drawn = false;
     irmStill = [];
     for (const [x, z, rad] of scene.docked) if (inField(x, z)) { moment(irmO, 0, rad - 2, m); irmStill.push([x, z, m[0], m[1]]); }
-    for (const nb of scene.neigh) if (nb.off === null && inField(nb.x, nb.z)) { moment(irmO, 0, nb.rad - 2, m); irmStill.push([nb.x, nb.z, m[0], m[1]]); }
+    for (const nb of scene.neigh) if (nb.t === null && inField(nb.x, nb.z)) { moment(irmO, 0, nb.rad - 2, m); irmStill.push([nb.x, nb.z, m[0], m[1]]); }
   }
   const key = st.p.toFixed(4) + '|' + st.diam;
   if (key !== irmKey) {
     irmKey = key; irmSpots = irmStill.slice();
-    moment(irmO, st.p, R, m); irmSpots.push([0, 0, m[0], m[1]]);
-    for (const nb of scene.neigh) if (nb.off !== null && inField(nb.x, nb.z)) { moment(irmO, clamp(st.p + nb.off, 0, 1), nb.rad - 2, m); irmSpots.push([nb.x, nb.z, m[0], m[1]]); }
+    moment(irmO, st.p, R, m); irmSpots.push([scene.vesMove.off[0], scene.vesMove.off[2], m[0], m[1]]);      // the arriving vesicle is where its walk has taken it
+    for (const nb of scene.neigh) if (nb.t !== null && inField(nb.x, nb.z)) { moment(irmO, other(st.p, nb.t), nb.rad - 2, m); irmSpots.push([nb.x, nb.z, m[0], m[1]]); }
   }
   const ck = st.diam + '|' + st.lambda + '|' + st.focus + '|' + st.sub;
   // The baseline frame: the field as it stood before our vesicle arrived, with every other vesicle where it starts.
   if (st.sub && irmRefKey !== ck) {
     irmRefKey = ck;
     const first = irmStill.slice();
-    for (const nb of scene.neigh) if (nb.off !== null && inField(nb.x, nb.z)) { moment(irmO, clamp(nb.off, 0, 1), nb.rad - 2, m); first.push([nb.x, nb.z, m[0], m[1]]); }
+    for (const nb of scene.neigh) if (nb.t !== null && inField(nb.x, nb.z)) { moment(irmO, other(-ARRIVE, nb.t), nb.rad - 2, m); first.push([nb.x, nb.z, m[0], m[1]]); }
     irmCam.reference(irmO, first);
   }
   irmCam.render(irmO, irmSpots, reshuffle, st.sub);
@@ -508,7 +509,7 @@ const dash = new Dashboard({ obs: $('obs'), exp: $('expect'), obs2: $('obs2'), e
 // A second sampler that is given less, to show what the rest added: the 510 nm band only, or,
 // with the reflection camera on, both fluorescence bands but no reflection video.
 let samplerT = null;
-let exper = null, sampler = null, expKey = '', viewDiam = 42, diamAt = 0, infTick = 0, goal = null;
+let exper = null, sampler = null, expKey = '', seedKey = null, viewDiam = 42, diamAt = 0, infTick = 0, goal = null;
 const belief = { p: [FAR_P, FAR_P, FAR_P, FAR_P, FAR_P], R: [20, 20, 20, 20, 20], sp: [80, 80, 80, 80, 80], fused: 0, ready: false };
 const rowBuf = new Float32Array(1300 * NP), qP = new Float32Array(1300), qR = new Float32Array(1300), qS = new Float32Array(1300);
 function runInference(now, dt) {
@@ -517,8 +518,10 @@ function runInference(now, dt) {
     expKey = key;
     exper = new Experiment({ dt: st.dt, power: st.power, angle: st.angle, prior: st.prior, irm: st.irm, lambda: st.lambda, focus: st.focus });
     exper.simulate(truthOf(st.seed), st.seed * 7 + 3);
-    if (sampler) { sampler.both = st.irm; sampler.reset(exper); } else sampler = new Sampler(exper, 7, st.irm);
-    if (samplerT) { samplerT.orange = st.irm; samplerT.reset(exper); } else samplerT = new Sampler(exper, 11, false, st.irm);
+    // A new event starts again from the prior. The same event recorded another way starts from the last belief.
+    const again = seedKey === st.seed; seedKey = st.seed;
+    if (sampler) { sampler.both = st.irm; again ? sampler.retarget(exper) : sampler.reset(exper); } else sampler = new Sampler(exper, 7, st.irm);
+    if (samplerT) { samplerT.orange = st.irm; again ? samplerT.retarget(exper) : samplerT.reset(exper); } else samplerT = new Sampler(exper, 11, false, st.irm);
     belief.ready = false; goal = null;
   }
   const upto = Math.min(exper.nf, Math.floor(st.t / st.dt + 1e-6)), budget = phone.matches ? 5 : 7;

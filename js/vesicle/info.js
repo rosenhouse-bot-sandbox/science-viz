@@ -3,7 +3,7 @@
 const W = 'https://en.wikipedia.org/wiki/';
 const I = {
   vesicle: ['Synaptic vesicle', 'A 40 nm bubble of membrane that stores neurotransmitter. A nerve terminal holds hundreds, and each one releases its contents in a single all-or-nothing event.', 'Synaptic_vesicle'],
-  tether: ['Tether', 'Munc13 and RIM form rods on the active zone. They catch a passing vesicle about 40 nm out, partly by binding the Rab3 on the vesicle. Until then the vesicle wanders by Brownian motion. After that it is held and handed to the SNAREs.', 'Active_zone'],
+  tether: ['Tether', 'Munc13 and RIM form rods on the active zone, each with a flexible link. Rod and link together are under 40 nm long. The link binds the Rab3 on a vesicle that comes within its reach. Until then the vesicle wanders by Brownian motion. After that it is held and handed to the SNAREs.', 'Active_zone'],
   pump: ['Proton pump', 'The V-ATPase uses ATP to pump protons into the vesicle. The acid inside, pH 5.5, powers the glutamate transporters and keeps pHluorin dark. A vesicle has only one or two of these pumps, and they are the largest parts of it. They are too tall for the narrow wedge around the fusion pore, so here the pump stays on the vesicle until the neck has opened wide.', 'V-ATPase'],
   stalk: ['Hemifusion stalk', 'An hourglass-shaped bridge in which only the facing halves of the two bilayers have merged. Lipids can cross it, but the contents cannot.', 'Lipid_bilayer_fusion'],
   pore: ['Fusion pore', 'The first water-filled channel between the vesicle interior and the outside, about 2 nm wide. It can flicker open and shut before it widens.', 'Exocytosis'],
@@ -13,7 +13,7 @@ const I = {
   channel: ['Calcium channel', 'Voltage-gated channels open when the nerve impulse arrives. They sit within tens of nanometers of docked vesicles, so calcium reaches the sensor almost at once.', 'Voltage-gated_calcium_channel'],
   receptor: ['AMPA receptor', 'A glutamate-gated ion channel on the receiving cell. Binding glutamate opens it and lets sodium in, which starts the electrical signal in the next neuron.', 'AMPA_receptor'],
   pre: ['Presynaptic membrane', 'The membrane of the sending cell at the active zone, where vesicles dock and fuse.', 'Active_zone'],
-  cleft: ['Synaptic cleft', 'The 20 nm gap between the two cells. Transmitter crosses it by diffusion in a few microseconds.', 'Chemical_synapse'],
+  cleft: ['Synaptic cleft', 'The 20 nm gap between the two cells. Transmitter crosses it by diffusion in less than a microsecond.', 'Chemical_synapse'],
   post: ['Postsynaptic membrane', 'The membrane of the receiving cell, studded with receptors directly opposite the release site.', 'Dendritic_spine'],
   psd: ['Postsynaptic density', 'A dense scaffold of proteins under the receiving membrane that holds receptors in place opposite the release site.', 'Postsynaptic_density'],
   reserve: ['Reserve vesicles', 'Vesicles held back from the membrane, tethered to each other and to the cytoskeleton, that refill the release sites during sustained activity.', 'Synaptic_vesicle'],

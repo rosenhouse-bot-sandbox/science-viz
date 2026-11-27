@@ -32,7 +32,7 @@ export const PARAMS = [
 // docked. The real approach is a wander and a reeling-in over some milliseconds; here it is one
 // step, which is all that frames of several milliseconds can resolve. Arrival can fall anywhere
 // before the fusion, equally likely.
-export const FAR = shape(-ARRIVE, 20).approach, FAR_P = -ARRIVE, DOCKED_P = 0.2;
+export const FAR = shape(-ARRIVE, 18.6).approach, FAR_P = -ARRIVE, DOCKED_P = 0.2;
 export const NP = PARAMS.length;
 export const toValue = (i, u) => (PARAMS[i].log ? Math.exp(u) : u);
 export const toU = (i, v) => (PARAMS[i].log ? LN(v) : v);
@@ -231,6 +231,8 @@ export class Experiment {
 // Affine-invariant ensemble sampler (Goodman & Weare's stretch move), with an occasional fresh
 // draw from the prior mixed in so the ensemble can widen again when evidence is taken away.
 export const WALKERS = 40, KEEP = 300;
+// When the walk in is over (see Sampler.sweep), and how many frames may arrive at once without starting one.
+export const SETTLE = { every: 50, gain: 1, calm: 4, min: 250, max: 6000, jump: 3 };
 export class Sampler {
   // both: score guesses against the reflection video as well as the fluorescence video.
   // orange: score them against the 589 nm band as well as the 510 nm band.
@@ -240,14 +242,24 @@ export class Sampler {
     for (let k = 0; k < WALKERS; k++) this.x.push(new Float64Array(NP));
     this.reset(exp);
   }
-  // New experiment: start again from the prior.
-  reset(exp) { this.exp = exp; this.upto = -1; for (const w of this.x) exp.drawPrior(this.r, w); this.count = 0; this.head = 0; }
+  // A new event, with a new hidden truth: start again from the prior. With no frame seen yet the prior is the
+  // whole answer, so walkers drawn from it need no walk in (fresh).
+  reset(exp) { this.exp = exp; this.upto = -1; for (const w of this.x) exp.drawPrior(this.r, w); this.fresh = true; this.unsettle(); }
+  // The same event recorded with another setting: the last belief is the best place to start from, so keep the walkers.
+  retarget(exp) { this.exp = exp; this.upto = -1; this.fresh = false; this.unsettle(); }
+  // The walkers are no longer spread as the answer is. Until they are again (ready), nothing they visit is kept,
+  // so that the summaries hold the answer alone and never the walk in to it.
+  unsettle() { this.ready = false; this.count = 0; this.head = 0; this.walk = { n: 0, sum: 0, top: -Infinity, calm: 0 }; }
   // Evidence changed (more or fewer frames): keep the walkers, rescore them.
   observe(upto) {
     if (upto === this.upto) return;
+    const far = this.upto >= 0 && Math.abs(upto - this.upto) > SETTLE.jump;
     this.upto = upto;
     for (let k = 0; k < WALKERS; k++) { this.ll[k] = this.exp.logLike(this.x[k], upto, this.both, this.orange); this.lp[k] = this.exp.logPrior(this.x[k]); }
-    this.count = Math.min(this.count, WALKERS * 4);      // forget most of the old posterior quickly
+    if (this.fresh && upto <= 0) this.ready = true;
+    else if (!this.ready || far) this.unsettle();        // many frames at once: the answer may have moved a long way
+    else this.count = Math.min(this.count, WALKERS * 4);      // forget most of the old posterior quickly
+    this.fresh = false;
   }
   sweep() {
     const { r, x, exp } = this, y = this._y || (this._y = new Float64Array(NP));
@@ -267,6 +279,18 @@ export class Sampler {
       }
       this.tried++;
       if (LN(r() + 1e-300) < logq) { x[k].set(y); this.lp[k] = lpy; this.ll[k] = lly; this.accepted++; }
+    }
+    if (!this.ready) {
+      // Walking in. The walkers have arrived when their mean log probability has stopped climbing: it is averaged over
+      // SETTLE.every sweeps, and SETTLE.calm averages in a row must fail to beat the best so far by SETTLE.gain.
+      const W = this.walk; let m = 0; for (let k = 0; k < WALKERS; k++) m += this.lp[k] + this.ll[k];
+      W.sum += m / WALKERS;
+      if (++W.n % SETTLE.every === 0) {
+        const mean = W.sum / SETTLE.every; W.sum = 0;
+        W.calm = mean > W.top + SETTLE.gain ? 0 : W.calm + 1; W.top = Math.max(W.top, mean);
+        if ((W.calm >= SETTLE.calm && W.n >= SETTLE.min) || W.n >= SETTLE.max) this.ready = true;
+      }
+      return;
     }
     // Remember every fourth sweep: successive sweeps are much alike, and a longer memory gives steadier summaries.
     if (++this.sweeps % 4 === 0 || this.count < WALKERS * 8) {

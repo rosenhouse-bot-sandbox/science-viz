@@ -147,8 +147,12 @@ Before pushing:
   anything in the panel or the bench moves or changes size (a number that gains a digit and wraps).
 - For Vesicle fusion, run `node tests/vesicle/placement.mjs` after changing the membrane shape or
   where a protein sits. It steps through the whole event without a GPU and fails if any protein is
-  on the wrong side of a membrane or pushed into one. It cannot judge what only looks wrong, so
-  also step through the stages by eye.
+  on the wrong side of a membrane or pushed into one. After changing the clock, the glutamate path, the tethers, the
+  arrival, the lipids' placement, the camera or the sampler, run `node tests/vesicle/model.mjs` (no browser, about
+  three minutes): it fails if glutamate, lipids and proteins are not on one clock, glutamate is made or lost or reaches
+  a receptor it has not, anything moves before calcium has bound, a tether changes length, the two settings carry
+  different proteins, the trace and the picture differ, a sheet has a hole, or a range is shown before the sampler has
+  walked in. Neither test can judge what only looks wrong, so also step through the stages by eye.
 - For Graph layout, run `node tests/dag/run.mjs` (no browser needed): it lays out every sample graph
   with both methods over a spread of settings and fails if nodes overlap, an edge misses or runs through a node, two unrelated
   edges share a line, a cycle is left, a crossing count, length, score or turn reason disagrees with a second count,

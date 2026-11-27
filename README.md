@@ -126,28 +126,28 @@ fewer pixels to keep the frame rate.
 A second experience, at `vesicle/`: a real-time 3D model of a synaptic vesicle fusing with the
 presynaptic membrane, drawn lipid by lipid and to scale in nanometres.
 
-- **Fusion progress** starts with the vesicle's arrival: it wanders the last 120 nm by Brownian
-  motion until tethers on the active zone (Munc13 and RIM, drawn as rods) catch it about 42 nm up
-  and reel it in, with synaptobrevin free until syntaxin and SNAP-25 can reach it. The wander is a
-  fixed path, so the slider is repeatable. It goes as far sideways as up and down (up to 20 nm either
-  way before the tethers catch it, 4 nm after), and it tumbles, with everything it carries: the same
-  knocks turn a sphere this size about 40° for each 16 nm it wanders, so it turns through a few
-  radians on the way. Once tethered it keeps one side down and only shivers, and it docks in the
-  place and the turn the later stages start from. The reflection camera does not see the sideways
-  part: it is a fifth of one of its pixels. Inside, the glutamate moves about the whole lumen, and which
-  molecule leaves through the pore next is a matter of chance, so the vesicle empties evenly: a molecule
-  crosses the lumen about a thousand times faster than it can leave. It then scrubs
-  from a docked vesicle through SNARE zippering, the hemifusion stalk,
-  the opening and widening of the fusion pore, to full collapse into the membrane.
-- The vesicle carries more than its fusion machinery: about 30 synaptophysins, 10 glutamate
-  transporters, 10 Rab3 and a proton pump, in the numbers counted on an average vesicle (Takamori
-  et al., 2006). They ride into the cell membrane with its lipids, but each only once it fits: around
-  a narrow neck the cytoplasm is a wedge a few nanometres high, so the small proteins leave soon
-  after the pore opens, Rab3 later, and the proton pump, whose head stands 13 nm tall, only when the
-  neck has opened to the vesicle's full width. A tagged synaptobrevin waits until the pore's lumen
-  is wide enough for its tag. The fit is tested against the membrane shape in code (`gates` in
-  `scene.js`); that the pump stays whole is a simplification. Shapes are schematic, and they
-  are not counted as scatterers by the reflection camera.
+- **Fusion progress** starts with the vesicle's arrival: one fixed random walk, the same on every visit, with steps of
+  the same size up, down and sideways, and the vesicle tumbles with everything it carries. Tethers on the active zone
+  (Munc13 and RIM, drawn as rods with a flexible link, under 40 nm in all) bind it when it comes within reach, about
+  16 nm above its docked place for a 42 nm vesicle, and the SNAREs pull it the last 12 nm. It then scrubs from a docked
+  vesicle through SNARE zippering, which waits until calcium has bound, the hemifusion stalk, the opening and widening
+  of the fusion pore, to full collapse into the membrane.
+- **One clock.** The stages differ a thousand times in length, so the slider runs each at its own pace, and
+  `js/vesicle/kinetics.js` gives the real time at each point: 60 µs from calcium to the pore (Sabatini and Regehr
+  1996), 0.3 ms to the omega shape (the page's choice), 40 ms to flat. In that time glutamate (0.33 µm²/ms in the
+  cleft), lipids (5.4 µm²/s) and the vesicle's proteins (0.2 µm²/s) each spread as far as their diffusion coefficient
+  allows. Glutamate leaves through the pore no faster than the pore's width lets it, each molecule at its own random
+  moment, so the lumen thins evenly. It spreads from the pore as a round cloud and has left the drawn patch before the
+  vesicle flattens. A receptor lights only when the drawn molecules that bind it arrive (two each), and they come out
+  of the cloud.
+- The vesicle carries more than its fusion machinery: about 70 synaptobrevins, 15 synaptotagmins, 30 synaptophysins,
+  10 glutamate transporters, 10 Rab3 and a proton pump, in the numbers counted on an average vesicle (Takamori et al.,
+  2006), the same in both settings. They spread into the cell membrane by their own random motion, far more slowly than
+  its lipids, but each only once it fits: around a narrow neck the cytoplasm is a wedge a few nanometers high, so the
+  small proteins leave soon after the pore opens, Rab3 later, and the proton pump, whose head stands 13 nm tall, only
+  when the neck has opened to the vesicle's full width. A tagged synaptobrevin waits until the pore's lumen is wide
+  enough for its tag. The fit is tested against the membrane shape in code (`gates` in `scene.js`); that the pump stays
+  whole is a simplification. Shapes are schematic, and they are not counted as scatterers by the reflection camera.
 - **Vesicle diameter** resizes the vesicle (and its glutamate load, at 150 mM).
 - **Cutaway, orbit, tilt, distance** fly the camera; drag, pinch and scroll work too.
 - Lipids keep the colour of the membrane they started in, so you can watch the two mix: the
@@ -240,8 +240,7 @@ of one fusion event from hidden parameters, then infers them back with Bayes' ru
 - Six unknowns: the moment of arrival, the moment of fusion, vesicle diameter, number of tag
   copies, collapse time and the tags' diffusion coefficient, each with a prior (log-normal; flat
   for the fusion time; for the arrival, any time before the fusion).
-- Until it arrives the vesicle hangs about 120 nm above its docked height, where the page's
-  Arrival stage begins, and then it is docked: one step, not the wander and reeling-in of the
+- Until it arrives the vesicle hangs about 95 nm above its docked height, where the page's Arrival stage begins (for a 42 nm vesicle), and then it is docked: one step, not the wander and reeling-in of the
   3D view.
 - The forward model gives the expected photons in every pixel of every frame of each band. The
   bands share every unknown and the evanescent field, and differ only in how much the acid dims
@@ -263,7 +262,7 @@ of one fusion event from hidden parameters, then infers them back with Bayes' ru
   range and the bits learned), a fan chart that turns into a forecast past the last frame seen,
   and in the 3D scene a gold band around the best-estimate vesicle that holds 90% of the plausible
   membrane shapes (brighter core: 50%). Everything shown is a running summary, eased over time,
-  so it moves when the evidence changes and not with each step of the sampler.
+  so it moves when the evidence changes and not with each step of the sampler. When a setting changes, the walkers start from the last belief; a new event starts them from the prior. Nothing they visit on the way in is kept, and until they arrive the numbers read "not ready yet".
 - Laser power, frame time, laser angle and prior width are adjustable; "New event" draws a new
   hidden truth and "Show the true values" reveals it.
 

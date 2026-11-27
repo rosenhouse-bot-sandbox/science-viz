@@ -1,6 +1,7 @@
 // GLSL for the vesicle-fusion scene. Everything round is a camera-facing quad shaded as a sphere
 // with true per-pixel depth, which is what lets a phone draw a couple of hundred thousand lipids.
 import { TABW } from './profile.js';
+import { REL_N, REL_MAX } from './kinetics.js';
 
 const HEAD = `#version 300 es
 precision highp float;
@@ -74,7 +75,7 @@ layout(location=0) in vec2 aCorner;
 layout(location=1) in vec4 aA;   // flat-map position (xy), per-lipid Gaussian pair (zw)
 layout(location=2) in vec3 aB;   // seed, code = kind + 4*leaflet, radius scale
 uniform sampler2D uTab;
-uniform vec2 uAv, uSigma, uSigmaPM, uRl, uRW;
+uniform vec2 uAv, uSigma, uSeam, uRW;   // areas of the vesicle's leaflets; how far lipids have spread in each; the turn that joins the two spirals; the patch's edge
 uniform vec4 uGeo;       // D, cleft, BAREA, patch radius
 uniform vec3 uCol[6];
 uniform float uHeadR;
@@ -101,25 +102,21 @@ void lipid(out vec3 pos, out vec3 nrm, out vec3 col, out float scale, out float 
     nrm = vec3(0.0, sg, 0.0);
     col = uCol[4 + leaf];
   } else {
-    float Av = uAv[leaf], uv2 = Av / PI;
-    vec2 U = kind == 0 ? aA.xy * sqrt(uv2) : aA.xy * (sqrt(uv2 + dot(aA.xy, aA.xy)) / max(length(aA.xy), 1e-4));
+    float Av = uAv[leaf], uv2 = Av / PI, cs0 = cos(uSeam[leaf]), sn0 = sin(uSeam[leaf]);
+    // Its place on the flat map: the vesicle's lipids fill the disc of area Av; the cell membrane's own sheet is turned
+    // so that its spiral carries on from the vesicle's, and pushed out from the axis by that area.
+    vec2 own = kind == 0 ? aA.xy : vec2(aA.x * cs0 - aA.y * sn0, aA.x * sn0 + aA.y * cs0);
+    vec2 U = kind == 0 ? own * sqrt(uv2) : own * (sqrt(uv2 + dot(own, own)) / max(length(own), 1e-4));
     vec4 s = lookup(leaf, PI * dot(U, U), Av);
     vec2 cs = U / max(length(U), 1e-5);
     pos = vec3(s.x * cs.x, s.y, s.x * cs.y);
     nrm = normalize(vec3(s.z * cs.x, s.w, s.z * cs.y));
     if(PI * dot(U, U) < Av){ pos = vesMove(pos); nrm = uVesRot * nrm; }      // on the vesicle: it goes where the vesicle goes
-    // Mixing. Rather than move lipids (which would wreck the even packing), each site shows the
-    // origin of the lipid that has random-walked into it. On the vesicle, the chance of finding a
-    // cell-membrane lipid falls off with distance along the surface from the neck; on the cell
-    // membrane, vesicle lipids thin out with distance from the fusion site, and the two tallies
-    // are matched so that no lipid is created or lost.
-    float m;
-    if(kind == 0){
-      float s = uRl[leaf] * (PI - acos(clamp(1.0 - 2.0 * dot(aA.xy, aA.xy), -1.0, 1.0)));
-      m = smoothstep(-0.5, 0.5, uSigma[leaf] * aA.z - s);
-    } else {
-      m = aB.x > 0.5 ? 1.0 : 1.0 - smoothstep(-0.5, 0.5, uSigmaPM[leaf] * length(aA.zw) - length(aA.xy));
-    }
+    // Mixing. Rather than move lipids (which would wreck the even packing), each site shows the origin of the lipid
+    // that has random-walked into it: the lipid now here set out from a point a Gaussian step of uSigma away on the
+    // flat map, and it is the vesicle's if that point is inside the vesicle's disc. As many of the vesicle's lipids
+    // are then found outside the disc as the cell's are found inside it, so no lipid is made or lost.
+    float m = smoothstep(-0.5, 0.5, length(U - uSigma[leaf] * aA.zw) - sqrt(uv2));
     col = mix(uCol[leaf], uCol[2 + leaf], m);
     cat = m > 0.5 ? 2.0 : 1.0;
   }
@@ -257,52 +254,74 @@ void main(){
   o = vec4(vColor * g * uGlow * (1.0 - 0.8 * f) * lightGain(vCat), 1.0);
 }`;
 
-// Neurotransmitter: every molecule's whole journey is a function of the progress slider, so it
-// can be scrubbed. It waits in the lumen, squeezes through the pore, then spreads in the cleft.
-// Glutamate in the lumen diffuses across it a thousand times faster than it can leave through the pore, so what is left
-// inside is always spread evenly: the molecules keep moving about the whole lumen, and which one leaves next is a matter
-// of chance, not of where it was. The vesicle thins out everywhere at once.
+// Neurotransmitter: every molecule's whole journey is a function of the one clock (kinetics.js), so it can be scrubbed.
+// A molecule waits in the lumen, at its own place, until its own moment to leave. That moment comes from the pore's
+// width alone (the release table uRel): glutamate crosses the lumen thousands of times faster than the pore lets it
+// out, so which molecule leaves next is chance, and those still inside stay spread evenly. It then crosses the lumen
+// and the pore by diffusion, which takes it a fraction of a microsecond, and spreads in the cleft from the pore's
+// mouth as far as the time since allows: a Gaussian step sideways in each direction, and a random walk between the
+// two membranes. A molecule that binds a receptor stops at its site when it gets there. No molecule is faded out.
+// glutamate() in kinetics.js is the same sum in JavaScript.
 export const transmitterVS = HEAD + CUT + `
 layout(location=0) in vec2 aCorner;
 layout(location=1) in vec3 aBall;   // home position in the unit ball
 layout(location=2) in vec4 aSeed;   // uniform, Gaussian pair, uniform
-uniform vec4 uNT;        // progress, vesicle centre height, lumen radius, neck height
+layout(location=3) in vec4 aBind;   // the receptor site this molecule binds (xyz) and the kind (0 none, 1 AMPA, 2 NMDA)
+uniform vec4 uNT;        // ms since the pore opened (negative before), vesicle centre height, lumen radius, neck height
 uniform vec4 uNT2;       // pore radius, cleft top, cleft bottom, ball radius
-uniform vec4 uNT3;       // first release, release span, radius scale, _
+uniform vec4 uNT3;       // radius scale, ms to cross the pore, 2 D, ms at which an AMPA receptor lets go (negative: no receptors)
+uniform float uRel[${REL_N}];   // ms at which exp(-L) of the glutamate is left, L = ${REL_MAX} (j / ${REL_N - 1})^2
 uniform vec3 uNTCol;
 uniform vec4 uVes; uniform mat3 uVesRot;      // the arriving vesicle's wander (as for the lipids)
 ` + SPHERE_OUT + `
+// Where a molecule is across the gap a time dt after it set out a distance from below the top: a random walk between two walls.
+float across(float dt, float w, float from){
+  float n3 = sqrt(-2.0 * log(max(w, 1e-4))) * cos(6.2831853 * fract(w * 97.13)), h = uNT2.y - uNT2.z;
+  float m = mod(from + sqrt(uNT3.z * dt) * abs(n3), 2.0 * h);
+  return uNT2.y - (m < h ? m : 2.0 * h - m);
+}
 void main(){
   float e = aSeed.x;
-  float s = (uNT.x - (uNT3.x + uNT3.y * pow(e, 0.6))) / 0.05;
+  float L = -log(max(1e-6, 1.0 - e)), x = min(${(REL_N - 1.001).toFixed(3)}, ${(REL_N - 1).toFixed(1)} * sqrt(L / ${REL_MAX.toFixed(1)}));
+  int i = int(x);
+  float dt = uNT.x - mix(uRel[i], uRel[i + 1], x - float(i));      // ms since this molecule left the lumen
   float sd = aSeed.w * 100.0, t = uTime;
   vec3 jig = vec3(sin(t * 2.1 + sd), sin(t * 1.7 + sd * 1.3 + 1.0), sin(t * 2.6 + sd * 0.7 + 2.0));
   // each wanders through the whole lumen: its place in the ball is turned about two axes at its own rates
   float sw = t * 0.5 * (aSeed.w - 0.5) + sd, tw = t * 0.37 * (fract(sd * 0.137) - 0.5) + 0.7 * sd;
   vec3 b = vec3(aBall.x * cos(sw) - aBall.z * sin(sw), aBall.y, aBall.x * sin(sw) + aBall.z * cos(sw));
   b = vec3(b.x, b.y * cos(tw) - b.z * sin(tw), b.y * sin(tw) + b.z * cos(tw));
-  vec3 home = vec3(uVes.x, uNT.y, uVes.z) + uVesRot * (b * uNT.z + jig * 0.32);
-  vec3 pos = home; float fade = 1.0;
-  if(s > 0.0){
-    vec2 q = aSeed.yz / max(1.0, length(aSeed.yz) / 1.5);
-    vec3 neck = vec3(q.x * uNT2.x * 0.5, uNT.w, q.y * uNT2.x * 0.5);
-    if(s < 1.0){
-      float u = s * s * (3.0 - 2.0 * s);
-      vec3 ctrl = vec3(neck.x, uNT.y - uNT.z + 2.5, neck.z);
-      pos = mix(mix(home, ctrl, u), mix(ctrl, neck, u), u) + jig * 0.15;
-    } else {
-      float k = s - 1.0, desc = 1.0 - exp(-k * 2.5);
-      float lat = (6.5 * sqrt(k) + 2.4 * k) * smoothstep(0.4, 0.95, desc);
-      pos = vec3(neck.x + aSeed.y * lat, mix(uNT.w, mix(uNT2.y, uNT2.z, aSeed.w), desc), neck.z + aSeed.z * lat) + jig * 0.42;
-      fade = 1.0 - smoothstep(60.0, 150.0, length(pos.xz));
+  vec3 pos = vec3(uVes.x, uNT.y, uVes.z) + uVesRot * (b * uNT.z + jig * 0.32);
+  // its own way across the lumen to the pore takes about as long as the pore itself
+  vec2 q = aSeed.yz / max(1.0, length(aSeed.yz) / 1.5) * uNT2.x * 0.5;
+  vec3 mouth = vec3(q.x, uNT2.y, q.y);
+  if(uNT.x >= 0.0 && dt > -uNT3.y){
+    if(dt < 0.0) pos = mix(pos, vec3(q.x, 2.0 * uNT.w, q.y), 1.0 + dt / uNT3.y);
+    else if(dt < uNT3.y) pos = mix(vec3(q.x, 2.0 * uNT.w, q.y), mouth, dt / uNT3.y);
+    else {
+      float t0 = dt - uNT3.y, from = 0.0; vec2 o = q;
+      bool bound = false; float pull = 0.0;
+      if(aBind.w > 0.5 && uNT3.w > 0.0){
+        float ta = dot(aBind.xz, aBind.xz) / (uNT3.z * dot(aSeed.yz, aSeed.yz));     // ms from the pore's mouth to the site
+        float off = aBind.w < 1.5 ? uNT3.w : 1e9;
+        o = vec2(0.0);
+        if(t0 >= ta && uNT.x < off) bound = true;
+        else if(t0 >= ta){ t0 = uNT.x - off; o = aBind.xz; from = uNT2.y - aBind.y; }
+        else pull = smoothstep(0.6, 1.0, t0 / ta);
+      }
+      if(bound) pos = aBind.xyz + jig * 0.08;
+      else {
+        float s = sqrt(uNT3.z * t0), y = across(t0, aSeed.w, from);
+        pos = vec3(o.x + s * aSeed.y, mix(y, aBind.y, pull), o.y + s * aSeed.z) + jig * 0.3 * (1.0 - pull);
+      }
     }
   }
-  float rad = uNT2.w * uNT3.z * fade;
+  float rad = uNT2.w * uNT3.x;
   vec4 vc = uView * vec4(pos, 1.0);
   vRad = rad; vUv = aCorner; vCenterV = vc.xyz; vColor = uNTCol * (0.85 + 0.3 * aSeed.w); vMemN = vec3(0.0);
   vMisc = vec3(0.0, 1.0, 0.0); vCat = 7.0;
   vc.xy += aCorner * rad;
-  gl_Position = (rad < 0.01 || cutDist(pos) < -0.2) ? vec4(2.0, 2.0, 2.0, 1.0) : uProj * vc;
+  gl_Position = cutDist(pos) < -0.2 ? vec4(2.0, 2.0, 2.0, 1.0) : uProj * vc;
 }`;
 
 // The membranes beyond the patch that is drawn lipid by lipid.

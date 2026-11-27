@@ -19,6 +19,7 @@ function fit(cv) {
 }
 const EASE = 0.16;                           // fraction of the gap closed per redraw
 const fmt = (i, v) => (PARAMS[i].digits ? v.toFixed(PARAMS[i].digits) : String(Math.round(v)));
+const NOT_READY = 'not ready yet';             // shown in place of a number while the sampler walks in (Sampler.ready)
 
 export class Dashboard {
   constructor(el) {
@@ -193,7 +194,7 @@ export class Dashboard {
     c.textBaseline = 'top'; c.fillText('nm', padL - 4, 1);
     // The 90% range at the playhead, in words.
     const k = Math.max(0, Math.min(nf - 1, Math.round(t / dt - 0.5))), rng = (q) => `${q[0].toFixed(q[4] < 10 ? 1 : 0)}–${q[4].toFixed(q[4] < 10 ? 1 : 0)}`;
-    this.poreText = A ? `now ${rng(B[k])} nm · ${this.aloneName} ${rng(A[k])}` : `now ${rng(B[k])} nm, 90% range`;
+    this.poreText = !sam.ready ? NOT_READY : A ? `now ${rng(B[k])} nm · ${this.aloneName} ${rng(A[k])}` : `now ${rng(B[k])} nm, 90% range`;
   }
 
   // One strip per unknown. Grey is what we assumed beforehand, gold is what we believe now.
@@ -230,25 +231,28 @@ export class Dashboard {
       for (let b = 0; b < bins; b++) if (sm[b] > peak * 0.004) { c.fillStyle = rgba(GOLD, 0.08 + 0.5 * sm[b] / peak); c.fillRect(b * bw, bot - h * sm[b] / peak, bw + 0.6, h * sm[b] / peak); }
       c.beginPath(); for (let b = 0; b < bins; b++) c.lineTo((b + 0.5) * bw, bot - h * sm[b] / peak); c.strokeStyle = rgba(GOLD, 0.95); c.lineWidth = 1.3; c.stroke();
       // 90% interval and median.
-      const qn = n ? quantiles(this.col, n, [0.05, 0.5, 0.95]) : [lo, (lo + hi) / 2, hi];
-      if (!ei.q || this.snap) ei.q = qn; else for (let j = 0; j < 3; j++) ei.q[j] += (qn[j] - ei.q[j]) * e;
-      const q = ei.q;
-      c.strokeStyle = INK; c.lineWidth = 1.5; c.beginPath();
-      c.moveTo(X(q[0]), bot + 3.5); c.lineTo(X(q[2]), bot + 3.5); c.moveTo(X(q[0]), bot + 1); c.lineTo(X(q[0]), bot + 6); c.moveTo(X(q[2]), bot + 1); c.lineTo(X(q[2]), bot + 6); c.stroke();
-      c.fillStyle = INK; c.beginPath(); c.arc(X(q[1]), bot + 3.5, 2.6, 0, 7); c.fill();
+      // Until the walkers have reached the answer (sam.ready) nothing is kept, and no range is drawn or written.
+      const ready = sam.ready && n > 0, qn = ready ? quantiles(this.col, n, [0.05, 0.5, 0.95]) : null;
+      if (qn) { if (!ei.q || this.snap) ei.q = qn; else for (let j = 0; j < 3; j++) ei.q[j] += (qn[j] - ei.q[j]) * e; }
+      const q = ei.q || [lo, (lo + hi) / 2, hi];
+      if (ready) {
+        c.strokeStyle = INK; c.lineWidth = 1.5; c.beginPath();
+        c.moveTo(X(q[0]), bot + 3.5); c.lineTo(X(q[2]), bot + 3.5); c.moveTo(X(q[0]), bot + 1); c.lineTo(X(q[0]), bot + 6); c.moveTo(X(q[2]), bot + 1); c.lineTo(X(q[2]), bot + 6); c.stroke();
+        c.fillStyle = INK; c.beginPath(); c.arc(X(q[1]), bot + 3.5, 2.6, 0, 7); c.fill();
+      }
       if (showTruth) {
         const x = X(exp.truth[i]);
         c.strokeStyle = '#fff'; c.setLineDash([2, 2]); c.beginPath(); c.moveTo(x, top - 2); c.lineTo(x, bot); c.stroke(); c.setLineDash([]);
         c.fillStyle = '#fff'; c.beginPath(); c.moveTo(x, top - 1); c.lineTo(x - 4, top - 7); c.lineTo(x + 4, top - 7); c.closePath(); c.fill();
       }
       // Words: name, best estimate with its range, and how many bits the video has taught us.
-      ei.bits += ((n ? bitsLearned(i, this.col, n, priorScale) : 0) - ei.bits) * e;
+      if (ready) ei.bits += (bitsLearned(i, this.col, n, priorScale) - ei.bits) * e;
       const bits = ei.bits, S = this.summary[i];
       S.q = q.map((u) => toValue(i, u)); S.bits = bits;
       c.textBaseline = 'alphabetic'; c.font = `${compact ? 10.5 : 12}px 'Source Sans 3', sans-serif`;
       c.textAlign = 'left'; c.fillStyle = '#AAB6D6'; c.fillText(P.name, 0, y0 + (compact ? 9 : 11));
-      c.textAlign = 'right'; c.fillStyle = INK; c.font = `${compact ? 10 : 11}px JetBrains Mono, monospace`;
-      c.fillText(`${fmt(i, S.q[1])}${P.unit ? ' ' + P.unit : ''}  ${fmt(i, S.q[0])}–${fmt(i, S.q[2])}  ·  ${bits.toFixed(1)} bits`, W, y0 + (compact ? 9 : 11));
+      c.textAlign = 'right'; c.fillStyle = ready ? INK : INK3; c.font = `${compact ? 10 : 11}px JetBrains Mono, monospace`;
+      c.fillText(ready ? `${fmt(i, S.q[1])}${P.unit ? ' ' + P.unit : ''}  ${fmt(i, S.q[0])}–${fmt(i, S.q[2])}  ·  ${bits.toFixed(1)} bits` : NOT_READY, W, y0 + (compact ? 9 : 11));
     }
   }
 

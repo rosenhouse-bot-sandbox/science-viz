@@ -1,7 +1,8 @@
 // Builds and draws the synapse: lipids, proteins, transmitter and the hazy surroundings.
 // Units are nanometres. y points into the sending cell; the cleft is below y = 0.
 import { program, instancedVAO, rng, sstep, lerp } from './glx.js';
-import { compute, surf, outline, drift, D, CLEFT, TABW, BAREA, PH, ARRIVE } from './profile.js';
+import { compute, surf, outline, drift, tethers, D, RHO0, CLEFT, TABW, BAREA, PH, ARRIVE, CA_IN, CA_BOUND, DOCK_GAP, SNARE_REACH, TETHER, WALK } from './profile.js';
+import { clock, unclock, kinetics, lipidSpread, proteinSpread, spreadAfter, released, arrivalTime, T_END, T_UNBIND, BOUND, PORE_T, D_GLU, REL_N } from './kinetics.js';
 import * as SH from './shaders.js';
 import { irmBeam, irmOptics, hue } from './irm.js';
 import { optics, buildBench, beamPath, QUENCH, QUENCH_O, GAP, GLASS_TOP, GLASS_BOT, LENS_Y, MM, UM, F_OBJ, N_GLASS, CELL, SPOT, spot, domeY } from './vitro.js';
@@ -11,6 +12,10 @@ export const PATCH = 120;            // radius of membrane drawn lipid by lipid
 const LIPID_AREA = 0.68;             // nm^2 per lipid in a fluid bilayer
 const GLU_PER_NM3 = 0.0903;          // 150 mM glutamate
 const NT_MAX = 26000, BALL_MAX = 11000;
+export const NT_STRIDE = 11, NT_BIND = 190;       // floats per glutamate instance; the binders are among the first NT_BIND
+// How many copies of each protein the vesicle carries (Takamori et al., Cell 127:831, 2006: 69.8 synaptobrevins and
+// 15.2 synaptotagmins on an average vesicle), and how many of the synaptobrevins carry the tag on the microscope.
+export const COPIES = { synaptobrevin: 70, synaptotagmin: 15, tagged: 36 };
 export const CUT_CENTRE = PI / 2;
 
 export const COLORS = {
@@ -29,14 +34,13 @@ const add = (a, b, s = 1) => [a[0] + b[0] * s, a[1] + b[1] * s, a[2] + b[2] * s]
 const mixv = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
 const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const norm = (a) => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
-const erfc = (x) => { const t = 1 / (1 + 0.3275911 * x); return t * (0.254829592 + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429)))) * Math.exp(-x * x); };
 const shade = (c, k) => [c[0] * k, c[1] * k, c[2] * k];
 
 // A protein cannot go where it does not fit. Each kind is given the height of its bulk above the
 // membrane and that bulk's radius (cytoplasmic side), or for a tagged synaptobrevin the room its
 // tag needs inside the pore. While the neck is narrow the wedge of cytoplasm around it is only a
 // few nanometres high, so a proton pump has to wait on the vesicle until the neck has opened wide.
-const BULK = { pump: [9.6, 5.4], rab: [2.9, 1.5], physin: [0.9, 0.9], vglut: [0.8, 0.8], free: [0, 1.35] };
+const BULK = { pump: [9.6, 5.4], rab: [2.9, 1.5], physin: [0.9, 0.9], vglut: [0.8, 0.8], syt: [4.0, 2.6], free: [0, 1.35] };
 const gateCache = { R: 0, g: null };
 // For each kind, the progress from which it fits everywhere between the vesicle and the cell membrane.
 function gates(R) {
@@ -64,13 +68,117 @@ function gates(R) {
 }
 
 // Where a protein that rides on the vesicle sits: fixed until there is room for it to leave, then
-// wandering outward across the merged membrane. Returns [area coordinate, azimuth].
+// spreading by random motion across the merged membrane, as far as the time since then allows
+// (proteinSpread in kinetics.js). Returns [area coordinate, azimuth].
 function freeSite(S, fr, p, gate) {
-  const uv = Math.sqrt(S.Av[0] / PI), sg = 150 * Math.pow(sstep(gate, 1, p), 0.8);
+  const uv = Math.sqrt(S.Av[0] / PI), sg = proteinSpread(p, S.R, gate);
   const ux = fr.u * uv * Math.cos(fr.phi) + sg * fr.g1, uz = fr.u * uv * Math.sin(fr.phi) + sg * fr.g2;
   let a = PI * (ux * ux + uz * uz);
   if (!S.fused[1]) a = Math.min(a, S.Av[0] * 0.985);
   return [a, Math.atan2(uz, ux)];
+}
+
+// A tagged synaptobrevin near a pore too narrow for its tag waits just above it.
+function roomy(S, a, phi, tmp) {
+  const Av = S.Av[0];
+  for (let k = 0; k < 60 && a > Av * 0.6; k++, a -= 8) {
+    surf(S, 0, a, phi, tmp);
+    const r = Math.hypot(tmp[0], tmp[2]), nr = (tmp[3] * tmp[0] + tmp[5] * tmp[2]) / Math.max(r, 1e-6);
+    if (tmp[4] > 0.98 || r - 2 * D * nr >= 1.35 || (Math.abs(Math.hypot(r, tmp[1] - S.hV) - S.Rc - D) < 0.05 && tmp[4] > Math.cos(S.theta) - 0.02)) break;
+  }
+  return a;
+}
+// A spent SNARE complex spreads from this progress on: by then it lies along one membrane.
+const SNARE_FREE = 0.56;
+// Where one SNARE complex is: syntaxin's anchor in the cell membrane (area aS, azimuth phiS) and synaptobrevin's
+// (aB, phiB). Until calcium has bound nothing moves. Winding then draws the anchors toward the neck. Once the complex
+// lies in one membrane it spreads by random motion like any other protein; it lies along the cell membrane and
+// does not climb the dome, so its walk turns back at the neck.
+function snareSite(S, sn, p, gate) {
+  const Av = S.Av[0], uv2 = Av / PI, near = sstep(CA_BOUND, PH.STALK, p), sb = lerp(10, 5.5, near), IN = 5.5;
+  const u0 = Math.sqrt(uv2 + Math.pow(lerp(9, IN, near), 2)), sg = proteinSpread(p, S.R, SNARE_FREE);
+  const ux = u0 * Math.cos(sn.phi) + sg * sn.g1, uz = u0 * Math.sin(sn.phi) + sg * sn.g2, umin = Math.sqrt(uv2 + IN * IN);
+  let u = Math.hypot(ux, uz); if (u < umin) u = 2 * umin - u;
+  const phi = sg > 0 ? Math.atan2(uz, ux) : sn.phi, rs = Math.sqrt(Math.max(IN * IN, u * u - uv2)), aS = Av + PI * rs * rs, dphi = 0.9 / Math.max(rs, 3);
+  const wJoin = sstep(Math.max(PH.PORE, gate.free - 0.03), 0.58, p);
+  return { phi, rs, aS, phiS: phi + dphi * wJoin, phiB: phi - dphi * wJoin, aB: lerp(Av - PI * sb * sb, aS, wJoin) };
+}
+// Where the fluorescent tag of a synaptobrevin at A hangs (A: its point on the cytoplasmic leaflet, and the normal).
+// The tag hangs into the lumen. Inside a narrow pore it has to lie along the pore's axis. The orange barrel hangs
+// from the far end of the green one on a short flexible linker. With room it folds to one side; in a narrow pore
+// the two have to go through in single file. Returns the two barrels' centres (c, c2) and the lines they lie on.
+function tagAt(A) {
+  let dir = shade(A.n, -1);
+  const rA = Math.hypot(A.p[0], A.p[2]), nR = rA > 1e-3 ? (A.n[0] * A.p[0] + A.n[2] * A.p[2]) / rA : 0, rB = rA - 2 * D * nR;
+  if (nR > 0.05 && rB - 4.9 * nR < 1.3) {
+    const ax = [0, A.n[1] < 0 ? 1 : -1, 0];
+    for (let t = 0.1; t <= 1.001; t += 0.1) { dir = norm(mixv(shade(A.n, -1), ax, t)); if (rB + 4.9 * (dir[0] * A.p[0] + dir[2] * A.p[2]) / rA >= 1.3) break; }
+  }
+  const base = add(A.p, A.n, -2 * D), side = norm(cross(dir, Math.abs(dir[1]) > 0.9 ? [1, 0, 0] : [0, 1, 0]));
+  const fold = 1 - sstep(0.05, 0.25, nR) * (1 - sstep(1.3, 5, rB - 4.9 * nR));
+  const dir2 = norm(mixv(dir, add(shade(dir, 0.25), side, 1), fold)), hinge = add(base, dir, 6.0);
+  return { base, dir, hinge, dir2, c: add(base, dir, 3.6), c2: add(hinge, dir2, 1.6) };
+}
+// The arriving vesicle's pose at progress p: everything it carries is turned about its centre C and moved by off.
+function vesPose(S, p) { const dr = drift(p, S.R); return { off: [dr.x, 0, dr.z], M: dr.M, C: [0, S.hV, 0], dr }; }
+const carried = (VM, q) => { const x = q[0] - VM.C[0], y = q[1] - VM.C[1], z = q[2] - VM.C[2], M = VM.M;
+  return [M[0] * x + M[1] * y + M[2] * z + VM.C[0] + VM.off[0], M[3] * x + M[4] * y + M[5] * z + VM.C[1], M[6] * x + M[7] * y + M[8] * z + VM.C[2] + VM.off[2]]; };
+// The camera's trace is the light from within about TRACE_R nm of the fusion site, at TRACE_N moments of the event.
+export const TRACE_R = 130, TRACE_N = 72;
+export const traceWeight = (x, z) => Math.exp(-(x * x + z * z) / (2 * TRACE_R * TRACE_R));
+// The membrane points of the tagged synaptobrevins: the six in SNARE complexes, then the tagged free ones.
+// The picture and the camera's trace both start from this list.
+function taggedSites(S, p, gate, snares, free, tmp) {
+  const out = [], at = (a, phi) => { surf(S, 0, a, phi, tmp); return { p: [tmp[0], tmp[1], tmp[2]], n: [tmp[3], tmp[4], tmp[5]] }; };
+  for (const sn of snares) { const g = snareSite(S, sn, p, gate); out.push(at(roomy(S, g.aB, g.phiB, tmp), g.phiB)); }
+  for (const fr of free) if (fr.tagged) { const site = freeSite(S, fr, p, gate.free); out.push(at(roomy(S, site[0], site[1], tmp), site[1])); }
+  return out;
+}
+
+// ---- the lipids ------------------------------------------------------------------------------------
+// Every lipid has a place on a flat map of its leaflet in which equal areas are equal: the vesicle's lipids fill a disc
+// of the vesicle's area, and the cell membrane's lie outside it, each pushed out from the axis by that area. Both are
+// laid out on one sunflower spiral (lipid i at area (i + 1/2) a, turned i golden angles), the cell membrane's carrying
+// on where the vesicle's ends. A spiral like that stays evenly packed however much area is added at its centre, so
+// the sheet has no gaps at any stage. (A lattice of rows does not: pushed out from the axis it opens into spokes.)
+const GOLDEN = PI * (3 - Math.sqrt(5));
+const spin = (leaf) => GOLDEN * (leaf ? 1 : -1);
+const vesicleCount = (R, leaf, q) => { const Rl = R + (leaf ? -D : D); return Math.round(4 * PI * Rl * Rl * q / LIPID_AREA); };
+// The turn that makes the cell membrane's spiral carry on from the vesicle's last lipid.
+export const seamTurn = (R, leaf, q) => (vesicleCount(R, leaf, q) * spin(leaf)) % TAU;
+// The vesicle's lipids, seven numbers each: place on the unit disc of the flat map (2), a Gaussian pair, a seed, 4 * leaflet, size.
+export function vesicleLipids(R, q) {
+  const r = rng(11), out = [];
+  for (let leaf = 0; leaf < 2; leaf++) {
+    const n = vesicleCount(R, leaf, q), g = spin(leaf);
+    for (let i = 0; i < n; i++) {
+      const u = Math.sqrt((i + 0.5) / n), ph = i * g + leaf;
+      out.push(u * Math.cos(ph), u * Math.sin(ph), r.gauss(), r.gauss(), r(), 4 * leaf, 1);
+    }
+  }
+  return new Float32Array(out);
+}
+// The two flat membranes' lipids, in the same seven numbers: the sending cell's (kind 1; nPM of them, placed in nm on
+// their own sheet as it is before any vesicle joins it), then the receiving cell's (kind 2, fewer and larger).
+export function sheetLipids(q) {
+  const area = LIPID_AREA / q, r = rng(7), out = [], s = Math.sqrt(2 * area / Math.sqrt(3));
+  for (let leaf = 0; leaf < 2; leaf++) {
+    const n = Math.round(PI * (PATCH + 3) * (PATCH + 3) / area), g = spin(leaf);
+    for (let i = 0; i < n; i++) {
+      const rr = Math.sqrt((i + 0.5) * area / PI), ph = i * g + leaf;
+      out.push(rr * Math.cos(ph), rr * Math.sin(ph), r.gauss(), r.gauss(), r(), 1 + 4 * leaf, 1);
+    }
+  }
+  const nPM = out.length / 7, coarse = 1.3;            // the far membrane is drawn with fewer, larger headgroups
+  for (let leaf = 0; leaf < 2; leaf++) {
+    const sp = s * coarse, dz = sp * Math.sqrt(3) / 2, nj = Math.ceil(PATCH / dz), ni = Math.ceil(PATCH / sp) + 1, ox = r() * sp, oz = r() * dz;
+    for (let j = -nj; j <= nj; j++) for (let i = -ni; i <= ni; i++) {
+      const x = (i + 0.5 * (j & 1)) * sp + ox + (r() - 0.5) * sp * 0.34, z = j * dz + oz + (r() - 0.5) * sp * 0.34;
+      if (x * x + z * z > PATCH * PATCH) continue;
+      out.push(x, z, r.gauss(), r.gauss(), r(), 2 + 4 * leaf, coarse);
+    }
+  }
+  return { data: new Float32Array(out), nPM };
 }
 
 export class Scene {
@@ -94,7 +202,7 @@ export class Scene {
     for (const k of [gl.TEXTURE_WRAP_S, gl.TEXTURE_WRAP_T]) gl.texParameteri(gl.TEXTURE_2D, k, gl.CLAMP_TO_EDGE);
     const mk = (layout, stride) => { const b = gl.createBuffer(); return { b, vao: instancedVAO(gl, this.corners, b, layout, stride), n: 0 }; };
     this.ves = mk([4, 3], 7); this.sheetLipids = mk([4, 3], 7);
-    this.nt = mk([3, 4], 7); this.scenery = mk([4, 4], 8); this.dyn = mk([4, 4], 8);
+    this.nt = mk([3, 4, 4], NT_STRIDE); this.scenery = mk([4, 4], 8); this.dyn = mk([4, 4], 8);
     this.dynData = new Float32Array(BALL_MAX * 8);
     this.emptyVAO = gl.createVertexArray();
     this.S = null; this.key = ''; this.labels = [];
@@ -119,50 +227,55 @@ export class Scene {
   // ---- static geometry -------------------------------------------------------------------------
   setQuality(q) {
     this.q = q;
-    const area = LIPID_AREA / q, gl = this.gl, r = rng(7);
+    const area = LIPID_AREA / q, gl = this.gl;
     this.spacing = Math.sqrt(2 * area / Math.sqrt(3));
     this.headR = this.spacing * 0.53;
-    const out = [];
-    const hex = (kind, leaf, s, radius, scale) => {
-      const dz = s * Math.sqrt(3) / 2, nj = Math.ceil(radius / dz), ni = Math.ceil(radius / s) + 1;
-      const ox = r() * s, oz = r() * dz;
-      for (let j = -nj; j <= nj; j++) for (let i = -ni; i <= ni; i++) {
-        const x = (i + 0.5 * (j & 1)) * s + ox + (r() - 0.5) * s * 0.34, z = j * dz + oz + (r() - 0.5) * s * 0.34;
-        if (x * x + z * z > radius * radius) continue;
-        out.push(x, z, r.gauss(), r.gauss(), r(), kind + 4 * leaf, scale);
-      }
-    };
-    hex(1, 0, this.spacing, PATCH + 3, 1); hex(1, 1, this.spacing, PATCH + 3, 1);
-    this.nPM = out.length / 7;
-    const coarse = 1.3;                 // the far membrane is drawn with fewer, larger headgroups
-    hex(2, 0, this.spacing * coarse, PATCH, coarse); hex(2, 1, this.spacing * coarse, PATCH, coarse);
+    const { data, nPM } = sheetLipids(q);
+    this.nPM = nPM;
     gl.bindBuffer(gl.ARRAY_BUFFER, this.sheetLipids.b);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(out), gl.STATIC_DRAW);
-    this.sheetLipids.n = out.length / 7;
+    gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+    this.sheetLipids.n = data.length / 7;
     this.vesR = -1; this.key = '';
   }
 
   buildVesicle(R) {
-    const gl = this.gl, r = rng(11), out = [], area = LIPID_AREA / this.q;
-    for (let leaf = 0; leaf < 2; leaf++) {
-      const Rl = R + (leaf ? -D : D), n = Math.round(4 * PI * Rl * Rl / area), g = PI * (3 - Math.sqrt(5)) * (leaf ? 1 : -1);
-      for (let i = 0; i < n; i++) {
-        const u = Math.sqrt((i + 0.5) / n), ph = i * g + leaf;
-        out.push(u * Math.cos(ph), u * Math.sin(ph), r.gauss(), r.gauss(), r(), 4 * leaf, 1);
-      }
-    }
+    const gl = this.gl, out = vesicleLipids(R, this.q);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.ves.b);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(out), gl.DYNAMIC_DRAW);
+    gl.bufferData(gl.ARRAY_BUFFER, out, gl.DYNAMIC_DRAW);
     this.ves.n = out.length / 7; this.vesR = R;
   }
 
+  // Each glutamate molecule: a home in the lumen (a point of the unit ball), and its own random numbers: e decides
+  // when it leaves (kinetics.js), the Gaussian pair where it goes in the cleft, w how it crosses the gap.
+  // A few are the ones that bind a receptor: each binding site takes the molecule whose own direction points most
+  // nearly at it, and that molecule stops there when it arrives. They are among the first NT_BIND, which are drawn
+  // for every size of vesicle, so the bound molecules always come out of the cloud and the total stays the same.
   buildTransmitter() {
-    const gl = this.gl, r = rng(23), d = new Float32Array(NT_MAX * 7);
+    const gl = this.gl, r = rng(23), d = new Float32Array(NT_MAX * NT_STRIDE);
     for (let i = 0; i < NT_MAX; i++) {
       let x, y, z;
       do { x = r() * 2 - 1; y = r() * 2 - 1; z = r() * 2 - 1; } while (x * x + y * y + z * z > 1);
-      d.set([x, y, z, r(), r.gauss(), r.gauss(), r()], i * 7);
+      d.set([x, y, z, r(), r.gauss(), r.gauss(), r(), 0, 0, 0, 0], i * NT_STRIDE);
     }
+    const taken = new Set();
+    for (const rc of this.receptors) {
+      rc.bound = [];
+      for (const q of rc.sites) {
+        const want = Math.atan2(q[2], q[0]), rr = Math.hypot(q[0], q[2]); let best = -1, miss = 9;
+        for (let i = 0; i < NT_BIND; i++) {
+          const g1 = d[i * NT_STRIDE + 4], g2 = d[i * NT_STRIDE + 5], g = Math.hypot(g1, g2);
+          if (taken.has(i) || g < 0.7 || g > 2.2) continue;
+          const m = Math.abs(((Math.atan2(g2, g1) - want + PI) % TAU + TAU) % TAU - PI);
+          if (m < miss) { miss = m; best = i; }
+        }
+        taken.add(best);
+        const k = best * NT_STRIDE, g = Math.hypot(d[k + 4], d[k + 5]);
+        d[k + 4] = g * q[0] / rr; d[k + 5] = g * q[2] / rr;
+        d.set([q[0], q[1], q[2], rc.nmda ? 2 : 1], k + 7);
+        rc.bound.push({ i: best, e: d[k + 3], g, r: rr });
+      }
+    }
+    this.ntData = d;
     gl.bindBuffer(gl.ARRAY_BUFFER, this.nt.b);
     gl.bufferData(gl.ARRAY_BUFFER, d, gl.STATIC_DRAW);
   }
@@ -185,15 +298,14 @@ export class Scene {
 
   // Fixed cast of proteins. Angles are chosen so some sit on each side of the default cutaway.
   buildProteins() {
-    const r = rng(5);
+    const r = rng(5), r2 = rng(41);
     this.snares = []; this.syts = [];
     for (let k = 0; k < 6; k++) {
-      this.snares.push({ phi: CUT_CENTRE + PI / 6 + k * PI / 3 + (r() - 0.5) * 0.16, dphi: (r() - 0.5) * 2.2, rOut: 22 + r() * 46, yaw: (r() - 0.5) * 4.5 });
-      this.syts.push({ phi: CUT_CENTRE + k * PI / 3 + (r() - 0.5) * 0.2 + PI / 3, dphi: (r() - 0.5) * 2, rOut: 12 + r() * 40 });
+      // g1, g2: the direction and share of its random walk once it is free to spread (as for every protein here).
+      this.snares.push({ phi: CUT_CENTRE + PI / 6 + k * PI / 3 + (r() - 0.5) * 0.16, yaw: (r(), r(), (r() - 0.5) * 4.5), g1: r2.gauss(), g2: r2.gauss() });
+      this.syts.push({ phi: CUT_CENTRE + k * PI / 3 + (r() - 0.5) * 0.2 + PI / 3, g1: (r(), r(), r2.gauss()), g2: r2.gauss() });
     }
-    // Synaptobrevin copies not engaged in a SNARE complex (a vesicle carries about seventy).
-    this.free = [];
-    for (let i = 0; i < 30; i++) this.free.push({ u: Math.sqrt(0.03 + 0.9 * (i + r()) / 30), phi: i * 2.39996 + r(), g1: r.gauss(), g2: r.gauss() });
+    for (let i = 0; i < 30; i++) { r(); r(); r.gauss(); r.gauss(); }      // (keeps the numbers below as they were)
     this.channels = [{ phi: 3.55, r: 30 }, { phi: 5.9, r: 37 }, { phi: 1.75, r: 44 }];
     this.receptors = [];
     let guard = 0;
@@ -202,30 +314,53 @@ export class Scene {
       if (this.receptors.some(o => Math.hypot(o.x - x, o.z - z) < 11.5)) continue;
       this.receptors.push({ x, z, rot: r() * PI, nmda: this.receptors.length % 5 === 4, r: rr });
     }
+    // Where glutamate binds: BOUND of a receptor's four subunits each hold one molecule, in the cleft-side domain.
+    for (const rc of this.receptors) {
+      const k = rc.nmda ? 1.12 : 1; rc.sites = [];
+      for (let j = 0; j < 4 && rc.sites.length < (rc.nmda ? BOUND.nmda : BOUND.ampa); j += 2) {
+        const a = rc.rot + j * PI / 2, cx = Math.cos(a), sz = Math.sin(a);
+        rc.sites.push([rc.x + 3.2 * cx * k + sz * 0.5, -CLEFT + D + 3.9, rc.z + 3.2 * sz * k - cx * 0.5]);
+      }
+    }
     this.links = [];
     for (let i = 0; i < 12; i++) { const a = r() * TAU, rr = 48 + r() * 60; this.links.push({ a, r: rr, bend: (r() - 0.5) * 3, ph: r() * 9 }); }
-    // The rest of the vesicle's coat, in the numbers counted on an average synaptic vesicle
-    // (Takamori et al., 2006): about 30 synaptophysins, 10 glutamate transporters, 10 Rab3 and one
-    // or two proton pumps. They sit on the upper three quarters, clear of the fusion machinery.
-    this.coat = [];
-    const kinds = [...Array(30).fill('physin'), ...Array(10).fill('vglut'), ...Array(10).fill('rab')];
-    kinds.forEach((kind, i) => { const j = (i * 19) % kinds.length; this.coat.push({ kind, u: Math.sqrt(0.06 + 0.70 * (j + r()) / kinds.length), phi: j * 2.39996 + 0.6 * r(), g1: r.gauss(), g2: r.gauss(), rot: r() * TAU }); });
+    // The vesicle's own proteins, in the numbers counted on an average synaptic vesicle (Takamori et al., Cell
+    // 127:831, 2006): about 70 synaptobrevins, 15 synaptotagmins, 30 synaptophysins, 10 glutamate transporters,
+    // 10 Rab3 and one or two proton pumps. Six of the synaptobrevins and six of the synaptotagmins are at the fusion
+    // site (above). The rest share one even spiral over the upper four fifths of the vesicle, so that no two are in
+    // the same place. The same vesicle is drawn in the cell and on the microscope; there, COPIES.tagged of its
+    // synaptobrevins carry the fluorescent tag.
+    const kinds = [...Array(COPIES.synaptobrevin - 6).fill('free'), ...Array(30).fill('physin'), ...Array(10).fill('vglut'), ...Array(10).fill('rab'), ...Array(COPIES.synaptotagmin - 6).fill('syt')];
+    const N = kinds.length, r3 = rng(29), pa = CUT_CENTRE + 2.2, pu = 0.33, CLEAR = 0.19;
+    this.coat = []; this.free = [];
+    for (let j = 0; j < N; j++) {
+      const kind = kinds[(j * 47) % N]; let u = Math.sqrt(0.035 + 0.78 * (j + 0.5) / N), phi = j * 2.39996 + 0.4;
+      // Nothing stands under the proton pump: a site closer to it than its ring is moved out to the ring's edge.
+      const dx = u * Math.cos(phi) - pu * Math.cos(pa), dz = u * Math.sin(phi) - pu * Math.sin(pa), dd = Math.hypot(dx, dz);
+      if (dd < CLEAR) { const x = pu * Math.cos(pa) + dx / dd * CLEAR, z = pu * Math.sin(pa) + dz / dd * CLEAR; u = Math.hypot(x, z); phi = Math.atan2(z, x); }
+      const site = { kind, u, phi, g1: r3.gauss(), g2: r3.gauss(), rot: r3() * TAU };
+      if (kind === 'free') { site.tagged = this.free.length < COPIES.tagged - 6; this.free.push(site); } else this.coat.push(site);
+    }
     // The pump is far bulkier than the rest and diffuses slowly, so it ends up not far from where it came in.
-    this.coat.push({ kind: 'pump', u: 0.33, phi: CUT_CENTRE + 2.2, g1: 0.28 * Math.cos(CUT_CENTRE + 2.2), g2: 0.28 * Math.sin(CUT_CENTRE + 2.2), rot: 0 });
+    this.coat.push({ kind: 'pump', u: pu, phi: pa, g1: 0.28 * Math.cos(pa), g2: 0.28 * Math.sin(pa), rot: 0 });
   }
 
   buildScenery() {
     const gl = this.gl, r = rng(3), out = [];
     const ball = (x, y, z, rad, c, style) => out.push(x, y, z, rad, c[0], c[1], c[2], style);
     const amber = [0.80, 0.58, 0.30];
-    // Reserve pool of vesicles, and a few more docked along the active zone.
+    // Reserve pool of vesicles, and a few more docked along the active zone. None stands where the arriving vesicle
+    // can go: its walk stays within WALK.side of the axis, less near the membrane (profile.js), and the largest
+    // vesicle the size slider allows must pass.
+    const RMAX = 45 - 2.4 + D, Y0 = 45 - 2.4 + 2 * RHO0 + DOCK_GAP;
+    const inWay = (rr, y, rad) => { for (let a = 0; a <= 175; a += 5) if (Math.hypot(Math.max(0, rr - Math.min(WALK.side, 10 + 0.9 * a)), y - Y0 - a) < RMAX + rad + 3) return true; return false; };
     const ves = []; this.reserve = null; this.docked = [];
     let guard = 0;
     while (ves.length < 230 && guard++ < 40000) {
       const a = r() * TAU, rr = 520 * Math.sqrt(r()), y = 62 + 480 * Math.pow(r(), 1.25), rad = 19 + r() * 5;
       const p = [rr * Math.cos(a), y, rr * Math.sin(a)];
       if (Math.hypot(p[0], p[1] - 10, p[2]) < 98) continue;
-      if (Math.hypot(p[0], p[2]) < 62 && y < 250) continue;        // the way down to the release site stays clear
+      if (inWay(Math.hypot(p[0], p[2]), y, rad)) continue;        // the way down to the release site stays clear
       if (ves.some(v => Math.hypot(v[0] - p[0], v[1] - p[1], v[2] - p[2]) < v[3] + rad + 5)) continue;
       ves.push([...p, rad]);
       if (!this.reserve && p[2] < -90 && y > 110 && y < 190 && Math.abs(p[0]) < 120) this.reserve = [p[0], p[1] + rad, p[2]];
@@ -273,8 +408,10 @@ export class Scene {
     for (let i = 0; i < 420; i++) {
       const [x, z] = inCell();
       if (this.neigh.some((n) => Math.hypot(n.x - x, n.z - z) < 110)) continue;
-      // Just under half fuse within the window, at their own moment; the rest stay docked.
-      this.neigh.push({ x, z, rad: 19 + r() * 5, off: r() < 0.45 ? -1.5 + 2.9 * r() : null, k: 0.75 + 0.5 * r() });
+      // Just under half fuse at their own moment, up to T_END ms before our pore opens or after it; the rest stay
+      // docked. t is that moment on the one clock (kinetics.js), in ms from our pore opening.
+      const off = r() < 0.45 ? -1.5 + 2.9 * r() : null;
+      this.neigh.push({ x, z, rad: 19 + r() * 5, off, t: off === null ? null : -Math.sign(off) * T_END * Math.pow(Math.abs(off) / 1.5, 3), k: 0.75 + 0.5 * r() });
     }
     // Vesicles deeper in the cytoplasm, out of the laser's reach.
     for (let i = 0; i < 1700; i++) {
@@ -320,15 +457,10 @@ export class Scene {
     }
     const S = this.S, p = st.p;
     S.hV = S.h + (S.fused[0] ? 0 : S.extra);
-    // While it arrives the vesicle wanders sideways and tumbles as well as bobbing up and down: everything it carries is
+    // While it arrives the vesicle wanders and tumbles as one body (drift in profile.js): everything it carries is
     // turned about its centre and moved with it (vx), the lipids and the glutamate in their shaders (uVes, uVesRot).
-    { const dr = drift(p), [ax, ay, az] = dr.rot, th = Math.hypot(ax, ay, az), k = th > 1e-9 ? [ax / th, ay / th, az / th] : [1, 0, 0], c = Math.cos(th), s = Math.sin(th), t = 1 - c;
-      const M = [c + k[0] * k[0] * t, k[0] * k[1] * t - k[2] * s, k[0] * k[2] * t + k[1] * s,
-        k[1] * k[0] * t + k[2] * s, c + k[1] * k[1] * t, k[1] * k[2] * t - k[0] * s,
-        k[2] * k[0] * t - k[1] * s, k[2] * k[1] * t + k[0] * s, c + k[2] * k[2] * t];
-      this.vesMove = { off: [dr.x, 0, dr.z], M, C: [0, S.hV, 0] }; }
-    const VM = this.vesMove, vx = (q) => { const x = q[0] - VM.C[0], y = q[1] - VM.C[1], z = q[2] - VM.C[2], M = VM.M;
-      return [M[0] * x + M[1] * y + M[2] * z + VM.C[0] + VM.off[0], M[3] * x + M[4] * y + M[5] * z + VM.C[1], M[6] * x + M[7] * y + M[8] * z + VM.C[2] + VM.off[2]]; };
+    this.vesMove = vesPose(S, p);
+    const VM = this.vesMove, dr = VM.dr, vx = (q) => carried(VM, q);
     let OWN = 0;      // how far the balls being placed go with the vesicle (1: they are carried by it)
     S.Rin = R - D - 0.9;
     this.glutamate = Math.round(GLU_PER_NM3 * 4 / 3 * PI * Math.pow(S.Rin, 3));
@@ -344,15 +476,6 @@ export class Scene {
     const strand = (a, b, steps, rad, c) => { for (let i = 0; i <= steps; i++) ball(mixv(a, b, i / steps), rad, c); };
     const Av = S.Av[0], C = COLORS;
     const anchors = {}, gate = gates(R);
-    // A tagged synaptobrevin near a pore too narrow for its tag waits just above it.
-    const roomy = (a, phi) => {
-      for (let k = 0; k < 60 && a > Av * 0.6; k++, a -= 8) {
-        surf(S, 0, a, phi, tmp);
-        const r = Math.hypot(tmp[0], tmp[2]), nr = (tmp[3] * tmp[0] + tmp[5] * tmp[2]) / Math.max(r, 1e-6);
-        if (tmp[4] > 0.98 || r - 2 * D * nr >= 1.35 || (Math.abs(Math.hypot(r, tmp[1] - S.hV) - S.Rc - D) < 0.05 && tmp[4] > Math.cos(S.theta) - 0.02)) break;
-      }
-      return a;
-    };
     const vitro = !!st.vitro, opt = this.opt = optics(st.angle);
     this.emit = [];
     // Superecliptic pHluorin: a pH-sensitive GFP fused to the end of synaptobrevin that faces the
@@ -363,19 +486,7 @@ export class Scene {
     // light already says how deep in the field the vesicle sits.
     const unq = sstep(PH.PORE, PH.PORE + 0.04, p);
     const tag = (A, draw) => {
-      // The tag hangs into the lumen. Inside a narrow pore it has to lie along the pore's axis.
-      let dir = shade(A.n, -1);
-      const rA = Math.hypot(A.p[0], A.p[2]), nR = rA > 1e-3 ? (A.n[0] * A.p[0] + A.n[2] * A.p[2]) / rA : 0, rB = rA - 2 * D * nR;
-      if (nR > 0.05 && rB - 4.9 * nR < 1.3) {
-        const ax = [0, A.n[1] < 0 ? 1 : -1, 0];
-        for (let t = 0.1; t <= 1.001; t += 0.1) { dir = norm(mixv(shade(A.n, -1), ax, t)); if (rB + 4.9 * (dir[0] * A.p[0] + dir[2] * A.p[2]) / rA >= 1.3) break; }
-      }
-      const base = add(A.p, A.n, -2 * D), c = add(base, dir, 3.6);
-      // The orange barrel hangs from the far end of the green one on a short flexible linker. With
-      // room it folds to one side; in a narrow pore the two have to go through in single file.
-      const side = norm(cross(dir, Math.abs(dir[1]) > 0.9 ? [1, 0, 0] : [0, 1, 0]));
-      const fold = 1 - sstep(0.05, 0.25, nR) * (1 - sstep(1.3, 5, rB - 4.9 * nR));
-      const dir2 = norm(mixv(dir, add(shade(dir, 0.25), side, 1), fold)), hinge = add(base, dir, 6.0), c2 = add(hinge, dir2, 1.6);
+      const { base, dir, hinge, dir2, c, c2 } = tagAt(A);
       const cT = vx(c), c2T = vx(c2), E = opt.at(cT[1] + GAP), E2 = opt.at(c2T[1] + GAP);
       const b = E * (QUENCH + (1 - QUENCH) * unq), lit = b > 0.05, bo = E2 * (QUENCH_O + (1 - QUENCH_O) * unq), litO = bo > 0.05;
       this.emit.push([cT[0], cT[2], b, cT[1], bo]);
@@ -393,18 +504,16 @@ export class Scene {
     // SNARE complexes. Syntaxin (red) and SNAP-25 (green) belong to the plasma membrane,
     // synaptobrevin (blue) to the vesicle. Zipping the four helices from their far ends toward
     // the membrane anchors is what drags the two bilayers together.
-    const Lb = 11.5, zip = lerp(0.42, 1, sstep(0.02, PH.STALK + 0.02, p));
-    const wCis = sstep(PH.PORE + 0.02, 0.6, p), wOut = sstep(0.56, 1, p), wJoin = sstep(Math.max(PH.PORE, gate.free - 0.03), 0.58, p);
+    // They stay half wound until calcium has bound; the rest of the winding is what closes the gap.
+    const Lb = 11.5, zip = lerp(0.42, 1, sstep(CA_BOUND, PH.STALK, p));
+    const wCis = sstep(PH.PORE + 0.02, 0.6, p);
     // While the vesicle is still on its way the SNAREs have not met: syntaxin and SNAP-25 wait as a
     // bundle on the plasma membrane, and synaptobrevin hangs free from the vesicle. They engage
-    // once it is close enough for the strands to reach.
-    const apart = sstep(5, 24, S.approachBase);
+    // once it is within SNARE_REACH, and from there their winding pulls it down to the docked place.
+    const apart = sstep(0.4 * SNARE_REACH, SNARE_REACH, S.approach);
     this.snares.forEach((sn) => {
-      const phi = sn.phi + sn.dphi * wOut;
-      const rs = lerp(9, 5.5, sstep(0, PH.STALK, p)) + sn.rOut * Math.pow(wOut, 1.4);
-      const sb = lerp(10, 5.5, sstep(0, PH.STALK, p));
-      const aS = Av + PI * rs * rs, dphi = 0.9 / Math.max(rs, 3);
-      const Sx = at(0, aS, phi + dphi * wJoin), B = at(0, roomy(lerp(Av - PI * sb * sb, aS, wJoin), phi - dphi * wJoin), phi - dphi * wJoin);
+      const { phi, rs, aS, phiS, phiB, aB } = snareSite(S, sn, p, gate);
+      const Sx = at(0, aS, phiS), B = at(0, roomy(S, aB, phiB, tmp), phiB);
       const shown = kept(Sx.p[0], Sx.p[2]);
       if (vitro) tag(B, shown);
       if (!shown) return;
@@ -450,24 +559,48 @@ export class Scene {
       if (!anchors.snare || sn.phi % TAU > 2.9 && sn.phi % TAU < 3.6) anchors.snare = add(C0, dir, Lb * 0.6);
     });
 
-    // Tethers: rods standing on the active zone (Munc13 with RIM) whose free ends catch the vesicle
-    // as it wanders within reach, hold it against Brownian motion, and hand it to the SNAREs.
+    // Tethers: rods standing on the active zone (Munc13 with RIM), each with a flexible link at its tip. The link is a
+    // chain of one length, TETHER.link. It binds its site on the vesicle when the site comes within that length, and
+    // from then on the vesicle cannot go further from the rod's tip than the chain allows. Slack is drawn as a coil,
+    // and the chain is straight when the vesicle pulls it tight. It cannot pass through the vesicle: where the
+    // straight line to its site would, the chain lies on the vesicle's surface. At hemifusion it lets go and stays on its rod.
     CAT = 19;
-    [1.42, -1.55].forEach((dphi, k) => {
-      const phi = CUT_CENTRE + dphi, r0 = R * 0.9 + 12, F = at(0, Av + PI * r0 * r0, phi);
+    const ctr = vx([0, S.hV, 0]), rSite = R + D + 0.6, NB = 30, up = Math.sqrt(TETHER.rod * TETHER.rod - TETHER.lean * TETHER.lean);
+    this.tetherEnds = [];
+    tethers(R).forEach((T, k) => {
+      const F = at(0, Av + PI * Math.pow(R * 0.9 + 12, 2), T.phi);
       if (!kept(F.p[0], F.p[2])) return;
-      const er = [Math.cos(phi), 0, Math.sin(phi)], tip = add(add(F.p, F.n, 17), er, -6), c = C.tether;
+      const er = T.er, tip = add(add(F.p, F.n, up), er, -TETHER.lean), c = C.tether;
       for (let i = 0; i <= 12; i++) ball(mixv(add(F.p, F.n, -1.5), tip, i / 12), i > 9 ? 1.25 : 0.9, shade(c, 0.85 + 0.15 * (i % 2)));
-      if (p >= PH.STALK) return;
-      // The link from the rod to the vesicle: loose until capture, taut after.
-      const ctr = vx([0, S.hV, 0]), dv = add(ctr, tip, -1), dist = Math.hypot(dv[0], dv[1], dv[2]), hit = add(ctr, norm(dv), -(S.Rc + D + 0.6));
-      const end = S.tethered ? hit : add(tip, norm(add(dv, [0.3 * Math.sin(time * 2.1 + k), 0, 0.3 * Math.cos(time * 1.7 + k)])), Math.min(9, Math.max(0, dist - S.Rc - D - 2)));
-      const nb = Math.max(3, Math.round(Math.hypot(end[0] - tip[0], end[1] - tip[1], end[2] - tip[2]) / 0.9));
-      for (let i = 1; i <= nb; i++) ball(mixv(tip, end, i / nb), 0.32, c);
+      // Where the chain's far end is: on its site while it holds; otherwise a short way from the tip, on the side away from the vesicle.
+      const site = vx(add([0, S.hV, 0], T.site)), away = add(tip, ctr, -1), gap = Math.hypot(away[0], away[1], away[2]);
+      const rest = add(tip, norm(add(add(er, [0, 1, 0], 0.35), norm(away), 2.5 * (1 - sstep(rSite + 4, rSite + 18, gap)))), 7);
+      const hold = p < 0 ? (dr.held[k] ? 1 : 1 - sstep(0, 3, dr.wait[k])) : 1 - sstep(PH.STALK, PH.STALK + 0.05, p);
+      // The path with no slack: straight from the tip to the end, pushed out to the vesicle's surface where it would pass inside.
+      const path = (w, q) => { const end = mixv(rest, site, w); let len = 0, prev = tip;
+        for (let i = 1; i <= NB; i++) { let x = mixv(tip, end, i / NB); const o = add(x, ctr, -1), l = Math.hypot(o[0], o[1], o[2]); if (l < rSite && p < PH.STALK + 0.05) x = add(ctr, o, rSite / Math.max(l, 1e-6));
+          len += Math.hypot(x[0] - prev[0], x[1] - prev[1], x[2] - prev[2]); prev = x; if (q) q.push(x); }
+        return len; };
+      let w = hold; for (let it = 0; it < 6 && w > 0 && w < 1 && path(w) > TETHER.link; it++) w *= 0.8;
+      const base = [tip], taut = path(w, base);
+      // Slack: the chain winds around that path, more loosely the more slack there is, and always on the side away from the vesicle.
+      const coil = (amp, q) => { let len = 0, prev = tip;
+        for (let i = 1; i <= NB; i++) { const u = i / NB, x0 = base[i], tg = norm(add(base[Math.min(NB, i + 1)], base[i - 1], -1)), out = norm(add(x0, ctr, -1));
+          const sd = norm(cross(tg, out)), a = amp * Math.sin(PI * u), ph = TAU * 3 * u + k;
+          const x = add(add(x0, out, a * (0.5 - 0.5 * Math.cos(ph))), sd, a * 0.5 * Math.sin(ph));
+          len += Math.hypot(x[0] - prev[0], x[1] - prev[1], x[2] - prev[2]); prev = x; if (q) q.push(x); }
+        return len; };
+      let lo = 0, hi = 12; if (taut < TETHER.link) for (let it = 0; it < 22; it++) { const mid = (lo + hi) / 2; if (coil(mid) < TETHER.link) lo = mid; else hi = mid; }
+      const pts = []; coil(lo, pts);
+      for (const x of pts) ball(x, 0.32, c);
+      this.tetherEnds.push({ tip, end: pts[NB - 1], site, held: p < 0 ? dr.held[k] : p < PH.STALK });
       if (k === 0) anchors.tether = tip;
     });
 
-    // The rest of the coat rides on the vesicle and spreads into the cell membrane with its lipids.
+    // Calcium is flowing in by CA_IN and has bound synaptotagmin by CA_BOUND.
+    const wCa = sstep(CA_IN, CA_BOUND, p);
+    // The rest of the coat rides on the vesicle. Once the neck is wide enough for a protein, it spreads into the cell
+    // membrane by its own random motion, far more slowly than the lipids around it.
     OWN = S.fused[0] ? 0 : 1;      // the coat rides on the vesicle
     this.coat.forEach((pr) => {
       const site = freeSite(S, pr, p, gate[pr.kind]), A = at(0, site[0], site[1]);
@@ -489,6 +622,13 @@ export class Scene {
         // Rab3: a small switch protein held to the surface by two lipid tails.
         CAT = 18; const c = C.rab;
         ball(P(0, 0, 0.5), 0.34, shade(c, 0.8)); ball(P(0.2, 0, 1.3), 0.34, shade(c, 0.8)); ball(P(0.4, 0, 2.9), 1.5, c);
+      } else if (pr.kind === 'syt') {
+        // A synaptotagmin away from the fusion site. Its two C2 domains stand clear of the vesicle; calcium binds them too.
+        CAT = 6; const c = C.synaptotagmin, a = P(-1.2, 0, 2.9), b = P(1.4, 0, 5.2);
+        for (let t = 0.5; t <= 2 * D + 0.3; t += 0.55) ball(P(0, 0, -t), 0.55, shade(c, 0.8));
+        strand(A.p, a, 4, 0.33, shade(c, 0.9)); strand(a, b, 3, 0.33, shade(c, 0.9));
+        for (const q of [a, b]) for (const [x, y, z] of [[0.8, 0.5, 0], [-0.8, 0.5, 0], [0, -0.6, 0.8], [0, -0.6, -0.8]]) ball(add(add(add(q, e1, x), nrm, y), e2, z), 1.25, c);
+        if (wCa > 0.5) for (const o of [[0.9, 1.1, 0.4], [-0.7, 1.2, -0.5], [0.1, 1.3, -0.9]]) ball(add(add(add(b, e1, o[0]), nrm, o[1]), e2, o[2]), 0.3 * wCa, C.calcium, 1, 8);
       } else {
         // The proton pump (V-ATPase): a ring in the membrane, a stalk, and a head ten nanometres
         // across that stands well clear of everything else on the vesicle.
@@ -503,19 +643,21 @@ export class Scene {
     });
     OWN = 0;
 
-    CAT = 0;
+    // The synaptobrevins that are not in a SNARE complex ride on the vesicle too. On the microscope some carry the tag.
+    CAT = 5; OWN = 1;
+    this.free.forEach((fr) => {
+      const site = freeSite(S, fr, p, gate.free), A = at(0, roomy(S, site[0], site[1], tmp), site[1]), draw = kept(A.p[0], A.p[2]);
+      if (draw) {
+        const t0 = norm(cross(A.n, Math.abs(A.n[1]) > 0.9 ? [1, 0, 0] : [0, 1, 0])), lean = add(shade(t0, Math.sin(fr.rot)), cross(A.n, t0), Math.cos(fr.rot));
+        for (let t = 0.5; t <= 2 * D + 0.3; t += 0.55) ball(add(A.p, A.n, -t), 0.55, shade(C.synaptobrevin, 0.82));
+        for (let t = 0.6; t < 3.4; t += 0.62) ball(add(add(A.p, A.n, t), lean, t * 0.3), 0.36, C.synaptobrevin);
+      }
+      if (!vitro || !fr.tagged) return;
+      const c = tag(A, draw);
+      if (draw && !anchors.phl) anchors.phl = c;
+    });
+    OWN = 0; CAT = 0;
     if (vitro) {
-      CAT = 5; OWN = 1;      // free synaptobrevins, with their tags, ride on the vesicle
-      this.free.forEach((fr) => {
-        const site = freeSite(S, fr, p, gate.free), A = at(0, roomy(site[0], site[1]), site[1]), draw = kept(A.p[0], A.p[2]);
-        if (draw) {
-          for (let t = 0.5; t <= 2 * D + 0.3; t += 0.55) ball(add(A.p, A.n, -t), 0.55, shade(C.synaptobrevin, 0.82));
-          for (let t = 0.6; t < 3.4; t += 0.62) ball(add(add(A.p, A.n, t), [Math.sin(fr.phi * 7), 0, Math.cos(fr.phi * 5)], t * 0.3), 0.36, C.synaptobrevin);
-        }
-        const c = tag(A, draw);
-        if (draw && !anchors.phl) anchors.phl = c;
-      });
-      OWN = 0;
       // Fluorescence leaves in every direction; the objective below catches about half of it.
       // Every other one of these is a 589 nm photon from the orange protein, which starts before the pore opens.
       const hash = (n) => { const v = Math.sin(n * 12.9898) * 43758.5453; return v - Math.floor(v); };
@@ -526,17 +668,19 @@ export class Scene {
         const dy = 1 - 2 * hash(id + 0.3), a = hash(id + 0.7) * TAU, dr = Math.sqrt(1 - dy * dy), L = 170 * ph;
         ball([e[0] + dr * Math.cos(a) * L, e[3] + dy * L, e[1] + dr * Math.sin(a) * L], 0.62 * (1 - ph) * Math.min(1, e[o ? 4 : 2] * 1.6), o ? C.emissionO : C.emission, 1, o ? 21 : 12);
       }
-      this.fluor = this.emit.reduce((t, e) => t + e[2], 0) / 36; this.fluorO = this.emit.reduce((t, e) => t + e[4], 0) / 36;
+      this.fluor = this.emit.reduce((t, e) => t + e[2], 0) / COPIES.tagged; this.fluorO = this.emit.reduce((t, e) => t + e[4], 0) / COPIES.tagged;
       if (st.dist > 4000) ball([0, -6, 0], 0.005 * st.dist, add(shade(C.emission, Math.min(1, 0.08 + this.fluor * 1.6)), C.emissionO, Math.min(1, this.fluorO * 1.6)), 1, 12);
       // The laser footprint covers the whole cell, so every vesicle near the glass is in the
       // picture: most sit docked and dark, and some fuse a little before or after ours.
       this.emitN = [];
       let near = null;
+      const now = clock(p);
       for (const nb of this.neigh) {
-        const pi = nb.off === null ? 0 : p + nb.off, pc = Math.min(1, Math.max(0, pi));
-        const u = sstep(PH.PORE, PH.PORE + 0.04, pi), sink = sstep(PH.PORE, 0.72, pc);
+        // Every vesicle in the field is on the same clock: this one's pore opened nb.t ms after ours (or before).
+        const since = nb.t === null ? -1 : now - nb.t, pc = nb.t === null ? 0 : unclock(since);
+        const u = sstep(PH.PORE, PH.PORE + 0.04, pc), sink = sstep(PH.PORE, 0.72, pc);
         const h = GAP + lerp(nb.rad + D + 3.5, -5, sink);
-        const spread = 110 * Math.pow(sstep(PH.PORE + 0.02, 1, pc), 0.8) + 260 * Math.max(0, pi - 1);
+        const spread = spreadAfter(since, Math.round(nb.rad - 2));
         const lit = 36 * opt.at(h) * spot(nb.x, nb.z) * nb.k, amp = lit * (QUENCH + (1 - QUENCH) * u), ampO = lit * (QUENCH_O + (1 - QUENCH_O) * u);
         this.emitN.push([nb.x, nb.z, amp, spread, ampO]);
         if (pc < 0.72) ball([nb.x, (nb.rad + D + 3.5) * (1 - sink), nb.z], nb.rad * (1 - 0.55 * sstep(0.5, 0.72, pc)), [0.86, 0.62, 0.30], 2, 1);
@@ -544,20 +688,23 @@ export class Scene {
         // A soft glow on each side of the membrane, so a flash shows from inside the cell and from under the glass.
         // A vesicle that has not fused glows faintly in orange alone.
         if (glow + glowO > 0.03) for (const y of [9, -9]) ball([nb.x, y, nb.z], (30 + spread) * 0.5, add(shade(C.phluorin, Math.min(1.3, glow * 2.2)), C.ofp, Math.min(1.0, glowO * 1.5)), 4, 13);
-        if (nb.off !== null && Math.abs(pi - 0.5) < 0.45 && (!near || Math.hypot(nb.x, nb.z) < Math.hypot(near[0], near[2]))) near = [nb.x, 30, nb.z];
+        if (nb.t !== null && Math.abs(pc - 0.5) < 0.45 && (!near || Math.hypot(nb.x, nb.z) < Math.hypot(near[0], near[2]))) near = [nb.x, 30, nb.z];
       }
       anchors.neigh = near;
     }
 
     // Synaptotagmin, the calcium sensor: anchored in the vesicle, with two C2 domains that
-    // plunge into the plasma membrane when calcium binds.
+    // plunge into the plasma membrane when calcium binds. These six are at the fusion site. Each is part of the
+    // vesicle: it goes where the vesicle goes, and after fusion it spreads like the other proteins.
     CAT = 6;
-    const wCa = sstep(0.07, 0.15, p), wDock = wCa * (1 - sstep(0.42, 0.62, p));
+    const wDock = wCa * (1 - sstep(0.42, 0.62, p));
     this.sytPos = [];
     this.syts.forEach((sy) => {
-      const st2 = Math.min(13, Math.sqrt(Av / PI) * 0.6), phi = sy.phi + sy.dphi * wOut;
-      const T = at(0, Av - PI * st2 * st2 + PI * Math.pow(st2 + sy.rOut, 2) * Math.pow(wOut, 1.5), phi);
+      const uv = Math.sqrt(Av / PI), st2 = Math.min(13, uv * 0.6), u0 = Math.sqrt(uv * uv - st2 * st2), sg = proteinSpread(p, R, gate.syt);
+      const ux = u0 * Math.cos(sy.phi) + sg * sy.g1, uz = u0 * Math.sin(sy.phi) + sg * sy.g2, phi = sg > 0 ? Math.atan2(uz, ux) : sy.phi;
+      const T = at(0, PI * (ux * ux + uz * uz), phi);
       if (!kept(T.p[0], T.p[2])) return;
+      OWN = S.fused[0] ? 0 : 1;
       const er = [Math.cos(phi), 0, Math.sin(phi)], et = [-Math.sin(phi), 0, Math.cos(phi)];
       const rT = Math.hypot(T.p[0], T.p[2]);
       const pm = [T.p[0] / Math.max(rT, 1e-3) * (rT + 1), D + 1.9, T.p[2] / Math.max(rT, 1e-3) * (rT + 1)];
@@ -568,13 +715,15 @@ export class Scene {
       strand(T.p, c2a, 4, 0.33, shade(c, 0.9)); strand(c2a, c2b, 3, 0.33, shade(c, 0.9));
       for (const q of [c2a, c2b]) for (const [a, b, e] of [[0.8, 0.5, 0], [-0.8, 0.5, 0], [0, -0.6, 0.8], [0, -0.6, -0.8]]) ball(add(add(add(q, er, a), [0, 1, 0], b), et, e), 1.25, c);
       if (wCa > 0.5) for (const o of [[0.9, -1.1, 0.4], [-0.7, -1.2, -0.5], [0.1, -1.3, -0.9]]) ball(add(c2b, o), 0.3 * wCa, C.calcium, 1, 8);
+      OWN = 0;
       this.sytPos.push(c2b);
-      if (!anchors.syt) anchors.syt = c2b;
+      if (!anchors.syt) anchors.syt = vx(c2b);
     });
 
     // Voltage-gated calcium channels, and the calcium that rushes in when one opens.
     CAT = 0;
-    const caFlow = sstep(0.03, 0.09, p) * (1 - sstep(0.2, 0.3, p));
+    // The channels open at PH.CA, when the nerve impulse arrives, and not before.
+    const caFlow = sstep(PH.CA, CA_IN, p) * (1 - sstep(0.2, 0.3, p));
     this.channels.forEach((ch, ci) => {
       const A = at(0, Av + PI * ch.r * ch.r, ch.phi);
       if (!kept(A.p[0], A.p[2])) return;
@@ -614,14 +763,18 @@ export class Scene {
       }
     });
 
-    // Glutamate receptors in the receiving cell. Each opens once transmitter has had time to reach it.
-    const yTop = -CLEFT + D;
+    // Glutamate receptors in the receiving cell. A receptor has glutamate from the moment the last of the drawn
+    // molecules that bind it arrives (the same molecules, from the same formula, that the shader stops at its sites).
+    // An AMPA receptor then opens and passes sodium, and lets its glutamate go at T_UNBIND. An NMDA receptor keeps
+    // its glutamate; it is drawn shut, because at rest its channel is blocked.
+    const yTop = -CLEFT + D, KIN = kinetics(R);
     let nearest = null;
     if (!vitro) this.receptors.forEach((rc, ri) => {
+      rc.since = Math.max(...rc.bound.map((b) => arrivalTime(KIN, b.e, b.g, b.r)));
       if (!kept(rc.x, rc.z)) return;
-      const open = sstep(0, 0.035, p - (0.415 + rc.r * 0.0019 + (rc.nmda ? 0.05 : 0)));
+      const has = rc.has = p > PH.PORE ? sstep(0, 0.03, p - unclock(rc.since)) * (rc.nmda ? 1 : 1 - sstep(-0.03, 0, p - unclock(T_UNBIND))) : 0, open = rc.nmda ? 0 : has;
       CAT = rc.nmda ? 10 : 9;
-      const base = rc.nmda ? C.nmda : C.ampa, lit = mixv(base, [1, 1, 0.9], 0.3 * open), k = rc.nmda ? 1.12 : 1;
+      const base = rc.nmda ? C.nmda : C.ampa, lit = mixv(base, [1, 1, 0.9], 0.3 * has), k = rc.nmda ? 1.12 : 1;
       for (let j = 0; j < 4; j++) {
         const a = rc.rot + j * PI / 2, cx = Math.cos(a), sz = Math.sin(a), pair = (j % 2 ? 1 : -1) * 0.5;
         const px = (rr, y, sq) => [rc.x + rr * cx * k + sq * -sz * pair, y, rc.z + rr * sz * k + sq * cx * pair];
@@ -630,7 +783,6 @@ export class Scene {
         ball(px(1.7 + 0.5 * open, yTop + 1.0, 0), 1.3, shade(base, 0.9));
         ball(px(2.3, yTop + 3.9, 1.0), 1.85, lit);
         ball(px(2.5, yTop + 8.4 * k, 2.2), 2.0, shade(base, 1.05));
-        if (open > 0.5) ball(px(3.2, yTop + 3.9, 1.0), 0.42, C.glutamate, 1, 7);
       }
       if (open > 0.3) for (let j = 0; j < 5; j++) {
         const ph = (time * 0.55 + j * 0.2 + ri * 0.137) % 1, y = lerp(yTop + 7, -CLEFT - 16, ph), sp = y < -CLEFT - D ? (-CLEFT - D - y) * 0.22 : 0.15;
@@ -649,7 +801,7 @@ export class Scene {
       { id: 'vesicle', q: p < 0.8 ? [0, Math.min(top, S.hV + S.Rc + D), 0] : null },
       { id: 'stalk', q: p >= PH.STALK - 0.02 && p < PH.PORE ? [0, S.rho, 0] : null },
       { id: 'pore', q: p >= PH.PORE && p < 0.66 ? [0, S.rho, 0] : null },
-      { id: 'glutamate', q: p < 0.4 ? (cut > 25 ? [-S.Rin * 0.45, S.hV + S.Rin * 0.2, 0] : null) : [-14 - 30 * sstep(0.45, 0.9, p), -CLEFT / 2, -6] },
+      { id: 'glutamate', q: released(p, R) < 0.5 ? (cut > 25 ? vx([-S.Rin * 0.45, S.hV + S.Rin * 0.2, 0]) : null) : p < 0.74 ? [-14 - 30 * sstep(0.5, 0.7, p), -CLEFT / 2, -6] : null },
       { id: 'tether', q: p < PH.CA ? anchors.tether : null }, { id: 'pump', q: p < PH.OMEGA ? anchors.pump : null }, { id: 'snare', q: anchors.snare }, { id: 'syt', q: p < 0.62 ? anchors.syt : null }, { id: 'channel', q: anchors.channel },
     ];
     const cellSide = [{ id: 'reserve', q: this.reserve }, { id: 'mito', q: this.mito }];
@@ -680,7 +832,7 @@ export class Scene {
     this.gapBottom = vitro ? -GAP + 1.4 : -CLEFT + D + 1.4;
     this.vitro = vitro; this.belief = st.belief || null;
     if (this.belief) this.labels.push({ id: 'ghost', q: [-(Math.min(S.Rc, 60) + D + 4) * 0.72, Math.max(6, Math.min(top * 0.72, 70)), 0], max: 2500, free: true });
-    this.focusY = Math.max(-3, Math.min(13, 0.3 * (top - S.approach) - 2)) + 0.45 * S.approachBase;   // follow the vesicle part of the way up while it arrives
+    this.focusY = Math.max(-3, Math.min(13, 0.3 * (top - S.approach) - 2)) + 0.45 * S.approach;   // follow the vesicle part of the way up while it arrives
     this.kept = kept;
   }
 
@@ -745,20 +897,14 @@ export class Scene {
 
     gl.enable(gl.SAMPLE_ALPHA_TO_COVERAGE);
     // Lipids.
-    // How far lipids have wandered since each leaflet became continuous, and the matching spread
-    // of vesicle lipid on the cell membrane (equal numbers cross in each direction).
-    const sig = [0, 1].map((leaf) => 0.7 * PI * S.R * Math.pow(Math.max(0, (S.p - (leaf ? PH.PORE : PH.STALK)) / (1 - (leaf ? PH.PORE : PH.STALK))), 0.75));
-    const sigPM = sig.map((sg, leaf) => {
-      if (sg <= 0) return 0;
-      const Rl = S.R + (leaf ? -D : D); let B = 0;
-      for (let i = 0; i < 64; i++) { const al = (i + 0.5) / 64 * PI, x = Rl * (PI - al) / sg; B += 0.5 * erfc(x / Math.SQRT2) * Math.sin(al); }
-      return Math.sqrt(2 * Rl * Rl * B * PI / 64);
-    });
+    // How far a lipid has got by random motion since its leaflet joined the other membrane's (kinetics.js), and how
+    // far the cell membrane's own pattern is turned so that it carries on from the vesicle's (see sheetLipids).
+    const sig = [0, 1].map((leaf) => lipidSpread(S.p, S.R, leaf)), seam = [0, 1].map((leaf) => seamTurn(S.R, leaf, this.q));
     const lipidU = (pr) => {
       const v = common(pr);
       gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, this.tabTex); gl.uniform1i(v.uTab, 0);
       gl.uniform2f(v.uAv, S.Av[0], S.Av[1]); gl.uniform2f(v.uRW, S.rW[0], S.rW[1]);
-      gl.uniform2f(v.uSigma, sig[0], sig[1]); gl.uniform2f(v.uSigmaPM, sigPM[0], sigPM[1]); gl.uniform2f(v.uRl, S.R + D, S.R - D);
+      gl.uniform2f(v.uSigma, sig[0], sig[1]); gl.uniform2f(v.uSeam, seam[0], seam[1]);
       gl.uniform4f(v.uGeo, D, CLEFT, BAREA, PATCH);
       gl.uniform4f(v.uVes, this.vesMove.off[0], S.hV, this.vesMove.off[2], 0); gl.uniformMatrix3fv(v.uVesRot, true, this.vesMove.M);
       gl.uniform3fv(v.uCol, [...C.vesicle, ...C.vesicleIn, ...C.plasma, ...C.plasmaOut, ...C.post, ...C.postIn]);
@@ -777,12 +923,14 @@ export class Scene {
     // Transmitter.
     const full = this.glutamate, shown = Math.min(NT_MAX, Math.round(full * (this.q < 0.6 ? 0.55 : 1)));
     const grow = Math.min(1.7, Math.cbrt(full / Math.max(1, shown)));
+    const KIN = kinetics(S.R), lumenR = S.Rin - 0.6;
     const ntU = (pr, scale) => {
       const v = common(pr);
-      gl.uniform4f(v.uNT, S.p, S.hV, S.Rin - 0.6, S.rho);
+      gl.uniform4f(v.uNT, S.p > PH.PORE ? clock(S.p) : -1, S.hV, lumenR, S.rho);
       gl.uniform4f(v.uVes, this.vesMove.off[0], S.hV, this.vesMove.off[2], 0); gl.uniformMatrix3fv(v.uVesRot, true, this.vesMove.M);
       gl.uniform4f(v.uNT2, Math.max(0.15, S.neck - D - 0.6), -D - 1.4, this.gapBottom, 0.36);
-      gl.uniform4f(v.uNT3, PH.PORE + 0.012, 0.30, scale, 0);
+      gl.uniform4f(v.uNT3, scale, PORE_T, 2 * D_GLU, vitro ? -1 : T_UNBIND);
+      gl.uniform1fv(v.uRel, KIN.rel);
       gl.uniform3fv(v.uNTCol, C.glutamate);
       return v;
     };
@@ -886,18 +1034,21 @@ export class Scene {
     gl.enable(gl.DEPTH_TEST);
   }
 
-  // Fluorescence at the fusion site across the whole event, for the camera's trace. The slow
-  // part (where every tag is at each moment) is cached until the vesicle size changes.
-  fluorCurve(R, n = 72) {
-    if (!this.curveCache || this.curveCache.R !== R) {
+  // Fluorescence at the fusion site across the whole event, for the camera's trace: at each of n moments, the light
+  // of the same tags that the picture draws at that moment (taggedSites, tagAt), each weighted by how near the site
+  // it is (TRACE_R). Where every tag is at each moment is cached until the vesicle size changes.
+  fluorCurve(R, n = TRACE_N) {
+    if (!this.curveCache || this.curveCache.R !== R || this.curveCache.n !== n) {
       const pts = [], tmp = new Float64Array(6), gate = gates(R); let tab = null;
       for (let i = 0; i < n; i++) {
         const p = -ARRIVE + (1 + ARRIVE) * i / (n - 1), S = compute(p, R, tab); tab = S.tab;
-        pts.push({ unq: sstep(PH.PORE, PH.PORE + 0.04, p), sites: this.free.map((fr) => { const s = freeSite(S, fr, p, gate.free); surf(S, 0, s[0], s[1], tmp); return [Math.hypot(tmp[0] - tmp[3] * 7.4, tmp[2] - tmp[5] * 7.4), tmp[1] - tmp[4] * 7.4]; }) });
+        S.hV = S.h + (S.fused[0] ? 0 : S.extra);
+        const VM = vesPose(S, p);
+        pts.push({ unq: sstep(PH.PORE, PH.PORE + 0.04, p), tags: taggedSites(S, p, gate, this.snares, this.free, tmp).map((A) => { const g = tagAt(A), c = carried(VM, g.c), c2 = carried(VM, g.c2); return [c[0], c[2], c[1], c2[1]]; }) });
       }
-      this.curveCache = { R, pts };
+      this.curveCache = { R, n, pts };
     }
     // One curve per band: the same tags in the same light, each protein with its own answer to the acid.
-    return [QUENCH, QUENCH_O].map((q) => this.curveCache.pts.map((pt) => pt.sites.reduce((t, s) => t + this.opt.at(s[1] + GAP) * (q + (1 - q) * pt.unq) * Math.exp(-s[0] * s[0] / (2 * 130 * 130)), 0) / 30));
+    return [QUENCH, QUENCH_O].map((q, band) => this.curveCache.pts.map((pt) => pt.tags.reduce((t, s) => t + this.opt.at(s[2 + band] + GAP) * (q + (1 - q) * pt.unq) * traceWeight(s[0], s[1]), 0) / COPIES.tagged));
   }
 }
