@@ -3,11 +3,12 @@
 // with one exception: the match flares for four seconds when it lights, and then holds still. With
 // reduced motion switched on it is simply alight.
 
-import { LEVELS, run } from './levels.js';
+import { LEVELS, run, say } from './levels.js';
 import { drawChart, CHART_ASPECT } from './chart.js';
 import { drawPicture } from './picture.js';
 import { drawScene, ringTaps, sliceTaps } from './scene.js';
 import { WHITE } from './glass.js';
+import { waveSigma } from './trace.js';
 import { gamepad } from '../gamepad/gamepad.js';
 import { touchSliders } from '../touch/slider.js';
 
@@ -68,15 +69,15 @@ function go(i, quiet) {
     wrap.append(lab, inp); box.append(wrap);
     inputs[q.id] = { inp, val, q };
   }
-  const key = $('key'); key.replaceChildren();
-  const rows = [...L.key];
-  for (const [cls, text] of rows) { const li = el('li'); li.append(el('i', cls), el('span', '', text)); key.append(li); }
   $('meters').replaceChildren(); meterEls = [];
 
   if (!quiet) { try { history.replaceState(null, '', '#l=' + L.id); } catch { /* sandboxed frame */ } }
   $('panel').scrollTop = 0;
   S.lit = undefined; S.fx = null;            // arriving at a challenge is not lighting the match
   update();
+  // the key: a line may take its numbers from what was built
+  const key = $('key'); key.replaceChildren();
+  for (const [cls, text] of L.key) { const li = el('li'); li.append(el('i', cls), el('span', '', say(text, S.out.b))); key.append(li); }
   if (S.out.b.handles.length) { const li = el('li'); li.append(el('i', 'k-knob'), el('span', '', 'Knob: drag it')); key.prepend(li); }
   paintNav();
   layout();
@@ -126,6 +127,7 @@ function swap() {
 function update() {
   const L = LEVELS[S.i];
   S.out = run(L, S.p);
+  if (S.out.b.fix) Object.assign(S.p, S.out.b.fix);      // a part that was pushed by another: the setting follows the part
   const lit = S.out.score.solved;
   if (lit && S.lit === false && !REDUCE.matches) S.fx = { t0: performance.now() };
   if (!lit) S.fx = null;
@@ -245,8 +247,9 @@ const ITEMS = {
     g.beginPath(); g.moveTo(x, sy(o.tip)); g.quadraticCurveTo(x + r, sy(o.tip - 4), x + r * 0.9, sy(o.tip - 5.4)); g.arc(x, sy(o.tip - 5.4), r * 0.9, 0, Math.PI); g.quadraticCurveTo(x - r, sy(o.tip - 4), x, sy(o.tip)); g.fill();
   },
   match(o, lit) {
-    g.strokeStyle = '#b89a6a'; g.lineWidth = Math.max(2, V.k * 1.1); g.lineCap = 'round';
-    line(o.x + o.r, -o.r, o.x + o.r + 5, -19);
+    const [ax, ay, bx, by, w] = o.stick;                    // the stick, as it is traced
+    g.strokeStyle = '#b89a6a'; g.lineWidth = Math.max(2, V.k * w); g.lineCap = 'butt';
+    line(ax, ay, bx, by);
     const r = Math.max(3, V.k * o.r), cx = sx(o.x) + r, cy = sy(0);
     if (!lit) { g.fillStyle = '#e8553d'; g.beginPath(); g.arc(cx, cy, r, 0, 7); g.fill(); return; }
     // t: seconds since it caught. Past the flare (or with reduced motion) the flame holds still.
@@ -287,9 +290,8 @@ const ITEMS = {
   },
   eye(o, lit) {
     const a = Math.atan2(o.hj, o.cx - o.xj);              // half-angle the cornea takes out of the eyeball
-    g.beginPath(); g.arc(sx(o.cx), sy(0), V.k * o.RB, Math.PI + a, Math.PI - a); 
-    const ac = Math.atan2(o.hj, o.RC - o.xj);
-    g.arc(sx(o.RC), sy(0), V.k * o.RC, Math.PI - ac, Math.PI + ac);
+    g.beginPath(); g.arc(sx(o.cx), sy(0), V.k * o.RB, Math.PI + a, Math.PI - a);
+    for (let i = 0; i < o.cornea.length; i += 2) g.lineTo(sx(o.cornea[i]), sy(o.cornea[i + 1]));     // the cornea, as it is traced
     g.closePath();
     g.fillStyle = 'rgba(150,195,255,.1)'; g.fill();
     g.strokeStyle = 'rgba(205,228,255,.75)'; g.lineWidth = 1.5; g.stroke();
@@ -305,10 +307,10 @@ const ITEMS = {
     g.fillStyle = 'rgba(135,146,184,.35)'; g.fillRect(sx(o.x), sy(y + o.h + 1.5), V.k * 3.5, V.k * (2 * o.h + 3));
     g.strokeStyle = lit ? '#6fe3a1' : '#e8553d'; g.lineWidth = 3; g.lineCap = 'butt'; line(o.x, y - o.h, o.x, y + o.h);
   },
-  tower(o, lit, m) {
+  tower(o) {
     // The boiler glows by how much of the mirrors' light is landing on it: dull red with none,
     // brighter with each mirror that finds it, white-hot with all three.
-    const f = Math.min(1, m.viaShare), mix = (a, b) => Math.round(a + (b - a) * f);
+    const f = S.out.score.glow, mix = (a, b) => Math.round(a + (b - a) * f);
     g.fillStyle = 'rgba(135,146,184,.3)'; g.fillRect(sx(o.x), sy(o.y1), V.k * o.w, V.k * o.y1);
     g.fillStyle = `rgb(${mix(150, 255)},${mix(58, 244)},${mix(44, 208)})`; g.fillRect(sx(o.x) - 1.5, sy(o.y1), V.k * o.w + 1.5, V.k * (o.y1 - o.y0));
     if (f > 0.01) {
@@ -357,8 +359,8 @@ function draw() {
   if (b.spot) inset(b.spot, m, lit);
   if ((b.chart || b.picture) && V.aside) {
     const [ax, ay, aw, ah] = V.aside;
-    if (b.chart) drawChart(g, ax, ay, aw, ah, V.dpr, m.hits, b.chart.umPerArcmin);
-    else drawPicture(g, ax, ay, aw, ah, V.dpr, m, b.picture);
+    if (b.chart) drawChart(g, ax, ay, aw, ah, V.dpr, m.hits, b.chart.umPerArcmin, waveSigma(m.wave) * 1000);
+    else drawPicture(g, ax, ay, aw, ah, V.dpr, m, b.picture, waveSigma(m.wave));
     g.strokeStyle = lit ? '#6fe3a1' : `rgba(${INK},.25)`; g.lineWidth = lit ? 2 : 1; g.beginPath(); g.roundRect(ax, ay, aw, ah, 8); g.stroke();
   }
   if (S.fx && performance.now() - S.fx.t0 < FLARE * 1000) invalidate();
@@ -381,18 +383,22 @@ function inset(spot, m, lit) {
     const q = spot.slices ? c : 0;
     tot[q] = (tot[q] || 0) + wt; r2[q] = (r2[q] || 0) + wt * d * d;
   }
-  const fOf = (q) => Math.min(10, Math.max(1, Math.round(Math.sqrt((r2[q] || 0) / (tot[q] || 1)) / 5))), f = fOf(0);
+  // The wave's part of each spot: a Gaussian as wide as the model's wave width (see trace.js), in device pixels, across and up.
+  const sig = (c) => { const Gr = m.groups[c]; return Gr ? [waveSigma(Gr.waveX) * k, waveSigma(Gr.wave) * k] : [0, 0]; };
+  const fOf = (q) => Math.min(10, Math.max(1, Math.round(Math.sqrt((r2[q] || 0) / (tot[q] || 1) + 2 * sig(q)[1] ** 2) / 5))), f = fOf(0);
+  const dim = (spot.light ?? 1) ** 0.6;                 // the share of light let through, compressed as the picture panel's is
+  const scaled = (c, ff) => sig(c).map((v) => v / ff);
   g.save();
   g.beginPath(); g.roundRect(x, y, size, size, 10); g.fillStyle = 'rgb(7,11,24)'; g.fill(); g.clip();
   if (spot.slices) {
-    drawScene(g, x, y, size / 2, size, V.dpr, f, lists[0] ? [{ rgb: [1, 1, 1], taps: ringTaps(lists[0], f) }] : [], true);
-    drawScene(g, x + size / 2, y, size / 2, size, V.dpr, fOf(1), lists[1] ? [{ rgb: [1, 1, 1], taps: sliceTaps(lists[1], fOf(1)) }] : [], true);
+    drawScene(g, x, y, size / 2, size, V.dpr, f, lists[0] ? [{ rgb: [dim, dim, dim], taps: ringTaps(lists[0], f), sigma: scaled(0, f) }] : [], true);
+    drawScene(g, x + size / 2, y, size / 2, size, V.dpr, fOf(1), lists[1] ? [{ rgb: [dim, dim, dim], taps: sliceTaps(lists[1], fOf(1)), sigma: scaled(1, fOf(1)) }] : [], true);
     g.strokeStyle = `rgba(${INK},.3)`; g.lineWidth = 1; g.beginPath(); g.moveTo(x + size / 2, y); g.lineTo(x + size / 2, y + size); g.stroke();
   } else {
     // white light: each wavelength's picture in its drawn colour, scaled so that the three in focus add up to white
     const sum = [0, 1, 2].map((q) => WHITE.reduce((a, col) => a + col.rgb[q], 0));
     const many = lists.length > 1;
-    drawScene(g, x, y, size, size, V.dpr, f, lists.map((list, c) => list && { rgb: many ? WHITE[c].rgb.map((v, q) => v / sum[q]) : [1, 1, 1], taps: ringTaps(list, f) }).filter(Boolean), false);
+    drawScene(g, x, y, size, size, V.dpr, f, lists.map((list, c) => list && { rgb: (many ? WHITE[c].rgb.map((v, q) => v / sum[q]) : [1, 1, 1]).map((v) => v * dim), taps: ringTaps(list, f), sigma: scaled(c, f) }).filter(Boolean), false);
   }
   g.restore();
   g.strokeStyle = lit ? '#6fe3a1' : `rgba(${INK},.25)`; g.lineWidth = lit ? 2 : 1; g.beginPath(); g.roundRect(x, y, size, size, 10); g.stroke();

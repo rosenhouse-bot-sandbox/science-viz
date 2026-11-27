@@ -444,7 +444,7 @@ text under the bar becomes a note about what you just built and why it works. No
   slider in the panel, so the whole game can be played from the keyboard. The iris and the mirrors
   move by a fixed small amount for each pixel of drag, so a thumb can set them finely.
 - A bar that fills is named for what the player gains: "Sharpness" fills as the blur (the number
-  beside it) shrinks, "Brightness" as more light gets through. A value that has to land in a band,
+  beside it) shrinks, "Light on the screen" or "Brightness" as more light gets through. A value that has to land in a band,
   such as a focal length, is a marker on a scale with the band marked, not a bar. A slider moves the
   same way as the thing it moves in the picture.
 - On a phone the bench is given only the height its shape needs and the panel takes the rest, so
@@ -453,7 +453,7 @@ text under the bar becomes a note about what you just built and why it works. No
 - Nothing moves unless you move it, with one exception: when the match lights it flares, with
   sparks, for four seconds and then the flame holds still. With reduced motion switched on it is
   simply alight. The flame is a drawing, not a model of combustion.
-- The solar tower's boiler glows by the share of the mirrors' light that lands on it, from dull red
+- The solar tower's boiler glows by the light that lands on it, against the most the three mirrors can send it, from dull red
   to white-hot, so each mirror that finds it makes it visibly brighter. The colours are a drawing,
   not a temperature.
 - Beside the eye is an eye chart as that eye sees it. The chart is laid out at its true size on the
@@ -468,15 +468,17 @@ challenges (their text, their scenes and their scoring), `chart.js` the eye char
 stylesheet. `node tests/optics/run.mjs` plays every challenge in a real browser with a mouse, a
 finger and the keyboard. `node tests/optics/layout.mjs` moves every slider through every value, on a
 desktop and two phone sizes, and fails if anything in the panel or the bench changes place or size.
+`node tests/optics/model.mjs` (no browser) checks the model against `optics/REALISM.md`;
+`tests/optics/plays.mjs` holds the known solutions.
 
 The physics:
 
-- The tracer is exact in the plane: each ray meets each spherical face where it really is and bends
+- The tracer is exact in the plane: each ray meets each face (spherical, or the eye's conic) where it really is and bends
   by Snell's law. No thin-lens or small-angle approximation is made, so spherical aberration appears
   because it is in the geometry. Focal lengths shown are the thick-lens (lensmaker's) values.
 - Glass indices come from the makers' Sellmeier fits, and Malitson's for fluorite. They give the
   catalogue values at 587.6 nm and the catalogue Abbe numbers: N-BK7 1.5168 and 64.2, F2 1.6200 and
-  36.4, SF10 1.7283 and 28.5, CaF2 1.4338 and 95.0.
+  36.4, N-SF10 1.7283 and 28.5, CaF2 1.4338 and 95.0.
 - The text keeps wavelength and colour apart: wavelength is a property of the light, colour is what
   we see. White light is a mix of many wavelengths; it is traced as three of them, 486 nm, 546 nm
   and 656 nm, each drawn in the colour we see it as (blue, green, red). In the two chromatic challenges the blur behind "Sharpness" is
@@ -484,6 +486,7 @@ The physics:
   rendering of what an eye would see of a full spectrum.
 - The insets show a small night scene (white stars, a close pair, a lit window) as the sensor records
   it: each point is spread into the traced spot, per wavelength in white light. Brightness is compressed.
+  The spot includes the wave width (below). The Camera's inset dims with the iris, compressed in the same way.
 - In the Wide view challenge the second bundle arrives 20° off the axis, so its spot is not round.
   Only the slice of that bundle in the plane of the picture is traced, each ray weighted equally,
   and its blur is measured about its own middle. That catches coma and field curvature; the error
@@ -492,15 +495,16 @@ The physics:
   plastic is a two-term fit through CR-39's index and Abbe number. Air is taken as 1.
 - For the lens challenges the light comes from a point on the axis, so the spot on the target is
   round. Each traced ray stands for a ring of light, and is weighted by its height in the beam.
-  "Blur" is twice the root-mean-square radius of the spot. The camera's sensor is placed where that
+  "Blur" is twice the root-mean-square radius of the spot. The traced spot and the diffraction width,
+  1.24 × the wavelength × the f-number by the same measure, add as squares. The camera's sensor is placed where that
   is smallest.
-- The eye is the textbook "reduced eye": one spherical surface of radius 5.55 mm into a fluid of
-  index 4/3, with a 3 mm pupil, made 23.45 mm long so that it is nearsighted.
+- The eye is the textbook "reduced eye": one surface of radius 5.55 mm into a fluid of
+  index 4/3, with a 3 mm pupil, made 23.45 mm long so that it is nearsighted. The surface flattens toward
+  its edge (conic constant −0.49), which gives the average spherical aberration measured in real eyes.
 
 Simplifications, which the panel also states where they matter: one wavelength (550 nm) outside the
 two chromatic challenges; light on the axis only outside Wide view; no reflection losses at the
-glass; the Sun is a point, not a half-degree disc; the spectacle lens (40 mm across, 1.5 mm at its thinnest) is equally curved on both
-faces, where a real one is a meniscus; the solar field is a flat slice with three mirrors. The
+glass; the Sun is a point, not a half-degree disc; the spectacle lens (40 mm across, 1.5 mm at its thinnest) is a meniscus whose front curve is the page's choice; the solar field is a flat slice with three mirrors. The
 inset that magnifies the spot compresses brightness (a square root) so that a wide blur can still be
 seen.
 

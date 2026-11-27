@@ -138,9 +138,11 @@ Before pushing:
   depends on the route taken. Read `tests/smooth/out/report.md` and look at `contact.png`. A new
   finding is yours to fix, or to record in `tests/smooth/accepted.json` with the reason it is
   meant. `tests/smooth/README.md` says what the tests can and cannot see.
-- For the Optics workshop, run `node tests/optics/run.mjs`. It plays every challenge with a mouse, a
+- For the Optics workshop, first run `node tests/optics/model.mjs` (no browser, about 15 s): it fails if a ray
+  breaks Snell's law or passes a solid, a blur or goal is under the wave width, a meter rises without more light, a
+  typed number disagrees with the model, or a known solution stops winning. Then run `node tests/optics/run.mjs`. It plays every challenge with a mouse, a
   finger and the keyboard, and fails if one cannot be won. A new challenge needs a known solution
-  added to `PLAYS` there. Numbers in a challenge's text must match what the trace gives.
+  added to `PLAYS` in `tests/optics/plays.mjs`. Numbers in a challenge's text must match what the trace gives.
   Also run `node tests/optics/layout.mjs`: it steps every slider through every value and fails if
   anything in the panel or the bench moves or changes size (a number that gains a digit and wraps).
 - For Vesicle fusion, run `node tests/vesicle/placement.mjs` after changing the membrane shape or

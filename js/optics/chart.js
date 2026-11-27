@@ -1,6 +1,9 @@
 // An eye chart as the eye in the picture sees it. The chart is laid out at its true size on the
 // retina (a 20/20 letter is five minutes of arc tall), then every point of it is spread into the
-// spot that the traced rays make there. Nothing is blurred by a made-up amount.
+// spot that the traced rays make there, and once more by the width the wave nature of light gives
+// the spot, which the model works out. Nothing is blurred by a made-up amount.
+
+import { gauss } from './scene.js';
 
 const ROWS = [[200, 'E'], [100, 'FP'], [50, 'TOZ'], [30, 'LPED'], [20, 'PECFD']];
 const TALL = 1.42;                        // the chart's height over its width
@@ -41,7 +44,8 @@ const scratch = document.createElement('canvas');
 
 // Draw the chart into the box (x, y, w, h: CSS pixels) of context g. `hits` is the tally's list of
 // (distance from the centre of the spot in mm, weight, group) triples for the rays that reached the retina.
-export function drawChart(g, x, y, w, h, dpr, hits, umPerArcmin) {
+// `sigmaUm` is the wave's Gaussian spread on the retina, in µm.
+export function drawChart(g, x, y, w, h, dpr, hits, umPerArcmin, sigmaUm = 0) {
   const W = Math.round(w * dpr), H = Math.round(h * dpr);
   const upp = 5 * 10 * umPerArcmin * 2.3 / W;                        // µm of retina per pixel
   const m = sharp(W, H, upp, umPerArcmin);
@@ -56,7 +60,7 @@ export function drawChart(g, x, y, w, h, dpr, hits, umPerArcmin) {
     acc += wt; sum += wt * r; r2 += wt * r * r;
     if (acc >= cut - 1e-12) { rings.push(sum / acc); acc = 0; sum = 0; }
   }
-  const f = Math.min(8, Math.max(1, Math.round(Math.sqrt(r2 / (tot || 1)) / 4)));
+  const f = Math.min(8, Math.max(1, Math.round(Math.sqrt(r2 / (tot || 1) + 2 * (sigmaUm / upp) ** 2) / 4)));
   const s = shrunk(m, f), out = new Float32Array(s.w * s.h);
   let count = 0;
   const taps = [];
@@ -70,6 +74,7 @@ export function drawChart(g, x, y, w, h, dpr, hits, umPerArcmin) {
     const x0 = Math.max(0, -dx), x1 = Math.min(s.w, s.w - dx), y0 = Math.max(0, -dy), y1 = Math.min(s.h, s.h - dy);
     for (let yy = y0; yy < y1; yy++) { let o = yy * s.w + x0, i = (yy + dy) * s.w + x0 + dx; for (let xx = x0; xx < x1; xx++) out[o++] += wt * s.a[i++]; }
   }
+  gauss(out, s.w, s.h, 1, sigmaUm / upp / f, sigmaUm / upp / f);
   if (scratch.width !== s.w || scratch.height !== s.h) { scratch.width = s.w; scratch.height = s.h; }
   const sc = scratch.getContext('2d'), img = sc.createImageData(s.w, s.h), d = img.data;
   for (let i = 0; i < out.length; i++) {
