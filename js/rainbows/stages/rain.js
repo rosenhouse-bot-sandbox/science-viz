@@ -5,7 +5,7 @@
 // Sunlight is gold, slanted and carries arrowheads; rain is cool, vertical and tear-shaped.
 import { V, DEG, rng, clamp, sstep, lerp } from '../gl.js';
 import * as O from '../optics.js';
-import { SUN, sunRay, bowTexture, drawFigure, wavefrontSheets, colourName, crestNote } from './common.js';
+import { SUN, sunRay, bowTexture, bowTab, drawFigure, wavefrontSheets, seenAs, crestNote } from './common.js';
 const CREST = 2.4;      // drawn spacing of the sunlight's crests, in metres
 import { EYE, sunDir, sunColour, drawEnv, initEnv } from './sky.js';
 import { drawFar } from './drop.js';
@@ -13,11 +13,19 @@ import { drawFar } from './drop.js';
 const BOX0 = [-8, 0, -13], BOXS = [16, 9, 10.5], NDROPS = 30000;
 const B1 = O.bowAngle(O.nWater(550)), B2 = O.bowAngle(O.nWater(550), 2);
 const DROP = 0.01, FALL = 1.1 / 16;      // a marked drop's drawn radius, and how fast it falls, in metres (per second)
-// The rain falls at RAIN_V to RAIN_V + RAIN_DV m/s; a real drop a few millimeters across at about REAL_FALL.
+// The rain falls at RAIN_V to RAIN_V + RAIN_DV m/s. A real drop falls at the speed its size sets: the page's
+// drop (the Drop scale's, 2 mm across) at REAL_FALL, 6.5 m/s in still air at sea level. (Gunn and Kinzer 1949,
+// J. Meteorology 6, 243, measured; as fitted by Foote and du Toit 1969 and tabulated in Bringi, Thurai and
+// Baumgardner 2018, Atmos. Meas. Tech. 11, 1377, Table 1: 6.1 to 6.5 m/s for 1.8 to 2.0 mm.)
 // The marked drops are slowed further so one can be watched crossing the bow; the readout says both.
-const RAIN_V = 0.45, RAIN_DV = 0.2, REAL_FALL = 8;
+const RAIN_V = 0.45, RAIN_DV = 0.2, REAL_FALL = 6.5;
 const RAIN_SLOW = Math.round(REAL_FALL / (RAIN_V + RAIN_DV / 2)), MARK_SLOW = Math.round(REAL_FALL / FALL);
-const HEROES = [[-2.6, -7.5, 0.0], [0.4, -6.2, 0.37], [2.9, -8.4, 0.71], [-0.9, -9.6, 0.55]];
+export const FALL_SPEEDS = { real: REAL_FALL, rain: RAIN_V + RAIN_DV / 2, marked: FALL };
+// Each marked drop falls the whole height of the rain, from its top, where it comes into view as the rain
+// does, to the ground, and the next one starts at the top: HEROES gives each one's column and how far
+// through its fall it is at the start (spread so that they cross the bow in turn).
+const TOP = 9, PERIOD = TOP / FALL;
+const HEROES = [[-2.6, -7.5, 0.40], [0.4, -6.2, 0.65], [2.9, -8.4, 0.90], [-0.9, -9.6, 0.15]];
 let drops = null, vao = null;
 // How the scene is dressed depends only on where the camera is. `here` is 0 from far above (arriving
 // from orbit) and 1 once it is down in the field; `close` is 0 from the wide view behind your shoulder
@@ -25,23 +33,20 @@ let drops = null, vao = null;
 const dress = eye => { const back = V.len(V.sub(eye, EYE)); return { here: 1 - sstep(60, 500, back), close: 1 - sstep(10, 19, back) }; };
 
 const angleAt = (p, s) => { const d = V.norm(V.sub(p, EYE)); return Math.acos(clamp(V.dot(d, s), -1, 1)); };
-// The hero drops fall straight down through the bow; find the height where each crosses 42°.
-function heroes(S, T) {
-  const s = sunDir(S), tab = bowTexture().tab, out = [];
+// The marked drops fall straight down through the bow, and are coloured by what each sends the eye from
+// where it is: the main bow near 42°, the outer bow near 51°.
+export function heroes(S, T) {
+  const s = sunDir(S), tab = bowTab(), out = [];
   for (const [x, z, ph] of HEROES) {
-    let lo = 0.2, hi = 12;
-    const target = 41.6 * DEG;
-    for (let i = 0; i < 30; i++) { const m = (lo + hi) / 2; if (angleAt([x, m, z], s) < target) lo = m; else hi = m; }
-    // a drop whose crossing of the bow is leaving the rain (too high, or into the ground) fades out
-    // as the Sun moves, and is not there one moment and gone the next
-    const edge = sstep(0.6, 1.4, lo) * (1 - sstep(7.2, 8.2, lo));
-    if (edge <= 0) continue;
-    const u = (T / 16 + ph) % 1, y = lo + 0.55 - FALL * 16 * u;
+    const u = (T / PERIOD + ph) % 1, y = TOP * (1 - u);
     const P = [x, y, z], th = angleAt(P, s), c = O.sampleBow(tab, th / DEG), m = Math.max(c[0], c[1], c[2], 1e-4);
-    out.push({ P, th, col: c.map(v => v / Math.max(m, 0.25)), level: Math.min(1, m / 0.25), lam: O.wavelengthAt(th), u, fade: Math.min(1, u * 8, (1 - u) * 8) * edge });
+    // (it comes into view at the top of the rain as each raindrop there does, and ends on the ground)
+    out.push({ P, th, col: c.map(v => v / Math.max(m, 0.25)), level: Math.min(1, m / 0.25), lam2: O.wavelengthAt(th, 2), u, fade: 1 - sstep(TOP - 0.9, TOP, y) });
   }
   return out;
 }
+// What the panel says a marked drop sends the eye: the color its drawn mix is seen as, or dark.
+export const seenName = h => h.level < 0.12 ? 'dark' : seenAs(h.col) + (h.lam2 ? ', outer bow' : '');
 let lastHeroes = [], lock = 0, lockAt = 0;
 // The Drop scene's axes for a drop at P: sunlight along its +x, and the eye in its x-y plane, below.
 function frame(P, X) {
@@ -58,10 +63,10 @@ export default {
   cam: { type: 'orbit', target: [0, 3.7, -6], yaw: 0.1, pitch: -0.18, dist: 20, fov: 58, sway: 0.02, minY: 0.9, widen: true,
     lim: { yaw: [-1.2, 1.2], pitch: [-0.22, 0.6], dist: [8.5, 26] } },
   extent: 3500,        // how much of this scene matters, in metres: the rain and the bow in it
-  // the next scale is one of the marked drops: pick the one with the most of its fall left, and stay with it
+  // the next scale is one of the marked drops: pick the one nearest the middle of the main bow, and stay with it
   portal: S => {
     const now = performance.now();
-    if (now - lockAt > 1500 || !lastHeroes[lock]) { lock = 0; lastHeroes.forEach((h, i) => { if (h.u < (lastHeroes[lock]?.u ?? 2) ) lock = i; }); }
+    if (now - lockAt > 1500 || !lastHeroes[lock]) { lock = 0; lastHeroes.forEach((h, i) => { if (Math.abs(h.th - B1) < Math.abs(lastHeroes[lock].th - B1)) lock = i; }); }
     lockAt = now;
     return lastHeroes[lock] ? lastHeroes[lock].P : [0, 5, -7];
   },
@@ -74,8 +79,9 @@ export default {
   },
 
   caption(S) {
-    if (S.sun > 42) return { title: 'Too high a Sun, no bow',
-      body: 'The bow is a circle 42° from the point directly opposite the Sun. With the Sun more than 42° up, that whole circle lies below the horizon. That is why rainbows are seen in the morning and late afternoon. Only drops close by and below your eye line can still be seen colored, as in the spray of a garden sprinkler. Lower the Sun to bring the bow back.' };
+    const b1 = Math.round(B1 / DEG), b2 = Math.round(B2 / DEG);
+    if (S.sun > B1 / DEG) return { title: 'Too high a Sun for the main bow',
+      body: `The main bow is a circle ${b1}° from the point directly opposite the Sun. With the Sun more than ${b1}° up, that whole circle lies below the horizon. That is why rainbows are seen in the morning and late afternoon. ${S.sun < B2 / DEG ? `The faint outer bow is ${b2}° out, so its top stays above the horizon until the Sun is ${b2}° up.` : `The faint outer bow, ${b2}° out, is below the horizon too.`} Only drops close by and below your eye line can still be seen colored, as in the spray of a garden sprinkler. Lower the Sun to bring the main bow back.` };
     if (S.focus === 'eye') return { title: 'Only some drops send light to your eye',
       body: 'Gold arrows are sunlight going into a few marked drops. The colored arrows are the light those drops send to your eye. You see a drop as colored only while it is 42° away from the line to your head\'s shadow, near or far. Falling through, it is seen as red, then orange, yellow, green, blue and violet, and then pale. Another drop takes its place at once, so the bow stays still while the drops fall through it.' };
     if (S.focus === 'sun') return { title: 'Every drop does the same thing',
@@ -85,12 +91,10 @@ export default {
   },
   readout(S) {
     const top = (B1 / DEG - S.sun), top2 = (B2 / DEG - S.sun);
-    const rows = lastHeroes.map((h, i) => `<dt>Marked drop ${i + 1} · ${(h.th / DEG).toFixed(1)}°</dt><dd>${h.lam ? colourName(h.lam) + ' ' + Math.round(h.lam) + ' nm' : h.th > 0.74 ? 'dark' : 'pale white'}</dd>`).join('');
-    // always one row for each marked drop, so the list never changes length while the Sun slider is held
-    const blank = Array.from({ length: HEROES.length - lastHeroes.length }, (_, i) => `<dt>Marked drop ${lastHeroes.length + i + 1}</dt><dd>not crossing the bow</dd>`).join('');
+    const rows = lastHeroes.map((h, i) => `<dt>Marked drop ${i + 1} · ${(h.th / DEG).toFixed(1)}°</dt><dd>${seenName(h)}</dd>`).join('');
     return `<dl><dt>Top of the main bow</dt><dd>${top > 0 ? top.toFixed(1) + '° up' : 'below the horizon'}</dd>
 <dt>Top of the outer bow</dt><dd>${top2 > 0 ? top2.toFixed(1) + '° up' : 'below the horizon'}</dd>
-${rows}${blank}<dt>Rain shown falling</dt><dd>about ${RAIN_SLOW}× slower than real</dd>
+${rows}<dt>Rain shown falling</dt><dd>about ${RAIN_SLOW}× slower than real</dd>
 <dt>Marked drops falling</dt><dd>about ${MARK_SLOW}× slower than real</dd></dl>${S.mode === 'wave' ? crestNote(CREST) : ''}`;
   },
   liveReadout: true,

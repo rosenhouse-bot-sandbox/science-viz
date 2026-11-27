@@ -96,9 +96,12 @@ export function eyeGlyph(R, at, look, up, size, iris, alpha = 1) {
 import { bowTable } from '../optics.js';
 import { latheMesh, sphereMesh, modelTRS } from '../gl.js';
 let bow = null;
+// (the table alone, for code that needs the colours and not the texture)
+let bowTab0 = null;
+export const bowTab = () => bowTab0 ??= bowTable(1024, 20, 70);
 export function bowTexture(R) {
   if (bow) return bow;
-  const gl = R.gl, tab = bowTable(1024, 20, 70);
+  const gl = R.gl, tab = bowTab();
   const tex = gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D, tex);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, tab.N, 1, 0, gl.RGBA, gl.FLOAT, tab.data);
@@ -128,5 +131,16 @@ export function coneDir(axis, theta, psi) {
   return [axis[0] * c + (u[0] * Math.cos(psi) + r[0] * Math.sin(psi)) * s,
     axis[1] * c + (u[1] * Math.cos(psi) + r[1] * Math.sin(psi)) * s,
     axis[2] * c + (u[2] * Math.cos(psi) + r[2] * Math.sin(psi)) * s];
+}
+// The color a mix of light is seen as, named from its linear RGB as the screen shows it (hue, and how far
+// from white). A drop in the bow sends a mix: inside a wavelength's own bow angle the longer wavelengths
+// still reach the eye, so the mix is seen redder and paler than the wavelength whose bow is there.
+const HUES = [[15, 'red'], [45, 'orange'], [90, 'yellow'], [170, 'green'], [250, 'blue'], [310, 'violet'], [360, 'red']];
+export function seenAs(c) {
+  const s = c.map(v => Math.pow(Math.max(0, v), 1 / 2.2)), hi = Math.max(...s), lo = Math.min(...s), d = hi - lo;
+  if (hi <= 0 || d / hi < 0.12) return 'pale white';
+  const h = 60 * (hi === s[0] ? ((s[1] - s[2]) / d + 6) % 6 : hi === s[1] ? (s[2] - s[0]) / d + 2 : (s[0] - s[1]) / d + 4);
+  const name = HUES.find(([top]) => h < top)[1];
+  return d / hi < 0.35 ? 'pale ' + name : name;
 }
 export const colourName = l => l == null ? '' : l < 425 ? 'violet' : l < 455 ? 'indigo' : l < 492 ? 'blue' : l < 565 ? 'green' : l < 590 ? 'yellow' : l < 625 ? 'orange' : 'red';

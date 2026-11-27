@@ -38,7 +38,7 @@ export default {
 <dt>Distance to the Sun</dt><dd>149.6 million km</dd>
 <dt>Light's travel time</dt><dd>8 min 19 s</dd>
 <dt>Rays parallel to within</dt><dd>0.53°</dd></dl>
-<p>Not to scale: the rainbow is drawn far too big.</p>${S.mode === 'wave' ? crestNote(CREST * EARTH_R) : ''}`;
+<p>Not to scale: the rainbow is drawn far too big, and the air far too thick.</p>${S.mode === 'wave' ? crestNote(CREST * EARTH_R) : ''}`;
   },
   labels(S) {
     const p = place(S);

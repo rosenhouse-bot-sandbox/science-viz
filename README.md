@@ -36,8 +36,8 @@ A page at `rainbows/`, in three dimensions at every scale, from the whole Earth 
   you nothing, falls straight down, and is drawn as a streak with its head down; a drop near enough
   to have a size on screen is drawn round, because drops are spheres. The streak is a drawing of
   motion, not the drop's shape. The panel carries a key.
-- Time is slowed so the fall can be followed: the rain about 15 times, and the four marked drops
-  about 116 times, so that one can be watched crossing the bow (a real drop would cross it in a few
+- Time is slowed so the fall can be followed: the rain about 12 times, and the four marked drops
+  about 95 times (against the 6.5 m/s of a 2 mm drop), each falling the whole height of the rain, so that one can be watched crossing the bow (a real drop would cross it in a few
   hundredths of a second). The readout gives both, computed from the speeds in `rain.js`.
 - The near drops are coloured by what each sends to the standing figure, not to the camera, while
   the bow on the far rain is painted for the camera. From behind the figure the two nearly coincide;
@@ -53,8 +53,8 @@ The physics, all in `js/rainbows/optics.js`:
   indices: `n² = 1 + Aλ²/(λ² − λ0²)`. It gives 1.3327 at 589 nm against a measured 1.3330. The same
   model sets the bending in the drop, the colours in the sky and the energy stored in the molecules.
 - Rays through the drop carry Fresnel reflection and transmission for both polarisations. Of the
-  sunlight on a typical rainbow ray, about 6% reflects off the front, 89% leaves through the back,
-  4.6% makes the primary bow (96% polarised) and 0.5% the secondary.
+  sunlight on the whole face of the drop, about 7% reflects off the front, 88% leaves through the back,
+  4% comes out after one reflection (96% of it vibrating along the bow) and 0.6% after two.
 - The sky's brightness against angle is computed, not painted: rays over the whole face of the drop,
   for the outside reflection and one and two internal reflections, summed over the spectrum with
   CIE colour matching and blurred by the Sun's half-degree disc. The dark band and the brighter sky
@@ -96,8 +96,8 @@ The physics, all in `js/rainbows/optics.js`:
   what one real layer does; reflection is left out.
 - The last scale is the Surface scale's own patch of the drop seen from the same camera, closer:
   the flight between the two never turns, the drop's skin and blue water are drawn by the same
-  shader code in both, and the water stays on the side it was on. The light drawn is polarised with
-  its electric field across the plane of the bend, so from that direction it swings mostly toward
+  shader code in both, and the water stays on the side it was on. The light drawn keeps the polarization set at the Surface scale; with its electric field across the
+  plane of the bend (s), from that direction it swings mostly toward
   and away from you; drag to look along the surface and see it from the side. The last scale shows
   light going from air into water, which happens where the ray enters the drop: zooming in from the
   back wall or the way out flies round to the entering crossing first.
@@ -113,8 +113,8 @@ The physics, all in `js/rainbows/optics.js`:
 Simplifications: with Waves at Orbit, Rain and Drop, the crests are drawn far further apart than real
 ones (6,690 km, 2.4 m and 0.4 mm against 550 nm), which the readout says; only the Surface and
 Molecules scales draw them at their true spacing. Drops are spheres, air's index is taken as 1, and brightness is compressed so that
-the 5% of light in the bow can be seen beside the 89% that escapes. A toggle spreads the colours 5×
-for visibility; it is off by default.
+the 4% of light in the bow can be seen beside the 88% that escapes. A toggle spreads the colours 5×
+for visibility; the angles and wavelengths shown stay real. It is off by default.
 
 Code: `js/rainbows/gl.js` is a small WebGL2 engine (HDR targets, bloom, glowing lines and points,
 full-screen ray shaders), `js/rainbows/main.js` holds state, cameras and controls, and each scale is a

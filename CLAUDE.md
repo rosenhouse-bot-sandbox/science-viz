@@ -131,6 +131,11 @@ A new page is not done until it does.
 Before pushing:
 
 - `node --check` every changed module.
+- For Rainbows, first run `node tests/rainbows/model.mjs` (no browser, a few seconds): it fails if a beam at
+  Surface is drawn with more light than arrived or s and p differ at 0°, a ray to the eye comes or goes at full
+  strength, the second bow's rays leave away from 51°, a caption share or slowdown is not the model's, a marked drop
+  fades in mid-fall or is named a color it is not drawn in, Molecules loses the polarization, or the color drawn lags
+  or jumps as the wavelength moves.
 - For Rainbows, run the smooth-interaction tests: `node tests/smooth/run.mjs --quick` after any change,
   and the full `node tests/smooth/run.mjs` after changing a slider, a flight between scales, the
   particles or the panel's layout. They drag every slider and press every button one frame at a

@@ -5,7 +5,7 @@
 import { V, DEG, rng, modelTRS, lerp, sstep } from '../gl.js';
 import * as O from '../optics.js';
 import { vis, backdrop, eyeGlyph, sunRay, crestNote } from './common.js';
-const SP = 0.42, RADIUS = 1e-3;      // optical path between drawn crests, in drop radii; the drop's radius in metres
+export const RADIUS = 1e-3, SP = 0.42;      // the drop's radius in meters; optical path between drawn crests, in drop radii
 
 const SPEC = O.spectrumSet([430, 470, 510, 550, 590, 630, 670]);
 const SPEC3 = O.spectrumSet([450, 545, 640]);
@@ -20,6 +20,42 @@ export function eyeAngle(S) {
   const a0 = O.bowAngle(nEff({ n: O.nWater(400) }, S)), a1 = O.bowAngle(nEff({ n: O.nWater(700) }, S));
   return lerp(a0, a1, S.bowpos);
 }
+// The slider runs from -0.8 to 1.6, the bow and a little either side. A marked drop flown into from the Rain
+// scale can be anywhere on its fall, further out than that: `bowpos` then holds its real place, out to
+// BOW_REACH, and the slider rests at its end.
+export const BOW_REACH = [-8, 8];
+// The same, for real water: with the colours drawn spread out, the picture's angle is not the drop's
+// real place in the sky, and the words and numbers give the real one.
+export const trueEyeAngle = S => eyeAngle({ bowpos: S.bowpos, exag: false });
+// Where all the sunlight on the drop goes, over its whole face: each impact parameter b counts by the
+// ring of the face it stands for (2b db). Keyed by order: -1 off the front, 0 through the back, then
+// after one and two reflections. (One ray's shares are not these: the rainbow ray's own are in the readout.)
+export function faceShares(n, N = 4000) {
+  const sh = { '-1': 0, 0: 0, 1: 0, 2: 0 };
+  for (let j = 0; j < N; j++) { const b = (j + 0.5) / N; for (const o of O.traceDrop(b, n, 2).outs) sh[o.order] += o.I * 2 * b / N; }
+  return sh;
+}
+const FACE = faceShares(O.nWater(550));
+// How strongly a ray to the eye is drawn: by its own weight w, against W_EYE, what all the rays to an eye
+// in the middle of the bow add up to. A ray that comes into the band at its edge has w = 0, so it fades in,
+// and the alpha never depends on how many rays there are. (W_RAY: one first-bow ray's weight, on average,
+// with the eye on that colour's bow; the twice-reflected rays are drawn against it.)
+const EYE_TOL = 0.3 * DEG, EYE_M = 260;
+function eyeRays(sp, n, k, theta, tol) {
+  const out = [];
+  for (let j = 0; j < EYE_M; j++) {
+    const b = (j + 0.5) / EYE_M, tr = O.traceDrop(b, n, k), o = tr.outs.find(x => x.order === k);
+    const d = (O.antisolarAngle(o.dir) - theta) / tol;
+    // (light after two reflections leaves on the far side of the axis from where it went in: turned half
+    // round the axis, phi = π, it is the ray that entered as far the other side and leaves on the eye's side)
+    if (Math.abs(d) < 1) out.push({ sp, phi: k === 2 ? Math.PI : 0, tr, b, k, w: o.I * b * Math.sqrt(1 - d * d) });
+  }
+  return out;
+}
+const W_EYE = SPEC_EYE.reduce((a, sp) => eyeRays(sp, sp.n, 1, eyeAngle({ bowpos: 0.5 }), EYE_TOL).reduce((x, r) => x + r.w, a), 0);
+const W_RAY = (() => { const n = O.nWater(550), rs = eyeRays({}, n, 1, O.bowAngle(n), EYE_TOL); return rs.reduce((a, r) => a + r.w, 0) / rs.length; })();
+export const eyeAlpha = (w, share = 1) => Math.min(0.9, 9 * w / W_EYE) * share;
+export const secondAlpha = (w, base) => Math.min(0.9, base * w / W_RAY);
 // The slider's track, painted with what each position sends the eye: faint white inside the bow, the
 // colour whose bow passes through the eye across it, and next to nothing outside. `lo` and `hi` are
 // the slider's ends; the stops are measured between the centres of the thumb's end positions.
@@ -89,7 +125,7 @@ export function skinBlend(R, S) {
 }
 function build(S) {
   const orders = S.second ? 2 : 1, thetaE = eyeAngle(S);
-  const c = { thetaE, fan: [], cone: [], disc: [], eye: [], eyeCum: [], eyeCol: [0, 0, 0], desc: null };
+  const c = { thetaE, fan: [], cone: [], disc: [], eye: [], eyeCum: [], eyeCol: [0, 0, 0], second: [], desc: null };
   for (const sp of SPEC) {
     const n = nEff(sp, S);
     for (let j = 0; j < 20; j++) c.fan.push({ sp, phi: 0, tr: O.traceDrop((j + 0.5) / 20 * 0.995, n, orders) });
@@ -101,18 +137,18 @@ function build(S) {
   // rays that leave within the Sun's half-width of the eye's direction, for a fine set of colours.
   // The Sun is a disc, so a ray counts by how much of the disc could have sent it (the chord at its
   // offset): the light reaching the eye then fades out at the bow's edge instead of stopping dead.
-  const tol = (S.exag ? 0.8 : 0.3) * DEG, M = 260;
-  for (const sp of SPEC_EYE) {
+  const tol = S.exag ? 0.8 * DEG : EYE_TOL;
+  // (a drop flown into from the Rain scale can sit out at the outer bow, where light after two reflections reaches the eye)
+  const outer = thetaE > O.bowAngle(nEff({ n: O.nWater(700) }, S), 2) - 2 * tol && thetaE < O.bowAngle(nEff({ n: O.nWater(400) }, S), 2) + 2 * tol;
+  for (const sp of SPEC_EYE) for (const k of outer ? [1, 2] : [1]) for (const r of eyeRays(sp, nEff(sp, S), k, thetaE, tol)) {
+    c.eye.push(r); c.eyeCum.push((c.eyeCum.at(-1) ?? 0) + r.w);
+    for (let j = 0; j < 3; j++) c.eyeCol[j] += sp.part[j] * r.w;
+  }
+  // After two reflections: the rays that leave at each colour's second bow, near 51°, picked and
+  // weighted as the rays to the eye are. They are drawn on the eye's side, outside the first bow.
+  if (S.second) for (const sp of SPEC) {
     const n = nEff(sp, S);
-    for (let j = 0; j < M; j++) {
-      const b = (j + 0.5) / M, tr = O.traceDrop(b, n, 1), out = tr.outs[2];
-      const d = (O.antisolarAngle(out.dir) - thetaE) / tol;
-      if (Math.abs(d) < 1) {
-        const w = out.I * b * Math.sqrt(1 - d * d);
-        c.eye.push({ sp, phi: 0, tr, b, w }); c.eyeCum.push((c.eyeCum.at(-1) ?? 0) + w);
-        for (let k = 0; k < 3; k++) c.eyeCol[k] += sp.part[k] * w;
-      }
-    }
+    c.second.push(...eyeRays(sp, n, 2, O.bowAngle(n, 2), tol));
   }
   const m = Math.max(...c.eyeCol, 1e-9);
   // how much of the full beam still comes this way: 1 through the bow, falling to 0 just outside it
@@ -136,7 +172,8 @@ function build(S) {
 // The eye is drawn on the beam that leaves toward it (in reality it is hundreds of metres away).
 function eyeAt(c) { const q = c.desc.hits[2]; return [q[0] - Math.cos(c.thetaE) * EYE_DIST, q[1] - Math.sin(c.thetaE) * EYE_DIST, 0]; }
 
-function ensure(S) {
+// (exported for tests/rainbows/model.mjs: the rays this scale draws, for a setting)
+export function ensure(S) {
   const key = [S.bowpos, S.exag, S.second].join();
   if (key !== cacheKey) { cache = build(S); cacheKey = key; }
   return cache;
@@ -175,6 +212,7 @@ export function drawFar(R, S, h, toEye, T, gain = 1, glint = gain, xf = p => p, 
   R.pt(o, h.col, h.level * aE / gain * glint * thin, 20 * unit);
 }
 
+const SECOND = { inc: 0.12, leg: 1, legs: 3, '-1': 0, 0: 0, 1: 0, 2: 1.6 };      // a ray drawn for the two reflections only (the way in faint: those rays come in together)
 function drawRay(R, ray, alpha, show, w = 1.5) {
   const { tr, phi, sp } = ray, col = sp.part, h = tr.hits;
   R.seg(rot([X0, h[0][1]], phi), rot(h[0], phi), col, alpha * show.inc * 0.25, w, alpha * show.inc);
@@ -199,7 +237,7 @@ function route(ph, S) {
     let lo = 0, hi = c.eye.length - 1;
     while (lo < hi) { const m = (lo + hi) >> 1; if (c.eyeCum[m] < u) lo = m + 1; else hi = m; }
     const e = c.eye[lo];
-    sp = e.sp; phi = (r[1] - 0.5) * 0.12; br = branch(e.tr, nEff(sp, S), 1);
+    sp = e.sp; phi = e.phi + (r[1] - 0.5) * 0.12; br = branch(e.tr, nEff(sp, S), e.k);
   } else if (S.focus === 'eye') {
     // past the bow's edge less and less is sent this way: the rest show the light that comes back,
     // all of it passing inside
@@ -230,7 +268,7 @@ function spawn(ph, S, T, over) {
 }
 
 export default {
-  id: 'drop', name: 'Drop', scale: '1 mm', modes: true, focus: true,
+  id: 'drop', name: 'Drop', scale: '1 mm', scaleNote: 'your eye is really meters away', modes: true, focus: true,
   controls: ['mode', 'focus', 'bowpos', 'exag', 'second'],
   bloom: 1.0, exposure: 1.0,
   overlay: true,      // light on a dark ground: laid over the scale above during the flight in
@@ -246,10 +284,11 @@ export default {
   },
 
   caption(S) {
+    const pc = x => Math.round(x * 100) + '%';
     if (S.focus === 'eye') return { title: 'The few rays that reach you',
       body: 'You see only the light that leaves in exactly your direction. Rays that enter near one particular height all leave at almost the same angle, so the light is brightest at that angle. That angle is the bow. The angle differs with wavelength, so sliding the drop through the bow changes which wavelength is brightest toward you. Inside the bow, wavelengths whose brightest angle is further out still send a little light, and the mix looks nearly white. Outside the bow, almost no light comes your way.' };
     if (S.focus === 'sun') return { title: 'Where all the sunlight goes',
-      body: 'Sunlight covers the whole face of the drop. About 6% reflects off the front and 89% goes out through the back. Only about 5% reflects once inside and comes back out, concentrated on a hollow cone that opens 42° out from the line back toward the Sun.' };
+      body: `Sunlight covers the whole face of the drop. Of all of it, about ${pc(FACE[-1])} reflects off the front and ${pc(FACE[0])} goes out through the back. Only about ${pc(FACE[1])} reflects once inside and comes back out, concentrated on a hollow cone that opens ${Math.round(O.bowAngle(N_MID) / DEG)}° out from the line back toward the Sun.` };
     return S.mode === 'wave'
       ? { title: 'One wave, folded by a sphere',
         body: 'Each line is a crest. In water the crests travel at three-quarters of the speed they have in air, so they are closer together and the front bends. After one reflection the front folds over on itself. The fold is where light is concentrated, and it leaves the drop 42° from the way back to the Sun.' }
@@ -258,24 +297,24 @@ export default {
   },
 
   readout(S) {
-    const c = ensure(S), t = c.desc, d = x => (x / DEG).toFixed(1) + '°';
-    const lam = (() => { if (S.exag) return null; return O.wavelengthAt(c.thetaE); })();
-    const seen = lam ? `${Math.round(lam)} nm` : (S.bowpos < 0 ? 'faint white (inside the bow)' : S.bowpos > 1 ? (c.share > 0.02 ? 'the last of the red' : 'almost nothing (outside)') : 'shown on the eye marker');
-    const out = k => (t.outs[k].I * 100).toFixed(k === 3 ? 1 : 1) + '%';
+    const c = ensure(S), t = c.desc, d = x => (x / DEG).toFixed(1) + '°', at = trueEyeAngle(S), lam = O.wavelengthAt(at);
+    const lam2 = O.wavelengthAt(at, 2);
+    const seen = lam ? `${Math.round(lam)} nm` : lam2 ? `${Math.round(lam2)} nm, after two reflections` : S.bowpos < 0.5 ? 'faint white (inside the bow)' : c.share > 0.02 ? 'the last of the red' : 'almost nothing (outside)';
+    const out = k => (t.outs[k].I * 100).toFixed(1) + '%';
     return `<dl>
-<dt>This drop sits</dt><dd>${d(c.thetaE)} from the antisolar point</dd>
+<dt>This drop sits</dt><dd>${d(at)} from the antisolar point</dd>
 <dt>It sends your eye</dt><dd>${seen}</dd>
-<dt>Green ray enters at</dt><dd>${d(t.inc)}, bends to ${d(t.refr)}</dd>
 <dt>Critical angle</dt><dd>${d(O.criticalAngle(N_MID))} (never reached)</dd>
-<dt>Off the front</dt><dd>${out(0)}</dd>
+<dt>Green ray enters at</dt><dd>${d(t.inc)}, bends to ${d(t.refr)}</dd>
+<dt>Of its light, off the front</dt><dd>${out(0)}</dd>
 <dt>Out through the back</dt><dd>${out(1)}</dd>
-<dt>Primary bow</dt><dd>${out(2)}, ${(t.outs[2].Is / t.outs[2].I * 100).toFixed(0)}% polarised</dd>
-<dt>Secondary bow</dt><dd>${out(3)}</dd></dl>${S.mode === 'wave' ? crestNote(SP * RADIUS) : ''}`;
+<dt>After one reflection</dt><dd>${out(2)}, ${(t.outs[2].Is / t.outs[2].I * 100).toFixed(0)}% vibrating along the bow</dd>
+<dt>After two reflections</dt><dd>${out(3)}</dd></dl>${S.mode === 'wave' ? crestNote(SP * RADIUS) : ''}`;
   },
 
   labels(S) {
     const c = cache; if (!c) return [];
-    return [{ p: V.mad([0, 0, 0], V.norm([-Math.cos(c.thetaE / 2), -Math.sin(c.thetaE / 2), 0]), 2.5), text: (c.thetaE / DEG).toFixed(1) + '°', cls: 'num' }];
+    return [{ p: V.mad([0, 0, 0], V.norm([-Math.cos(c.thetaE / 2), -Math.sin(c.thetaE / 2), 0]), 2.5), text: (trueEyeAngle(S) / DEG).toFixed(1) + '°', cls: 'num' }];
   },
 
   init(R) {
@@ -355,16 +394,20 @@ void main(){ vec3 ro = uEye, rd = rayDir();
         for (const r of c.fan) drawRay(R, r, 0.5 * k, show);
         const cone = { inc: 0.0, leg: 0.5, legs: 2, '-1': 0, 0: 0, 1: 1, 2: 0 };
         for (const r of c.cone) drawRay(R, r, 0.42 * k, cone, 1.2);
+        for (const r of c.second) drawRay(R, r, secondAlpha(r.w, 0.42 * k), SECOND, 1.2);
       } else if (f === 'sun') {
         const show = { inc: 0.7, leg: 1, legs: S.second ? 3 : 2, '-1': 0.9, 0: 0.9, 1: 1.1, 2: 0.9 };
         for (const r of c.disc) drawRay(R, r, 0.36 * k, show, 1.3);
         for (const r of c.cone) drawRay(R, r, 0.3 * k, { inc: 0, leg: 0.4, legs: 2, '-1': 0, 0: 0, 1: 1, 2: 0 }, 1.2);
+        for (const r of c.second) drawRay(R, r, secondAlpha(r.w, 0.3 * k), SECOND, 1.2);
       } else {
         const ghost = { inc: 0.5, leg: 1, legs: 2, '-1': 0, 0: 0.25, 1: 0.6, 2: 0 };
         for (const r of c.fan) drawRay(R, r, lerp(0.16, 0.07, c.share), ghost, 1.1);
-        const a = Math.min(0.9, 9 / Math.max(6, c.eye.length)) * c.share;
+        // (none of the light after two reflections comes this way: it leaves near 51°, outside the first bow)
+        for (const r of c.second) drawRay(R, r, secondAlpha(r.w, 0.1), SECOND, 1.1);
         const show = { inc: 1, leg: 2.4, legs: 2, '-1': 0, 0: 0, 1: 4, 2: 0 };
-        for (const r of c.eye) drawRay(R, r, a, show, 1.7);
+        const show2 = { inc: 1, leg: 2.4, legs: 3, '-1': 0, 0: 0, 1: 0, 2: 4 };
+        for (const r of c.eye) drawRay(R, r, eyeAlpha(r.w, c.share), r.k === 2 ? show2 : show, 1.7);
       }
       R.flushLines({ gain: near * others });
       // photons: each one is a single colour and takes one route, chosen with the Fresnel odds
