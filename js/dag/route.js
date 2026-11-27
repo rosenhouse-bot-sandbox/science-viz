@@ -5,14 +5,18 @@
 // outside every node and box; an edge takes the cheapest path along those lines from its source to
 // its target (A* search). A path pays for its length, for each bend, and for running along a line
 // that an unrelated edge already uses, and more for running through a box that holds neither of
-// its ends. It may not pass through another node.
+// its ends. It may not pass through another node, and it does not run along a line that an edge
+// with a different source and a different target already uses, unless no other path is left.
+// Where a node has no free side left, an edge that leaves it may share the short piece next to it
+// with an edge that enters it.
 export function routeOrtho(g, pos, boxes, o, only) {
   const N = g.n, hw = o.nodeW / 2, hh = o.nodeH / 2, m = Math.max(5, Math.min(o.gap / 3, 10));
   const lines = (vals) => { vals.sort((p, q) => p - q); const out = []; for (const v of vals) if (!out.length || v - out[out.length - 1] > 1.5) out.push(v); return out; };
   const xv = [], yv = [];
   for (const p of pos) { xv.push(p[0], p[0] - hw - m, p[0] + hw + m); yv.push(p[1], p[1] - hh - m, p[1] + hh + m); }
   for (const b of boxes) { xv.push(b.x - m, b.x + b.w + m); yv.push(b.y - m, b.y + b.h + m); }
-  const xs = lines(xv), ys = lines(yv), nx = xs.length, ny = ys.length;
+  const ring = (a) => { a.unshift(a[0] - 2 * m, a[0] - m); a.push(a[a.length - 1] + m, a[a.length - 1] + 2 * m); return a; };   // two free lines round the outside
+  const xs = ring(lines(xv)), ys = ring(lines(yv)), nx = xs.length, ny = ys.length;
   const nearest = (arr, v) => { let lo = 0, hi = arr.length - 1; while (lo < hi) { const mid = (lo + hi) >> 1; if (arr[mid] < v) lo = mid + 1; else hi = mid; } return lo > 0 && v - arr[lo - 1] < arr[lo] - v ? lo - 1 : lo; };
   const owner = new Int32Array(nx * ny).fill(-1), inBox = new Int32Array(nx * ny).fill(-1);
   for (const b of boxes) for (let iy = 0; iy < ny; iy++) {
@@ -39,7 +43,9 @@ export function routeOrtho(g, pos, boxes, o, only) {
     const pop = () => { const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let i = 0; for (;;) { let c = 2 * i + 1; if (c >= heap.length) break; if (c + 1 < heap.length && heap[c + 1][0] < heap[c][0]) c++; if (heap[i][0] <= heap[c][0]) break; const x = heap[c]; heap[c] = heap[i]; heap[i] = x; i = c; } } return top; };
     const h = (ix, iy) => Math.abs(xs[ix] - xs[tx]) + Math.abs(ys[iy] - ys[ty]);
     const start = sy * nx + sx;
-    let found = -1;
+    let found = -1, strict = 2;
+    const near = (n, ix, iy) => Math.abs(xs[ix] - pos[n][0]) <= hw + m + 2 && Math.abs(ys[iy] - pos[n][1]) <= hh + m + 2;
+    const by = (n, ix, iy, jx, jy) => near(n, ix, iy) && near(n, jx, jy);   // the piece is next to node n
     const relax = (v, d, base, parent) => {
       for (let nd = 0; nd < 4; nd++) {
         if (d >= 0 && nd === (d + 2) % 4) continue;
@@ -50,17 +56,23 @@ export function routeOrtho(g, pos, boxes, o, only) {
         const len = Math.abs(xs[jx] - xs[ix]) + Math.abs(ys[jy] - ys[iy]);
         const used = nd === 0 ? usedH[v] : nd === 2 ? usedH[w] : nd === 1 ? usedV[v] : usedV[w];
         let pen = inBox[w] >= 0 && inBox[w] !== Math.max(0, g.group[s]) && inBox[w] !== Math.max(0, g.group[t]) ? len * 1.5 : 0;   // a box the edge has no business in
-        if (used) for (const f of used) if (g.edges[f][0] !== s && g.edges[f][1] !== t) pen += len * 2 + 25;
+        let taken = false;
+        if (used) for (const f of used) if (g.edges[f][0] !== s && g.edges[f][1] !== t && !(strict < 2 && ((g.edges[f][1] === s && by(s, ix, iy, jx, jy)) || (g.edges[f][0] === t && by(t, ix, iy, jx, jy))))) { taken = true; pen += len * 2 + 25; }
+        if (taken && strict) continue;
         const c = base + len + (d >= 0 && nd !== d ? 28 : 0) + pen, st = w * 4 + nd;
         if (c < cost[st]) { cost[st] = c; from[st] = parent; push(c + h(jx, jy), st); }
       }
     };
-    relax(start, -1, 0, -1);
-    while (heap.length) {
-      const [f, st] = pop(), v = (st / 4) | 0, d = st % 4;
-      if (f - h(v % nx, (v / nx) | 0) > cost[st] + 1e-9) continue;
-      if (v === goal) { found = st; break; }
-      relax(v, d, cost[st], st);
+    for (const level of [2, 1, 0]) {   // apart from every other edge; then sharing the piece next to a node with an edge that comes the other way; then sharing where it must
+      strict = level; cost.fill(Infinity); heap.length = 0;
+      relax(start, -1, 0, -1);
+      while (heap.length) {
+        const [f, st] = pop(), v = (st / 4) | 0, d = st % 4;
+        if (f - h(v % nx, (v / nx) | 0) > cost[st] + 1e-9) continue;
+        if (v === goal) { found = st; break; }
+        relax(v, d, cost[st], st);
+      }
+      if (found >= 0) break;
     }
     let pts = [];
     if (found < 0) pts = [[pos[s][0], pos[s][1]], [pos[t][0], pos[t][1]]];

@@ -6,7 +6,7 @@
 //
 // Here: nodes sit on a grid inside their group's box, and the boxes sit on a grid of their own.
 // A try starts from a random arrangement and swaps two nodes, or two boxes, again and again,
-// keeping a swap when the score drops (and, early on, sometimes when it does not). The score adds
+// keeping a swap when the score drops or stays the same (and, early on, sometimes when it rises). The score adds
 // edge length, bends, crossings and edges that point against the chosen direction. Several tries
 // are made from different seeds and the lowest score is kept.
 
@@ -56,17 +56,20 @@ export function gridSearch(g, o) {
     for (let v = 0; v < N; v++) { X[v] += bx[grp[v]]; Y[v] += by[grp[v]]; }
   }
   const E = g.edges, flowW = o.flow * 0.5, crossW = o.cross * 14;
-  function score(st, withCrossings) {
-    geom(st);
+  // The score of a picture, from where its nodes are: each edge's length along x and y, 30 for an
+  // edge that needs a bend, a charge for an edge that does not point the chosen way by at least one
+  // cell, and a charge for each crossing of the straight lines between nodes.
+  function scoreAt(x, y, withCrossings) {
     let s = 0;
     for (const [a, b] of E) {
-      const dx = Math.abs(X[a] - X[b]), dy = Math.abs(Y[a] - Y[b]);
+      const dx = Math.abs(x[a] - x[b]), dy = Math.abs(y[a] - y[b]);
       s += dx + dy + (dx > 1 && dy > 1 ? 30 : 0);
-      if (flowW) s += flowW * Math.max(0, down ? Y[a] - Y[b] + ch : X[a] - X[b] + cw);
+      if (flowW) s += flowW * Math.max(0, down ? y[a] - y[b] + ch : x[a] - x[b] + cw);
     }
-    if (withCrossings && crossW) s += crossW * straightCrossings(E, X, Y);
+    if (withCrossings && crossW) s += crossW * straightCrossings(E, x, y);
     return s;
   }
+  function score(st, withCrossings) { geom(st); return scoreAt(X, Y, withCrossings); }
   const fileOrder = () => ({
     cell: members.map((m, k) => { const c = new Int32Array(cols[k] * rows[k]).fill(-1); m.forEach((v, i) => { c[i] = v; }); return c; }),
     outer: (() => { const c = new Int32Array(oc * or).fill(-1); for (let k = 0; k < K; k++) c[k] = k; return c; })(),
@@ -128,5 +131,7 @@ export function gridSearch(g, o) {
     { pos: end.pos, edges: routes.map((pts) => ({ pts, kind: 'ortho', turned: false, mark: false })), boxes: end.boxes },
   ];
   for (const s of snaps) { s.bands = []; s.dots = false; s.bbox = bounds(s.pos, o, s.boxes); }
-  return { stages: SEARCH_STAGES, snaps, facts: { tries: tries.map((t) => Math.round(t.score)), best, firstScore: Math.round(score(fileOrder(), true)) }, thumbs: tries.map((t) => picture(t.st).pos) };
+  // Each step's score is that of the picture beside it: the input's own, the file order's on the grid, then the kept try's.
+  const facts = { tries: tries.map((t) => Math.round(t.score)), best, firstScore: Math.round(score(fileOrder(), true)), inputScore: Math.round(scoreAt(pos0.map((p) => p[0]), pos0.map((p) => p[1]), true)) };
+  return { stages: SEARCH_STAGES, snaps, facts, thumbs: tries.map((t) => picture(t.st).pos) };
 }

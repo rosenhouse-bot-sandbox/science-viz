@@ -150,9 +150,10 @@ Before pushing:
   on the wrong side of a membrane or pushed into one. It cannot judge what only looks wrong, so
   also step through the stages by eye.
 - For Graph layout, run `node tests/dag/run.mjs` (no browser needed): it lays out every sample graph
-  with both methods over a spread of settings and fails if nodes overlap, an edge misses its node, a
-  cycle is left, or two runs differ. Then `node tests/dag/page.mjs` presses every control at a desktop
-  and a phone size and fails on a console error or a panel wider than the screen. A new sample graph
+  with both methods over a spread of settings and fails if nodes overlap, an edge misses or runs through a node, two unrelated
+  edges share a line, a cycle is left, a crossing count, length, score or turn reason disagrees with a second count,
+  or two runs differ (about a minute). Then `node tests/dag/page.mjs` presses every control at a desktop
+  and a phone size and fails on a console error, a panel wider than the screen, or words that change while nodes glide. A new sample graph
   goes in `SAMPLES` in `js/dag/graphs.js` and is picked up by both. The page must keep saying which
   pictures come from its own step-by-step code and which from the real ELK and TALA.
 - For Japanese maple, run `node tests/maple/model.mjs` (no browser needed) after changing the

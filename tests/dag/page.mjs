@@ -3,6 +3,9 @@
 // and steps through nodes with the keyboard. Fails on a console error, on a panel or page wider
 // than the screen, or if the drawing is blank. At the desktop size it also loads the real ELK and
 // the real TALA from their CDN and lays out one small graph with each.
+// It also records every frame of a few glides (between steps, after a change of settings, and to an
+// engine's result) and fails if a line is drawn off one of its two nodes, or if the words in the
+// panel change while the nodes are still moving.
 //
 //   node tests/dag/page.mjs         # needs Node 22 and Playwright, installed outside the repository
 import { findChromium, serve } from '../lib/serve.mjs';
@@ -33,8 +36,37 @@ for (const [name, width, height, motion] of [['desktop', 1280, 800, 'no-preferen
     await fits(`with ${g}, ${m}`);
     if (await inked() < 20) fail(`${name}: nothing drawn with ${g}, ${m}`);
   }
+  // From here on the page hands over what it draws in every frame.
+  await page.selectOption('#graph', 'services');
+  await page.click('#method [data-v=layered]');
+  await page.waitForTimeout(1500);
+  await page.evaluate(() => { window.__graph = { frames: [], frame(f) { this.frames.push(f); } }; });
+  await page.click('#stages button:nth-child(1)'); await page.waitForTimeout(1500);
+  await page.click('#stages button:nth-child(3)'); await page.waitForTimeout(1500);   // a glide between steps
+  await page.click('#ctl-dir button[aria-pressed=false]'); await page.waitForTimeout(1500);   // a glide after a change of settings
+  await page.click('#method [data-v=search]'); await page.waitForTimeout(1500);
+  const glides = async (when) => {
+    const r = await page.evaluate(() => {
+      const F = window.__graph.frames, out = { frames: F.length, moving: 0, off: 0, early: 0, example: '' };
+      F.forEach((f, i) => {
+        if (f.moving) out.moving++;
+        const on = (x, y, c) => Math.abs(x - c[0]) <= f.w / 2 + 0.7 && Math.abs(y - c[1]) <= f.h / 2 + 0.7;
+        for (const [s, t, x0, y0, x1, y1, alpha] of f.ends) if (alpha > 0.02 && !(on(x0, y0, f.pos[s]) && on(x1, y1, f.pos[t]))) { out.off++; out.example = out.example || `frame ${i}, edge ${s} to ${t}`; }
+        const clock = /^Working/.test(f.title) && /^Working/.test(F[i - 1].title);   // the seconds an engine has been working are not about the picture
+        if (i && f.moving && !clock && (f.title !== F[i - 1].title || f.text !== F[i - 1].text)) { out.early++; out.example = out.example || `frame ${i}: "${F[i - 1].title}" became "${f.title}"`; }
+      });
+      window.__graph.frames = [];
+      return out;
+    });
+    if (!r.frames) fail(`${name}: the page handed over no frames ${when}`);
+    if (motion !== 'reduce' && r.moving < 3) fail(`${name}: no glide was seen ${when} (${r.moving} moving frames of ${r.frames})`);
+    if (r.off) fail(`${name}: ${r.off} lines were drawn off their nodes ${when} (${r.example})`);
+    if (r.early) fail(`${name}: the words changed ${r.early} times while the nodes were moving ${when} (${r.example})`);
+  };
+  await glides('between steps and after a change of settings');
   await page.click('#play');
   await page.waitForFunction(() => document.getElementById('play').textContent !== 'Pause', null, { timeout: 30000 }).catch(() => fail(`${name}: the steps never finished playing`));
+  await glides('while the steps play');
   await page.focus('#view');
   await page.keyboard.press('ArrowRight'); await page.keyboard.press('ArrowRight');
   if (!(await page.textContent('#pick')).includes(' out ')) fail(`${name}: the arrow keys picked no node`);
@@ -44,10 +76,13 @@ for (const [name, width, height, motion] of [['desktop', 1280, 800, 'no-preferen
     // The real engines, on a small graph. They come from a CDN, so this part needs the network.
     await page.selectOption('#graph', 'services');
     for (const m of ['layered', 'search']) {
+      await page.evaluate(() => { document.getElementById('status').textContent = ''; });
       await page.click(`#method [data-v=${m}]`);
       await page.click('#ctl-eng [data-v=real]');
-      await page.waitForFunction(() => /^[0-9]/.test(document.querySelector('#meters .meter:nth-child(3) b').textContent) && document.querySelector('#ctl-eng [data-v=real]').getAttribute('aria-pressed') === 'true', null, { timeout: 120000 }).catch(() => fail(`${name}: the real engine for ${m} gave no layout`));
+      // the words wait for the glide to the engine's picture to end, so wait for the engine and then for the words
+      await page.waitForFunction(() => document.getElementById('status').textContent === 'The layout is ready.' && document.getElementById('capTitle').textContent === 'Result' && /^Seconds\s*[0-9]/.test(document.querySelector('#meters .meter:nth-child(3)').textContent) && document.querySelector('#ctl-eng [data-v=real]').getAttribute('aria-pressed') === 'true', null, { timeout: 120000 }).catch(() => fail(`${name}: the real engine for ${m} gave no layout`));
       await page.waitForTimeout(700);
+      await glides(`on the way to the real engine's result for ${m}`);
       if (await inked() < 20) fail(`${name}: nothing drawn by the real engine for ${m}`);
       await fits(`with the real engine for ${m}`);
     }

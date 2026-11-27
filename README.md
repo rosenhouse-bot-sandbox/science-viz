@@ -519,8 +519,8 @@ load the real engines and show what they give for the same graph:
 
 - ELK is [elkjs](https://github.com/kieler/elkjs) 0.12.1 (ELK compiled to JavaScript, 1.6 MB).
   Groups become nested nodes with `hierarchyHandling: INCLUDE_CHILDREN`. The settings map onto
-  ELK's own options (`js/dag/real.js`); "Sorting passes" sets `elk.layered.thoroughness`, which is
-  related but not the same thing.
+  ELK's own options (`js/dag/real.js`); with Real ELK the slider is named "Sorting effort" and sets
+  `elk.layered.thoroughness`. "Seconds" is the layout alone, without the download or the engine's start.
 - TALA is inside D2's WebAssembly build, [@d2lang/d2](https://www.npmjs.com/package/@d2lang/d2)
   0.1.34 (11 MB). The graph is written out as D2 text with each group as a container. Seed and
   Tries become `tala-seeds`. It runs in a worker; on the 55-node file it takes about 7 s for each
@@ -536,11 +536,11 @@ steps, the input and the result. The nodes and edges are still drawn by this pag
 
 | Step | What happens | Settings |
 | --- | --- | --- |
-| Turn | Edges are turned round until no cycle is left | Greedy (Eades, Lin and Smyth), depth first, or every edge that points to an earlier node in the file |
+| Turn | Edges are turned round until no cycle is left | Greedy (Eades, Lin and Smyth), depth first, or every edge that points to an earlier node in the file. Greedy leaves an edge that is on no cycle alone. With Boxes, an edge between boxes is turned when the boxes form a cycle |
 | Layers | Each node gets a layer after every node that points to it | Longest path; short edges; at most a set number of nodes in a layer |
 | Sort | Each layer is sorted by the average place of its neighbours, back and forth | Number of passes, 0 to 10 |
 | Align | Nodes slide along their layer until joined nodes line up | Space between nodes and between layers |
-| Route | Edges are drawn through the points that hold their place in each layer | Right angles, straight, or curved |
+| Route | Edges are drawn through the points that hold their place in each layer. A straight edge crosses a layer upright at its dot | Right angles, straight, or curved |
 
 - "Short edges" is a local search that moves a node towards the side where it has more edges. ELK
   finds the true shortest total with the network simplex method; this can stop short of it.
@@ -579,7 +579,8 @@ places labels, and scores the finished layout; the lowest penalty wins, then the
 None of the structure discovery, symmetry, label placement or per-container direction is here.
 
 The numbers in the panel are measured from the lines as drawn (`measure` in `js/dag/common.js`):
-crossings are counted where two drawn edges cross, and edge length is in node widths.
+two edges cross once where one passes from one side of the other to the other side, and edge length is in
+node widths, border to border, at every step. Before Route, a straight edge that passes a node is drawn over it.
 
 The first sample is `dag/graphs/anonymous-topology.yaml`, copied from the `lg` repository: 55 nodes
 in 9 groups. Of its 65 edges, 2 repeat an earlier one and 1 joins a node to itself; those are left
@@ -594,8 +595,7 @@ turns that position into coordinates the way D2's `lib/label` does. The page's o
 layouts do not place labels: each is put at the middle of its finished edge and left there. The
 panel counts "Labels covered", the labels that lie over a node or over another label
 (`labelsCovered` in `js/dag/common.js`). On the 55-node file that is 0 for both real engines and
-24 and 38 for the page's own two layouts. A label's text is drawn only when it is large enough on
-screen to read; its plate is always drawn.
+23 and 39 for the page's own two layouts. A label's text and a node's name are drawn at every size.
 
 Under each method the panel links to its background and source:
 [layered graph drawing](https://en.wikipedia.org/wiki/Layered_graph_drawing),
